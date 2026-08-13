@@ -1,0 +1,103 @@
+<!-- admin.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Painel ADM</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+</head>
+<body style="align-items: flex-start; padding: 40px 20px; height: auto; min-height: 100vh;">
+
+    <div class="login-container" style="max-width: 600px;">
+        <h1>👑 Painel ADM</h1>
+        <p style="color: #aaa; margin-bottom: 20px;">Área restrita de controle do sistema</p>
+
+        <!-- 1. CRIAR NOVA LIGA -->
+        <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+            <h3 style="color: var(--verde-campo); margin-top: 0;">1. Criar Nova Liga</h3>
+            <input type="text" id="adm-codigo-liga" placeholder="Código da Liga (Ex: LIGADOSAMIGOS)">
+            <input type="text" id="adm-nome-liga" placeholder="Nome da Liga (Ex: Copa Master 2026)">
+            <button onclick="criarLiga()">Criar Liga</button>
+        </div>
+
+        <!-- 2. SORTEIO DE TIMES E CALENDÁRIO -->
+        <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+            <h3 style="color: #ff8c00; margin-top: 0;">2. Sortear Clubes e Tabela 🎲</h3>
+            <p style="font-size: 13px; color: #ccc;">Sorteia times para os treinadores cadastrados e gera automaticamente as 38 rodadas.</p>
+            <select id="sorteio-liga-id" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #1a1a1a; color: white; border: 1px solid #444; border-radius: 6px;">
+                <option value="">Aguardando ligas...</option>
+            </select>
+            <button style="background: #ff8c00;" onclick="sortearTimesLiga()">Realizar Sorteio Completo</button>
+        </div>
+
+        <!-- 3. GERENCIAMENTO DE TREINADORES -->
+        <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+            <h3 style="color: #dc3545; margin-top: 0;">3. Controle Disciplinar 🛡️</h3>
+            <p style="font-size: 13px; color: #ccc;">Selecione uma liga para ver todos os jogadores e expulsar quem estiver inativo ou burlando as regras.</p>
+            <select id="gerenciar-liga-id" onchange="listarTreinadoresADM()" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #1a1a1a; color: white; border: 1px solid #444; border-radius: 6px;">
+                <option value="">Selecione a liga para inspecionar...</option>
+            </select>
+
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; text-align: left; color: #ccc; font-size: 13px; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #444;">
+                            <th style="padding: 8px 0;">Treinador (Login)</th>
+                            <th>Clube</th>
+                            <th style="text-align: right;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-treinadores-adm">
+                        <tr><td colspan="3" style="text-align: center; padding: 10px;">Aguardando seleção...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 4. MOTOR DE INJEÇÃO (SEMEADOR) -->
+        <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+            <h3 style="color: #666; margin-top: 0;">4. Banco de Dados (Setup Inicial)</h3>
+            <button style="background: transparent; border: 1px solid #666; color: #888;" onclick="injetarTimesIniciais()">⚠️ Injetar 40 Times no Servidor</button>
+        </div>
+
+        <button style="background: #dc3545;" onclick="deslogarADM()">Sair do Painel</button>
+    </div>
+
+    <!-- Modais de Controle Internos -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/admin.js"></script>
+
+    <!-- MODAL DE RELATÓRIO DO ADM -->
+    <div id="modal-relatorio" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
+        <div style="background: var(--card-bg); width: 100%; max-width: 500px; border-radius: 12px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; overflow: hidden;">
+            <div style="background: #2a2a2a; padding: 15px 20px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #ff8c00; font-size: 18px;">Aviso do Sistema</h3>
+                <button onclick="fecharModalRelatorio()" style="background: transparent; color: #aaa; border: none; font-size: 24px; cursor: pointer; padding: 0; margin: 0; width: auto; line-height: 1;">&times;</button>
+            </div>
+            <div id="conteudo-relatorio" style="padding: 20px; max-height: 60vh; overflow-y: auto; color: #ccc; font-size: 14px; line-height: 1.6;"></div>
+            <div style="padding: 15px 20px; border-top: 1px solid #444; background: #2a2a2a; text-align: right;">
+                <button onclick="fecharModalRelatorio()" style="background: #444; border: 1px solid #555; color: white; width: auto; padding: 8px 20px; margin: 0; border-radius: 6px;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO -->
+    <div id="modal-confirmacao" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
+        <div style="background: var(--card-bg); width: 100%; max-width: 400px; border-radius: 12px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; overflow: hidden; text-align: center;">
+            <div style="padding: 30px 20px;">
+                <h3 style="margin-top: 0; color: #ff8c00; font-size: 20px;">⚠️ Confirmação</h3>
+                <p id="texto-confirmacao" style="color: #ccc; font-size: 15px; margin-bottom: 0;">Tem certeza?</p>
+            </div>
+            <div style="padding: 15px 20px; border-top: 1px solid #444; background: #2a2a2a; display: flex; justify-content: space-between; gap: 10px;">
+                <button onclick="fecharConfirmacao()" style="background: #444; border: 1px solid #555; color: white; width: 100%; padding: 10px; border-radius: 6px; margin: 0;">Cancelar</button>
+                <button onclick="executarConfirmacao()" style="background: var(--verde-campo); border: none; color: white; width: 100%; padding: 10px; border-radius: 6px; margin: 0;">Sim, Continuar</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

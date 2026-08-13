@@ -1,0 +1,15 @@
+{
+  "name": "Manager BR 26",
+  "short_name": "Manager BR",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#00b853",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/889/889442.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

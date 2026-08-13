@@ -1,0 +1,50 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Login</title>
+    <link rel="stylesheet" href="css/style.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    <div class="login-container">
+        <h1>Manager BR 26</h1>
+        <p>Acesse o painel do Treinador</p>
+
+        <!-- CAIXA DE LOGIN / CADASTRO -->
+        <div id="form-box">
+            <!-- Abas -->
+            <div style="display: flex; margin-bottom: 15px; border-bottom: 2px solid #333;">
+                <button id="tab-login" onclick="mudarAba('login')" style="flex: 1; background: transparent; color: var(--verde-campo); border-bottom: 2px solid var(--verde-campo); margin: 0; border-radius: 0;">Entrar</button>
+                <button id="tab-cadastro" onclick="mudarAba('cadastro')" style="flex: 1; background: transparent; color: #888; border-bottom: 2px solid transparent; margin: 0; border-radius: 0;">Inscrever-se</button>
+            </div>
+
+            <!-- Formulário de Login -->
+            <div id="box-login">
+                <input type="text" id="loginInput" placeholder="Código da Liga (Ex: LIGA26)">
+                <input type="password" id="senhaInput" placeholder="Seu Usuário (Ex: joaosilva)">
+                <button onclick="processarAuth()">Entrar no Jogo</button>
+            </div>
+
+            <!-- Formulário de Cadastro -->
+            <div id="box-cadastro" style="display: none;">
+                <input type="text" id="cad-liga" placeholder="Código da Liga (Fornecido pelo ADM)">
+                <input type="text" id="cad-usuario" placeholder="Crie seu login (sem espaços)">
+                <input type="text" id="cad-nome" placeholder="Seu Nome Completo">
+                <button onclick="registrarNovoTreinador()">Criar Perfil e Entrar</button>
+            </div>
+        </div>
+        
+        <p id="msg-loading" style="display: none; color: var(--verde-campo); margin-top: 15px;">Conectando...</p>
+    </div>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>

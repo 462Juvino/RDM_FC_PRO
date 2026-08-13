@@ -1,0 +1,99 @@
+<!-- ranking.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Classificação</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <style>
+        .aba-btn {
+            background: #2a2a2a; color: #888; border: 1px solid #444; padding: 10px 20px;
+            border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 0; width: auto;
+        }
+        .aba-btn.ativo {
+            background: var(--verde-campo); color: white; border-color: var(--verde-campo);
+        }
+        .aba-btn:hover:not(.ativo) { background: #333; color: white; }
+
+        .tabela-ranking { width: 100%; border-collapse: collapse; text-align: center; color: #ccc; font-size: 14px; min-width: 600px; }
+        .tabela-ranking th { padding: 12px 8px; color: var(--verde-campo); border-bottom: 2px solid #444; }
+        .tabela-ranking td { padding: 10px 8px; border-bottom: 1px solid #333; }
+        .tabela-ranking tr:hover { background: rgba(255,255,255,0.05); }
+        .zona-libertadores { border-left: 3px solid #00b853; }
+        .zona-rebaixamento { border-left: 3px solid #dc3545; }
+    </style>
+</head>
+<body style="align-items: flex-start;">
+
+    <div class="dashboard-layout">
+        <!-- Menu Lateral -->
+        <aside class="sidebar">
+            <h2>Manager BR</h2>
+            <button onclick="window.location.href='dashboard.html'">📊 Visão Geral</button>
+            <button onclick="window.location.href='escalacao.html'">⚽ Tática e Escalação</button>
+            <button onclick="window.location.href='calendario.html'">📅 Calendário</button>
+            <button class="ativo" onclick="window.location.href='ranking.html'">🏆 Classificação</button>
+            <button onclick="window.location.href='mercado.html'">🛒 Mercado</button>
+            <button onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ IR PARA O JOGO</button>
+            <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div style="display: flex; align-items: center;">
+                    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+                    <div>
+                        <span style="color: #aaa; font-size: 14px;">Treinador:</span>
+                        <strong id="nome-treinador">Carregando...</strong>
+                        <span style="color: #666; margin: 0 10px;">|</span>
+                        <strong id="nome-time" style="color: var(--verde-campo);">...</strong>
+                    </div>
+                </div>
+            </header>
+
+            <section class="area-trabalho">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">Tabela do Campeonato 🏆</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-div-A" class="aba-btn ativo" onclick="mudarDivisao('A')">Série A</button>
+                        <button id="btn-div-B" class="aba-btn" onclick="mudarDivisao('B')">Série B</button>
+                    </div>
+                </div>
+
+                <div style="background: var(--card-bg); border: 1px solid #444; border-radius: 8px; padding: 15px; overflow-x: auto;">
+                    <table class="tabela-ranking">
+                        <thead>
+                            <tr>
+                                <th>Pos</th>
+                                <th style="text-align: left;">Clube</th>
+                                <th title="Pontos" style="font-weight: bold; color: white;">Pts</th>
+                                <th title="Jogos">J</th>
+                                <th title="Vitórias">V</th>
+                                <th title="Empates">E</th>
+                                <th title="Derrotas">D</th>
+                                <th title="Gols Pró">GP</th>
+                                <th title="Gols Contra">GC</th>
+                                <th title="Saldo de Gols">SG</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela">
+                            <tr><td colspan="10" style="padding: 20px;">Buscando cálculos do servidor...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/ranking.js"></script>
+</body>
+</html>

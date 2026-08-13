@@ -1,0 +1,97 @@
+<!-- escalacao.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Vestiário</title>
+    <link rel="stylesheet" href="css/style.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+</head>
+<body style="align-items: flex-start;">
+
+    <div class="dashboard-layout">
+        <!-- Menu Lateral (Igual ao Dashboard) -->
+        <aside class="sidebar">
+            <h2>Manager BR</h2>
+            <button onclick="window.location.href='dashboard.html'">📊 Visão Geral</button>
+            <button class="ativo" onclick="window.location.href='escalacao.html'">⚽ Tática e Escalação</button>
+            <button onclick="window.location.href='calendario.html'">📅 Calendário</button>
+            <button onclick="window.location.href='ranking.html'">🏆 Classificação</button>
+            <button onclick="window.location.href='mercado.html'">🛒 Mercado</button>
+            <button onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; text-align: center; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ IR PARA O JOGO</button>
+            <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
+        </aside>
+
+        <!-- Área Principal -->
+        <main class="main-content">
+            <header class="topbar">
+                <div style="display: flex; align-items: center;">
+                    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+                    <div>
+                        <span style="color: #aaa; font-size: 14px;">Treinador:</span> 
+                        <strong id="nome-treinador">Carregando...</strong> 
+                        <span style="color: #666; margin: 0 10px;">|</span>
+                        <strong id="nome-time" style="color: var(--verde-campo);">...</strong>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <span style="color: #aaa; font-size: 12px;">Força do Time:</span><br>
+                    <strong id="forca-time" style="color: #ff8c00; font-size: 20px;">0</strong>
+                </div>
+            </header>
+
+            <section class="area-trabalho">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <h2 style="margin: 0;">Prancheta Tática</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <select id="select-formacao" style="width: auto; padding: 8px; margin: 0;" onchange="desenharCampinho()">
+                            <option value="4-4-2">4-4-2 Padrão</option>
+                            <option value="4-3-3">4-3-3 Ofensivo</option>
+                            <option value="3-5-2">3-5-2 Posse de Bola</option>
+                        </select>
+                        <button onclick="salvarEscalacao()" style="background: var(--verde-campo); width: auto; margin: 0; padding: 8px 15px;">💾 Salvar Tática</button>
+                    </div>
+                </div>
+
+                <div class="escalacao-container">
+                    <!-- O Campo -->
+                    <div class="campinho" id="campinho">
+                        <!-- Renderizado via JS -->
+                    </div>
+
+                    <!-- Lista de Jogadores -->
+                    <div class="lista-elenco">
+                        <h3 style="margin-top: 0; color: var(--verde-campo);">Plantel Disponível</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">Nome</th>
+                                    <th>Pos</th>
+                                    <th title="Ataque">Atq</th>
+                                    <th title="Defesa">Def</th>
+                                    <th title="Força">For</th>
+                                    <th title="Velocidade">Vel</th>
+                                    <th title="Habilidade">Hab</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-jogadores">
+                                <tr><td colspan="7">Buscando atletas no servidor...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Final do dashboard.html (Exemplo) -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/motor.js"></script> <!-- ADICIONE ESTA LINHA -->
+</body>
+</html>

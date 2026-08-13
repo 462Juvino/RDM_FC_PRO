@@ -1,0 +1,87 @@
+<!-- partida.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Transmissão Ao Vivo</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+</head>
+<body style="align-items: flex-start;">
+
+    <div class="dashboard-layout">
+        <!-- Menu Lateral -->
+        <aside class="sidebar">
+            <h2>Manager BR</h2>
+            <button onclick="window.location.href='dashboard.html'">📊 Visão Geral</button>
+            <button onclick="window.location.href='escalacao.html'">⚽ Tática e Escalação</button>
+            <button onclick="window.location.href='calendario.html'">📅 Calendário</button>
+            <button onclick="window.location.href='ranking.html'">🏆 Classificação</button>
+            <button onclick="window.location.href='mercado.html'">🛒 Mercado</button>
+            <button onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button class="ativo" style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ TRANSMISSÃO</button>
+            <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div style="display: flex; align-items: center;">
+                    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+                    <div>
+                        <span style="color: #aaa; font-size: 14px;">Rodada Atual:</span>
+                        <strong id="lbl-rodada-top" style="color: var(--verde-campo);">...</strong>
+                    </div>
+                </div>
+            </header>
+
+            <section class="area-trabalho">
+                <!-- PLACAR GIGANTE -->
+                <div style="background: linear-gradient(135deg, #113a1e, #0a1f10); border: 2px solid #00b853; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; overflow: hidden;">
+
+                    <h3 style="color: #ff8c00; margin-top: 0; text-transform: uppercase; letter-spacing: 2px; font-size: 14px;">Ao Vivo 🔴</h3>
+
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 20px;">
+                        <!-- Mandante -->
+                        <div style="flex: 1; text-align: right;">
+                            <h2 id="placar-nome-mandante" style="margin: 0; font-size: 28px; color: white;">Carregando...</h2>
+                        </div>
+
+                        <!-- Caixas de Gol e Tempo -->
+                        <div style="display: flex; align-items: center; gap: 10px; background: #000; padding: 15px 25px; border-radius: 8px; border: 1px solid #333;">
+                            <span id="gols-mandante" style="font-size: 36px; font-weight: bold; color: #ff8c00;">0</span>
+                            <div style="display: flex; flex-direction: column; align-items: center; padding: 0 10px;">
+                                <span style="color: #666; font-size: 16px;">X</span>
+                                <span id="tempo-jogo" style="color: #00b853; font-weight: bold; font-size: 18px; margin-top: 5px;">00'</span>
+                            </div>
+                            <span id="gols-visitante" style="font-size: 36px; font-weight: bold; color: #ff8c00;">0</span>
+                        </div>
+
+                        <!-- Visitante -->
+                        <div style="flex: 1; text-align: left;">
+                            <h2 id="placar-nome-visitante" style="margin: 0; font-size: 28px; color: white;">...</h2>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- LANCE A LANCE (NARRAÇÃO) -->
+                <div style="margin-top: 20px; background: var(--card-bg); border: 1px solid #444; border-radius: 8px; padding: 20px;">
+                    <h3 style="margin-top: 0; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 10px;">🎙️ Minuto a Minuto</h3>
+
+                    <div id="narracao-container" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: #ddd; padding-right: 10px;">
+                        <div style="color: #666; text-align: center; padding: 20px;">Aguardando o início da partida...</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Script do Motor do Jogo -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/matchEngine.js"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!-- mercado.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Mercado da Bola</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+</head>
+<body style="align-items: flex-start;">
+
+    <div class="dashboard-layout">
+        <!-- Menu Lateral -->
+        <aside class="sidebar">
+            <h2>Manager BR</h2>
+            <button onclick="window.location.href='dashboard.html'">📊 Visão Geral</button>
+            <button onclick="window.location.href='escalacao.html'">⚽ Tática e Escalação</button>
+            <button onclick="window.location.href='calendario.html'">📅 Calendário</button>
+            <button onclick="window.location.href='ranking.html'">🏆 Classificação</button>
+            <button class="ativo" onclick="window.location.href='mercado.html'">🛒 Mercado</button>
+            <button onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ IR PARA O JOGO</button>
+            <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div style="display: flex; align-items: center;">
+                    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+                    <div>
+                        <span style="color: #aaa; font-size: 14px;">Treinador:</span>
+                        <strong id="nome-treinador">Carregando...</strong>
+                        <span style="color: #666; margin: 0 10px;">|</span>
+                        <strong id="nome-time" style="color: var(--verde-campo);">...</strong>
+                    </div>
+                </div>
+                <div class="info-caixa" id="saldo-treinador">R$ 0,00</div>
+            </header>
+
+            <section class="area-trabalho">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">Mercado da Bola 🛒</h2>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="busca-jogador" placeholder="Nome do Jogador..." style="width: 200px; margin: 0; padding: 8px;">
+                        <select id="filtro-posicao" style="width: auto; padding: 8px; margin: 0;" onchange="renderizarMercado()">
+                            <option value="TODOS">Todas as Posições</option>
+                            <option value="Goleiro">Goleiros</option>
+                            <option value="Zagueiro">Zagueiros</option>
+                            <option value="Lateral">Laterais</option>
+                            <option value="Volante">Volantes</option>
+                            <option value="Meia">Meias</option>
+                            <option value="Atacante">Atacantes (Todos)</option>
+                        </select>
+                        <button onclick="pesquisarJogador()" style="width: auto; margin: 0; padding: 8px 15px;">Buscar</button>
+                    </div>
+                </div>
+
+                <!-- Lista de Jogadores no Mercado -->
+                <div style="background: var(--card-bg); border: 1px solid #444; border-radius: 8px; padding: 15px; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: center; color: #ccc; min-width: 600px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #444;">
+                                <th style="text-align: left; padding: 10px; color: var(--verde-campo);">Atleta</th>
+                                <th>Posição</th>
+                                <th>Força (OVR)</th>
+                                <th>Clube Atual</th>
+                                <th>Passe (Valor)</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-mercado">
+                            <tr><td colspan="6" style="padding: 20px;">Carregando banco de dados da FIFA...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/mercado.js"></script>
+
+    <!-- MODAL DE PROPOSTA DE TRANSFERÊNCIA -->
+    <div id="modal-proposta" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
+        <div style="background: var(--card-bg); width: 100%; max-width: 450px; border-radius: 12px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; overflow: hidden;">
+
+            <div style="background: #2a2a2a; padding: 15px 20px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #ff8c00; font-size: 18px;">📄 Proposta de Transferência</h3>
+                <button onclick="fecharModalProposta()" style="background: transparent; color: #aaa; border: none; font-size: 24px; cursor: pointer; padding: 0; margin: 0; width: auto; line-height: 1;">&times;</button>
+            </div>
+
+            <div style="padding: 20px; color: #ccc; font-size: 14px;">
+                <p style="margin-top: 0;"><strong>Jogador Alvo:</strong> <span id="prop-nome-jogador" style="color: #fff;">...</span></p>
+                <p><strong>Clube Atual:</strong> <span id="prop-clube-dono" style="color: #fff;">...</span></p>
+                <p style="border-bottom: 1px solid #444; padding-bottom: 10px;"><strong>Valor de Mercado:</strong> <span id="prop-valor-base" style="color: var(--verde-campo); font-weight: bold;">...</span></p>
+
+                <!-- SEÇÃO DE OFERTA -->
+                <p style="margin-top: 15px; margin-bottom: 10px;"><strong>Seu Caixa Atual:</strong> <span id="prop-seu-caixa" style="color: var(--verde-campo);">...</span></p>
+
+                <label style="display: block; margin-bottom: 5px; color: #ff8c00; font-weight: bold;">Dinheiro Oferecido:</label>
+                <input type="number" id="input-valor-proposta" placeholder="Ex: 25000000 (Opcional se houver troca)" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; font-size: 14px; margin-bottom: 15px;">
+
+                <label style="display: block; margin-bottom: 5px; color: #ff8c00; font-weight: bold;">Adicionar Jogador na Troca (Opcional):</label>
+                <select id="select-jogador-troca" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; font-size: 13px;">
+                    <option value="">Nenhum - Apenas Dinheiro</option>
+                    <!-- Os jogadores do Treinador aparecerão aqui -->
+                </select>
+                <p style="font-size: 11px; color: #888; margin-top: 5px;">A IA do clube avaliará se a soma do dinheiro + o valor do seu jogador é justa.</p>
+            </div>
+
+            <div style="padding: 15px 20px; border-top: 1px solid #444; background: #2a2a2a; display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="fecharModalProposta()" style="background: #444; border: 1px solid #555; color: white; width: auto; padding: 8px 15px; margin: 0; border-radius: 6px;">Cancelar</button>
+                <button onclick="confirmarProposta()" style="background: var(--verde-campo); border: none; color: white; width: auto; padding: 8px 20px; margin: 0; border-radius: 6px; font-weight: bold;">Enviar Oferta</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Final do dashboard.html (Exemplo) -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/motor.js"></script> <!-- ADICIONE ESTA LINHA -->
+</body>
+</html>
