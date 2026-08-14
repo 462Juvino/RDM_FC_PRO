@@ -48,8 +48,18 @@
             <section class="area-trabalho">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                     <h2 style="margin: 0;">Prancheta Tática</h2>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <select id="select-formacao" style="width: auto; padding: 8px; margin: 0;" onchange="desenharCampinho()">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <select id="select-estilo" style="width: auto; padding: 8px; margin: 0; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px;">
+                            <option value="Posse de Bola">Posse de Bola</option>
+                            <option value="Contra-Ataque">Contra-Ataque</option>
+                            <option value="Pelos Lados">Jogadas pelos Lados</option>
+                        </select>
+                        <select id="select-mentalidade" style="width: auto; padding: 8px; margin: 0; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px;">
+                            <option value="Moderado">Moderado</option>
+                            <option value="Ofensivo">Ofensivo</option>
+                            <option value="Retranca">Retranca Total</option>
+                        </select>
+                        <select id="select-formacao" style="width: auto; padding: 8px; margin: 0; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px;" onchange="desenharCampinho()">
                             <option value="4-4-2">4-4-2 Padrão</option>
                             <option value="4-3-3">4-3-3 Ofensivo</option>
                             <option value="3-5-2">3-5-2 Posse de Bola</option>
@@ -89,9 +99,8 @@
         </main>
     </div>
 
-    <!-- Final do dashboard.html (Exemplo) -->
     <script src="js/firebase-config.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/motor.js"></script> <!-- ADICIONE ESTA LINHA -->
+    <script src="js/escalacao.js"></script>
+    <script src="js/motor.js"></script>
 </body>
 </html>

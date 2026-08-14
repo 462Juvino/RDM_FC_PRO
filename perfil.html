@@ -1,0 +1,109 @@
+<!-- perfil.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager BR 26 - Pro Player</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+</head>
+<body style="align-items: flex-start;">
+
+    <div class="dashboard-layout">
+        <!-- Menu Lateral -->
+        <aside class="sidebar">
+            <h2>Manager BR</h2>
+            <button onclick="window.location.href='dashboard.html'">📊 Visão Geral</button>
+            <button onclick="window.location.href='escalacao.html'">⚽ Tática e Escalação</button>
+            <button onclick="window.location.href='calendario.html'">📅 Calendário</button>
+            <button onclick="window.location.href='ranking.html'">🏆 Classificação</button>
+            <button onclick="window.location.href='mercado.html'">🛒 Mercado</button>
+            <button class="ativo" onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ IR PARA O JOGO</button>
+            <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div style="display: flex; align-items: center;">
+                    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+                    <div>
+                        <span style="color: #aaa; font-size: 14px;">Treinador:</span>
+                        <strong id="nome-treinador">Carregando...</strong>
+                        <span style="color: #666; margin: 0 10px;">|</span>
+                        <strong id="nome-time" style="color: var(--verde-campo);">...</strong>
+                    </div>
+                </div>
+            </header>
+
+            <section class="area-trabalho">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">Centro de Treinamento da Base 👤</h2>
+                </div>
+
+                <div class="dashboard-widgets" style="grid-template-columns: 1fr 1fr;">
+
+                    <!-- WIDGET: CRIAR SEU PRO PLAYER -->
+                    <div class="widget-card" id="box-criar-player">
+                        <h3 style="color: #ff8c00;">Forjar Promessa (Pro Player)</h3>
+                        <p style="font-size: 13px; color: #ccc;">Crie um jogador com um teto de <strong>300 pontos iniciais</strong>. Os outros treinadores avaliarão seu atleta para definir o OVR final. Ele entrará no mercado na 5ª Rodada!</p>
+
+                        <input type="text" id="pro-nome" placeholder="Nome do Jogador" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; margin-bottom: 10px;">
+
+                        <select id="pro-posicao" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; margin-bottom: 15px;">
+                            <option value="Atacante">Atacante</option>
+                            <option value="Meia">Meia</option>
+                            <option value="Volante">Volante</option>
+                            <option value="Zagueiro">Zagueiro</option>
+                            <option value="Lateral">Lateral</option>
+                            <option value="Goleiro">Goleiro</option>
+                        </select>
+
+                        <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: #aaa; font-size: 13px;">Pontos Disponíveis:</span>
+                                <strong id="pontos-restantes" style="color: var(--verde-campo);">300</strong>
+                            </div>
+
+                            <!-- Sliders de Atributos -->
+                            <div class="atributo-slider"><span>Ataque:</span> <input type="range" id="atr-atq" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-atq">60</span></div>
+                            <div class="atributo-slider"><span>Defesa:</span> <input type="range" id="atr-def" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-def">60</span></div>
+                            <div class="atributo-slider"><span>Força:</span> <input type="range" id="atr-for" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-for">60</span></div>
+                            <div class="atributo-slider"><span>Veloc.:</span> <input type="range" id="atr-vel" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-vel">60</span></div>
+                            <div class="atributo-slider"><span>Habil.:</span> <input type="range" id="atr-hab" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-hab">60</span></div>
+                        </div>
+
+                        <button onclick="salvarProPlayer()" style="background: var(--verde-campo); width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; color: white; border: none; cursor: pointer;">Registrar Atleta</button>
+                    </div>
+
+                    <!-- WIDGET: AVALIAR JOGADORES DOS OUTROS -->
+                    <div class="widget-card">
+                        <h3 style="color: #00b853;">Olheiro Comunitário 🔍</h3>
+                        <p style="font-size: 13px; color: #ccc;">Avalie as promessas criadas pelos outros treinadores. Sua nota influenciará o preço e a força final do atleta no mercado.</p>
+
+                        <div id="lista-avaliacoes" style="max-height: 400px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 20px; color: #666;">Buscando atletas aguardando avaliação...</div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/perfil.js"></script>
+    <script src="js/motor.js"></script>
+
+    <style>
+        .atributo-slider { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #ddd; }
+        .atributo-slider span:first-child { width: 60px; }
+        .atributo-slider input { flex: 1; margin: 0 10px; cursor: pointer; }
+        .atributo-slider span:last-child { width: 30px; text-align: right; font-weight: bold; color: #ff8c00; }
+    </style>
+</body>
+</html>
