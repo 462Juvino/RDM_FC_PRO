@@ -12,7 +12,6 @@ let divisaoAtiva = "A";
 
 window.addEventListener('DOMContentLoaded', async () => {
     try {
-        // 1. Carrega o usuário
         const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
         dadosUsuario = snapUser.val();
 
@@ -21,21 +20,19 @@ window.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('nome-treinador').innerText = dadosUsuario.nome;
         document.getElementById('nome-time').innerText = dadosUsuario.timeAtual.replace(/_/g, ' ');
 
-        // Descobre a divisão do usuário e a define como inicial
         const snapMeusDadosTime = await db.ref(`banco_global_times/${dadosUsuario.timeAtual}`).once('value');
         if (snapMeusDadosTime.exists() && snapMeusDadosTime.val().divisao) {
             divisaoAtiva = snapMeusDadosTime.val().divisao;
             atualizarBotoesAba();
         }
 
-        // 2. Carrega todos os times do mundo para montar a base
         const snapTimes = await db.ref('banco_global_times').once('value');
         timesGlobais = snapTimes.val() || {};
 
-        // 3. Carrega o calendário e fica escutando atualizações (se o P2P rodar, atualiza na hora)
         db.ref(`ligas/${ligaLogada}/calendario`).on('value', snapCal => {
             calendarioLiga = snapCal.val();
             renderizarTabela();
+            carregarEstatisticasGerais(); // Dispara a busca de artilheiros
         });
 
     } catch (e) {
@@ -43,11 +40,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Controle da aba Superior
 function mudarDivisao(divisao) {
     divisaoAtiva = divisao;
     atualizarBotoesAba();
     renderizarTabela();
+    carregarEstatisticasGerais(); // Atualiza artilheiros da Série A ou B
 }
 
 function atualizarBotoesAba() {
@@ -56,7 +53,9 @@ function atualizarBotoesAba() {
     document.getElementById(`btn-div-${divisaoAtiva}`).classList.add('ativo');
 }
 
-// O CÉREBRO DA CLASSIFICAÇÃO
+// ========================================================
+// 1. CÉREBRO DA CLASSIFICAÇÃO (Com as Zonas de Copa)
+// ========================================================
 function renderizarTabela() {
     const tbody = document.getElementById('corpo-tabela');
 
@@ -65,7 +64,6 @@ function renderizarTabela() {
         return;
     }
 
-    // 1. Cria a base de times zerada
     let tabela = {};
     for (let t in timesGlobais) {
         if (timesGlobais[t].divisao === divisaoAtiva) {
@@ -77,7 +75,6 @@ function renderizarTabela() {
         }
     }
 
-    // 2. Varre os jogos do calendário para somar os pontos
     const jogosDivisao = divisaoAtiva === "A" ? calendarioLiga.serieA : calendarioLiga.serieB;
 
     if (jogosDivisao) {
@@ -86,36 +83,24 @@ function renderizarTabela() {
             for (let idJogo in jogos) {
                 let jogo = jogos[idJogo];
 
-                // Só calcula se a partida já aconteceu
                 if (jogo.jogado) {
                     let mand = jogo.mandante;
                     let vis = jogo.visitante;
                     let gm = jogo.placarMandante;
                     let gv = jogo.placarVisitante;
 
-                    // Fantasma significa "Descanso", não conta
                     if (mand === "Fantasma" || vis === "Fantasma") continue;
 
-                    // Acréscimo de Gols e Jogos
-                    if (tabela[mand]) {
-                        tabela[mand].J++;
-                        tabela[mand].GP += gm;
-                        tabela[mand].GC += gv;
-                    }
-                    if (tabela[vis]) {
-                        tabela[vis].J++;
-                        tabela[vis].GP += gv;
-                        tabela[vis].GC += gm;
-                    }
+                    if (tabela[mand]) { tabela[mand].J++; tabela[mand].GP += gm; tabela[mand].GC += gv; }
+                    if (tabela[vis]) { tabela[vis].J++; tabela[vis].GP += gv; tabela[vis].GC += gm; }
 
-                    // Verifica o resultado
-                    if (gm > gv) { // Vitória do Mandante
+                    if (gm > gv) {
                         if (tabela[mand]) { tabela[mand].Pts += 3; tabela[mand].V++; }
                         if (tabela[vis]) { tabela[vis].D++; }
-                    } else if (gv > gm) { // Vitória do Visitante
+                    } else if (gv > gm) {
                         if (tabela[vis]) { tabela[vis].Pts += 3; tabela[vis].V++; }
                         if (tabela[mand]) { tabela[mand].D++; }
-                    } else { // Empate
+                    } else {
                         if (tabela[mand]) { tabela[mand].Pts += 1; tabela[mand].E++; }
                         if (tabela[vis]) { tabela[vis].Pts += 1; tabela[vis].E++; }
                     }
@@ -124,39 +109,37 @@ function renderizarTabela() {
         }
     }
 
-    // 3. Atualiza Saldo de Gols final
-    for (let t in tabela) {
-        tabela[t].SG = tabela[t].GP - tabela[t].GC;
-    }
+    for (let t in tabela) { tabela[t].SG = tabela[t].GP - tabela[t].GC; }
 
-    // 4. Converte em Array e Ordena pelas regras oficias de desempate
     let arrTabela = Object.values(tabela);
     arrTabela.sort((a, b) => {
-        if (b.Pts !== a.Pts) return b.Pts - a.Pts; // 1º Pontos
-        if (b.V !== a.V) return b.V - a.V;         // 2º Vitórias
-        if (b.SG !== a.SG) return b.SG - a.SG;     // 3º Saldo de Gols
-        return b.GP - a.GP;                        // 4º Gols Pró
+        if (b.Pts !== a.Pts) return b.Pts - a.Pts;
+        if (b.V !== a.V) return b.V - a.V;
+        if (b.SG !== a.SG) return b.SG - a.SG;
+        return b.GP - a.GP;
     });
 
-    // 5. Injeta no HTML
     tbody.innerHTML = "";
     arrTabela.forEach((time, index) => {
         let pos = index + 1;
 
-        // Cores de zonas de rebaixamento ou título (Opcional, configurado para ligas de 20 times)
-        let classeCSS = "";
-        if (pos <= 4) classeCSS = "zona-libertadores";
-        else if (pos >= arrTabela.length - 3) classeCSS = "zona-rebaixamento";
+        // Regras das Zonas (Igual ao da imagem que você mandou)
+        // 1 ao 4 = Azul | 5 ao 10 = Verde (Totalizando os Top 10 para Copas) | Últimos 4 = Vermelho
+        let classeCSS = "sem-zona";
+        if (pos <= 4) classeCSS = "zona-azul";
+        else if (pos <= 10) classeCSS = "zona-verde";
+        else if (pos >= arrTabela.length - 3) classeCSS = "zona-vermelha";
 
-        // Destaca o time do usuário
         let corNome = time.id === dadosUsuario.timeAtual ? "#ff8c00" : "#fff";
         let pesoNome = time.id === dadosUsuario.timeAtual ? "bold" : "normal";
 
         tbody.innerHTML += `
-            <tr>
-                <td class="${classeCSS}" style="font-weight: bold; color: #888;">${pos}º</td>
-                <td style="text-align: left; color: ${corNome}; font-weight: ${pesoNome};">${time.nome}</td>
-                <td style="font-weight: bold; color: white;">${time.Pts}</td>
+            <tr class="${classeCSS}">
+                <td>${pos}</td>
+                <td style="text-align: left; color: ${corNome}; font-weight: ${pesoNome}; display: flex; align-items: center;">
+                    <img src="${getEscudo(time.id)}" onerror="this.src='esculdos/default.png'" class="escudo-mini"> ${time.nome}
+                </td>
+                <td class="col-pts">${time.Pts}</td>
                 <td>${time.J}</td>
                 <td>${time.V}</td>
                 <td>${time.E}</td>
@@ -169,6 +152,78 @@ function renderizarTabela() {
             </tr>
         `;
     });
+}
+
+// ========================================================
+// 2. PAINEL DE ESTATÍSTICAS DA DIVISÃO
+// ========================================================
+function carregarEstatisticasGerais() {
+    let todosJogadores = [];
+
+    // Vasculha os times apenas da Divisão que o usuário está visualizando
+    for (let t in timesGlobais) {
+        if (timesGlobais[t].divisao === divisaoAtiva && timesGlobais[t].jogadores) {
+            for (let j in timesGlobais[t].jogadores) {
+                let jog = timesGlobais[t].jogadores[j];
+                jog.timeOrigem = t;
+                todosJogadores.push(jog);
+            }
+        }
+    }
+
+    // Top 10 Artilheiros
+    let artilheiros = [...todosJogadores]
+        .filter(j => j.estatisticas && j.estatisticas.gols > 0)
+        .sort((a, b) => b.estatisticas.gols - a.estatisticas.gols)
+        .slice(0, 10);
+
+    // Top 10 Assistências
+    let assistentes = [...todosJogadores]
+        .filter(j => j.estatisticas && j.estatisticas.assistencias > 0)
+        .sort((a, b) => b.estatisticas.assistencias - a.estatisticas.assistencias)
+        .slice(0, 10);
+
+    // Renderiza HTML
+    const listaGols = document.getElementById('lista-artilheiros');
+    const listaAst = document.getElementById('lista-assistencias');
+
+    if (artilheiros.length === 0) {
+        listaGols.innerHTML = `<li><span style="color: #666;">Nenhum gol registrado nesta divisão.</span></li>`;
+    } else {
+        listaGols.innerHTML = "";
+        artilheiros.forEach((j, i) => {
+            let nomeCurto = j.nome.split(" ")[0];
+            listaGols.innerHTML += `
+                <li>
+                    <div style="display: flex; align-items: center;">
+                        <span style="color: #888; width: 20px;">${i+1}º</span>
+                        <img src="${getEscudo(j.timeOrigem)}" onerror="this.src='esculdos/default.png'" style="width: 16px; height: 16px; margin: 0 8px;">
+                        <strong style="color: #fff;">${nomeCurto}</strong>
+                    </div>
+                    <span style="font-weight: bold; color: #ff8c00;">${j.estatisticas.gols} <span style="font-size:10px;color:#888;">Gols</span></span>
+                </li>
+            `;
+        });
+    }
+
+    if (assistentes.length === 0) {
+        listaAst.innerHTML = `<li><span style="color: #666;">Nenhuma assistência registrada nesta divisão.</span></li>`;
+    } else {
+        listaAst.innerHTML = "";
+        assistentes.forEach((j, i) => {
+            let nomeCurto = j.nome.split(" ")[0];
+            listaAst.innerHTML += `
+                <li>
+                    <div style="display: flex; align-items: center;">
+                        <span style="color: #888; width: 20px;">${i+1}º</span>
+                        <img src="${getEscudo(j.timeOrigem)}" onerror="this.src='esculdos/default.png'" style="width: 16px; height: 16px; margin: 0 8px;">
+                        <strong style="color: #fff;">${nomeCurto}</strong>
+                    </div>
+                    <span style="font-weight: bold; color: var(--verde-campo);">${j.estatisticas.assistencias} <span style="font-size:10px;color:#888;">Ast</span></span>
+                </li>
+            `;
+        });
+    }
 }
 
 function toggleMenu() { document.querySelector('.sidebar').classList.toggle('aberta'); }

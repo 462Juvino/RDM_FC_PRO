@@ -45,6 +45,38 @@ function carregarElenco(nomeTime) {
     db.ref(`banco_global_times/${nomeTime}/jogadores`).once('value').then(snap => {
         elencoCompleto = snap.val() || {};
 
+        // --- LÓGICA DE ESCALAÇÃO AUTOMÁTICA ---
+        let timeVazio = titulares.every(slot => slot === null);
+
+        if (timeVazio && Object.keys(elencoCompleto).length > 0) {
+            let todosJogadores = Object.keys(elencoCompleto).map(id => ({ id, ...elencoCompleto[id] }));
+
+            // Ordena os jogadores por Força Total (OVR)
+            todosJogadores.sort((a, b) => {
+                let ovrA = a.atributos.ataque + a.atributos.defesa + a.atributos.forca + a.atributos.velocidade + a.atributos.habilidade;
+                let ovrB = b.atributos.ataque + b.atributos.defesa + b.atributos.forca + b.atributos.velocidade + b.atributos.habilidade;
+                return ovrB - ovrA;
+            });
+
+            // Isola o melhor Goleiro no Slot 10
+            let goleiroIndex = todosJogadores.findIndex(j => j.posicoes.p === "Goleiro" || j.posicoes.s === "Goleiro");
+            if (goleiroIndex !== -1) {
+                titulares[10] = todosJogadores[goleiroIndex].id;
+                todosJogadores.splice(goleiroIndex, 1);
+            }
+
+            // Coloca os 10 melhores de linha nos slots restantes
+            let countLinha = 0;
+            for (let i = 0; i < todosJogadores.length; i++) {
+                if (countLinha >= 10) break;
+                titulares[countLinha] = todosJogadores[i].id;
+                countLinha++;
+            }
+            // Salva no banco de dados silenciosamente
+            db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/titulares`).set(titulares);
+        }
+        // ---------------------------------------
+
         // Renderiza a tabela e recalcula os nomes no campinho agora que os dados chegaram
         renderizarTabela();
         for(let i=0; i < titulares.length; i++) atualizarVisualSlot(i);
