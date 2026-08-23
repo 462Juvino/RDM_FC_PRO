@@ -10,6 +10,22 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <style>
+        .placar-wrapper {
+            display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 20px;
+        }
+        .placar-time { flex: 1; }
+        .placar-time-mandante { text-align: right; }
+        .placar-time-visitante { text-align: left; }
+
+        /* Regra de Ouro: No celular, o placar empilha! */
+        @media (max-width: 768px) {
+            .placar-wrapper { flex-direction: column; gap: 15px; }
+            .placar-time { text-align: center !important; width: 100%; }
+            .placar-time h2 { font-size: 24px !important; }
+        }
+    </style>
 </head>
 <body style="align-items: flex-start;">
 
@@ -45,9 +61,9 @@
 
                     <h3 style="color: #ff8c00; margin-top: 0; text-transform: uppercase; letter-spacing: 2px; font-size: 14px;">Ao Vivo 🔴</h3>
 
-                    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 20px;">
+                    <div class="placar-wrapper">
                         <!-- Mandante -->
-                        <div style="flex: 1; text-align: right;">
+                        <div class="placar-time placar-time-mandante">
                             <h2 id="placar-nome-mandante" style="margin: 0; font-size: 28px; color: white;">Carregando...</h2>
                         </div>
 
@@ -62,7 +78,7 @@
                         </div>
 
                         <!-- Visitante -->
-                        <div style="flex: 1; text-align: left;">
+                        <div class="placar-time placar-time-visitante">
                             <!-- O JS matchEngine.js injeta a tag inteira com a imagem e o nome aqui -->
                             <h2 id="placar-nome-visitante" style="margin: 0; font-size: 28px; color: white;">...</h2>
                         </div>
