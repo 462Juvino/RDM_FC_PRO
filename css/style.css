@@ -143,6 +143,8 @@ button:hover {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #333;
+    position: relative; /* ADICIONADO */
+    z-index: 10001; /* ADICIONADO: Fica por cima do menu lateral mobile */
 }
 
 .topbar .info-caixa {
@@ -307,13 +309,15 @@ button:hover {
 
 /* Menu Hambúrguer (Mobile) */
 .btn-menu {
-    display: none;
     background: transparent;
     border: none;
     color: white;
-    font-size: 26px;
+    font-size: 24px;
     cursor: pointer;
     margin-right: 15px;
+    /* ADICIONE ESTAS DUAS LINHAS ABAIXO: */
+    position: relative;
+    z-index: 99999;
 }
 
 @media (max-width: 768px) {
@@ -487,4 +491,33 @@ button:hover {
 @keyframes piscar {
     0% { color: #fff; transform: scale(1.5); }
     100% { color: #ff8c00; transform: scale(1); }
+}
+
+/* Fundo dinâmico para os Estádios */
+body {
+    background-color: #121212;
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    transition: background-image 0.5s ease-in-out;
+}
+
+/* Escudinhos em todo lugar */
+.escudo-mini {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin: 0 6px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.escudo-placar {
+    width: 45px;
+    height: 45px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin: 0 15px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
 }
