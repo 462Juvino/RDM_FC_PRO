@@ -90,11 +90,11 @@ function iniciarTransmissao() {
         if (jogoAoVivo) {
             jogoAtual = jogoAoVivo;
 
-            // 🟢 INJETA ESTÁDIO DO VISITANTE NO FUNDO (Conforme pedido)
+            // 🟢 INJETA ESTÁDIO DO VISITANTE NO FUNDO
             document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.visitante)}')`;
 
-            lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
-            lblVisitante.innerHTML = `<img src="esculdos/${jogoAoVivo.visitante}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
+            lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
+            lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
             // Toca a torcida do mandante de fundo (Ou genérica se não tiver arquivo)
             if (audioLiberado && canalTorcida.src === "") {
