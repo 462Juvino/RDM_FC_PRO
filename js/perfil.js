@@ -66,9 +66,46 @@ function carregarHistoricoCampeoes() {
 }
 
 // ========================================================
+// 1. HELPER DOS BOTÕES DE MAIS E MENOS NO CELULAR
+// ========================================================
+window.ajustarSlider = function(id, delta, funcName, arg) {
+    let el = document.getElementById(id);
+    if(el) {
+        let newVal = parseInt(el.value) + delta;
+        if(newVal >= parseInt(el.min) && newVal <= parseInt(el.max)) {
+            el.value = newVal;
+            if(funcName === 'calcularPontos') calcularPontos();
+            if(funcName === 'calcularPontosAvaliacao') calcularPontosAvaliacao(arg);
+        }
+    }
+};
+
+function gerarSlidersHTML(a, d, f, v, h, isAval = false, dono = "", mxA=90, mxD=90, mxF=90, mxV=90, mxH=90) {
+    const func = isAval ? 'calcularPontosAvaliacao' : 'calcularPontos';
+    const arg = isAval ? `'${dono}'` : '';
+    const suf = isAval ? `_${dono}` : '';
+
+    const makeRow = (lbl, val, id, max) => {
+        let valorReal = Math.min(val, max);
+        return `
+        <div class="atributo-slider" style="margin-bottom: 12px; display: flex; align-items: center; gap: 5px;">
+            <span style="width: 55px; font-size: 12px;">${lbl}:</span>
+            <button onclick="ajustarSlider('${id}', -1, '${func}', ${arg || 'null'})" style="width:30px; height:30px; background:#444; border:none; color:white; border-radius:4px; font-weight:bold; font-size:16px;">-</button>
+            <input type="range" id="${id}" min="10" max="${max}" value="${valorReal}" oninput="${func}(${arg})" style="flex:1;">
+            <button onclick="ajustarSlider('${id}', 1, '${func}', ${arg || 'null'})" style="width:30px; height:30px; background:#444; border:none; color:white; border-radius:4px; font-weight:bold; font-size:16px;">+</button>
+            <span id="val-${id}" style="width: 25px; text-align: right; color: #ff8c00; font-weight: bold;">${valorReal}</span>
+        </div>`;
+    };
+
+    return makeRow('Ataque', a, `atr-atq${suf}`, mxA) +
+           makeRow('Defesa', d, `atr-def${suf}`, mxD) +
+           makeRow('Força',  f, `atr-for${suf}`, mxF) +
+           makeRow('Veloc.', v, `atr-vel${suf}`, mxV) +
+           makeRow('Habil.', h, `atr-hab${suf}`, mxH);
+}
 
 // ========================================================
-// 1. CHECAGEM E RENDERIZAÇÃO DO PRO PLAYER
+// 2. CHECAGEM E RENDERIZAÇÃO DO PRO PLAYER
 // ========================================================
 function checarMeuProPlayer() {
     db.ref(`ligas/${ligaLogada}/pro_players/${userLogado}`).on('value', snap => {
@@ -78,11 +115,10 @@ function checarMeuProPlayer() {
             meuProPlayer = snap.val();
             renderizarPainelEvolucao();
         } else {
-            // SE NÃO EXISTE, MOSTRA A TELA DE CRIAÇÃO ORIGINAL
             TETO_PONTOS = 300;
             box.innerHTML = `
                 <h3 style="color: #ff8c00;">Forjar Promessa (Pro Player)</h3>
-                <p style="font-size: 13px; color: #ccc;">Crie um jogador com um teto de <strong>300 pontos</strong> iniciais. Os outros avaliarão seu atleta!</p>
+                <p style="font-size: 13px; color: #ccc;">Crie um jogador com <strong>300 pontos</strong>. Os técnicos da liga irão testá-lo e ajustar suas notas reais!</p>
                 <input type="text" id="pro-nome" placeholder="Nome do Jogador" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; margin-bottom: 10px;">
                 <select id="pro-posicao" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; margin-bottom: 15px;">
                     <option value="Atacante">Atacante</option>
@@ -106,58 +142,34 @@ function checarMeuProPlayer() {
     });
 }
 
-function gerarSlidersHTML(a, d, f, v, h) {
-    return `
-        <div class="atributo-slider"><span>Ataque:</span> <input type="range" id="atr-atq" min="10" max="90" value="${a}" oninput="calcularPontos()"> <span id="val-atq">${a}</span></div>
-        <div class="atributo-slider"><span>Defesa:</span> <input type="range" id="atr-def" min="10" max="90" value="${d}" oninput="calcularPontos()"> <span id="val-def">${d}</span></div>
-        <div class="atributo-slider"><span>Força:</span> <input type="range" id="atr-for" min="10" max="90" value="${f}" oninput="calcularPontos()"> <span id="val-for">${f}</span></div>
-        <div class="atributo-slider"><span>Veloc.:</span> <input type="range" id="atr-vel" min="10" max="90" value="${v}" oninput="calcularPontos()"> <span id="val-vel">${v}</span></div>
-        <div class="atributo-slider"><span>Habil.:</span> <input type="range" id="atr-hab" min="10" max="90" value="${h}" oninput="calcularPontos()"> <span id="val-hab">${h}</span></div>
-    `;
-}
-
 function renderizarPainelEvolucao() {
     const box = document.getElementById('box-criar-player');
     let at = meuProPlayer.atributos_base;
     let qtdVotos = meuProPlayer.avaliacoes ? Object.keys(meuProPlayer.avaliacoes).length : 0;
 
-    // Calcula Média
-    let media = 3; // Média padrão neutra
+    let mxA = 90, mxD = 90, mxF = 90, mxV = 90, mxH = 90;
+
+    // Lógica Inteligente: A Média da Comunidade vira o "Limite" do jogador
     if (qtdVotos > 0) {
-        let soma = 0;
-        for(let v in meuProPlayer.avaliacoes) soma += parseInt(meuProPlayer.avaliacoes[v].nota_estrelas);
-        media = (soma / qtdVotos).toFixed(1);
-    }
+        let sA=0, sD=0, sF=0, sV=0, sH=0;
+        for(let v in meuProPlayer.avaliacoes) {
+            let av = meuProPlayer.avaliacoes[v];
+            sA+=av.ataque; sD+=av.defesa; sF+=av.forca; sV+=av.velocidade; sH+=av.habilidade;
+        }
+        mxA = Math.round(sA / qtdVotos); mxD = Math.round(sD / qtdVotos);
+        mxF = Math.round(sF / qtdVotos); mxV = Math.round(sV / qtdVotos); mxH = Math.round(sH / qtdVotos);
 
-    // Lógica de Ganho/Perda de pontos baseado na avaliação da liga
-    // Se a liga achou ele craque (> 3.5), ganha até +15 pts. Se achou bagre (< 2.5), perde -15 pts.
-    let bonusPontos = 0;
-    if (qtdVotos >= 3) { // Só aplica bônus se pelo menos 3 pessoas votaram
-        if (media >= 4.0) bonusPontos = 15;
-        else if (media >= 3.5) bonusPontos = 10;
-        else if (media <= 2.0) bonusPontos = -15;
-        else if (media <= 2.5) bonusPontos = -10;
-    }
+        TETO_PONTOS = mxA + mxD + mxF + mxV + mxH; // O Teto total se ajusta à media
 
-    // Teto novo baseado na reputação
-    TETO_PONTOS = 300 + bonusPontos;
-
-    // Dispara a Notificação Visual
-    if (qtdVotos >= 3 && !meuProPlayer.ajuste_concluido) {
-        document.getElementById('alerta-notificacao').style.display = "block";
-        document.getElementById('painel-notificacao').style.display = "block";
-
-        let msg = bonusPontos > 0
-            ? `Boas notícias! A liga avaliou seu atleta com média <strong>${media}⭐</strong>. Você ganhou <strong>+${bonusPontos} Pts extras</strong> para distribuir!`
-            : (bonusPontos < 0 ? `Má notícia... A liga achou seu atleta fraco (Média <strong>${media}⭐</strong>). O seu teto caiu, remova <strong>${Math.abs(bonusPontos)} Pts</strong> dos atributos!` : `A liga avaliou seu atleta na média. Os pontos estão equilibrados.`);
-
-        document.getElementById('texto-notificacao').innerHTML = msg;
+        if (!meuProPlayer.ajuste_concluido) {
+            document.getElementById('alerta-notificacao').style.display = "block";
+            document.getElementById('painel-notificacao').style.display = "block";
+            document.getElementById('texto-notificacao').innerHTML = `A liga reavaliou o seu atleta! Os seus novos limites de atributos agora são baseados na média da comunidade. Você possui <strong>${TETO_PONTOS} pts</strong> permitidos para redistribuir!`;
+        }
     } else {
-        document.getElementById('alerta-notificacao').style.display = "none";
-        document.getElementById('painel-notificacao').style.display = "none";
+        TETO_PONTOS = 300;
     }
 
-    // Se o usuário já concluiu o ajuste final da temporada, a tela trava!
     if (meuProPlayer.ajuste_concluido) {
         box.innerHTML = `
             <h3 style="color: var(--verde-campo);">Craque Formado: ${meuProPlayer.nome}</h3>
@@ -165,23 +177,22 @@ function renderizarPainelEvolucao() {
                 <p style="margin-top:0; color:#aaa; font-size:13px;">Posição: <strong>${meuProPlayer.posicao}</strong></p>
                 <p style="color:#aaa; font-size:13px;">Força OVR Oficial: <strong style="color:var(--verde-campo);">${at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade}</strong></p>
                 <hr style="border-color:#333; margin: 10px 0;">
-                <p style="color: #666; font-size: 12px; margin-bottom:0;">O seu atleta já está devidamente registrado na base de dados final e avaliado pela liga. Nenhuma alteração a mais pode ser feita.</p>
+                <p style="color: #666; font-size: 12px; margin-bottom:0;">O seu atleta já está devidamente registrado no mercado. Nenhuma alteração a mais pode ser feita.</p>
             </div>
         `;
     } else {
-        // Se ainda não concluiu, exibe os sliders com os valores atuais para ele arrumar
         box.innerHTML = `
             <h3 style="color: var(--verde-campo);">Ajuste seu Craque: ${meuProPlayer.nome}</h3>
-            <p style="font-size: 13px; color: #ccc;">Sua reputação na liga: <strong>${qtdVotos > 0 ? media + '⭐' : 'Aguardando votos'}</strong></p>
+            <p style="font-size: 13px; color: #ccc;">Avaliações recebidas: <strong>${qtdVotos} Olheiro(s)</strong></p>
             <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444; margin-bottom: 15px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <span style="color: #aaa; font-size: 13px;">Pontos Max: <strong>${TETO_PONTOS}</strong> | Restantes:</span>
+                    <span style="color: #aaa; font-size: 13px;">Novo Teto: <strong>${TETO_PONTOS}</strong> | Restantes:</span>
                     <strong id="pontos-restantes" style="color: var(--verde-campo);">0</strong>
                 </div>
-                ${gerarSlidersHTML(at.ataque, at.defesa, at.forca, at.velocidade, at.habilidade)}
+                ${gerarSlidersHTML(at.ataque, at.defesa, at.forca, at.velocidade, at.habilidade, false, "", mxA, mxD, mxF, mxV, mxH)}
             </div>
-            <button onclick="salvarProPlayer(false)" style="background: #ff8c00; width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; color: white; border: none; cursor: pointer;">${qtdVotos >= 3 ? "✅ Finalizar e Travar Atleta" : "💾 Atualizar Atributos"}</button>
-            ${qtdVotos < 3 ? '<p style="font-size: 11px; color: #666; text-align:center; margin-top: 10px;">Aguarde pelo menos 3 votos da liga para o bloqueio definitivo e liberação no mercado.</p>' : ''}
+            <button onclick="salvarProPlayer(false)" style="background: #ff8c00; width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; color: white; border: none; cursor: pointer;">${qtdVotos >= 3 ? "✅ Aceitar Limites e Travar Atleta" : "💾 Atualizar Atributos"}</button>
+            ${qtdVotos < 3 ? '<p style="font-size: 11px; color: #666; text-align:center; margin-top: 10px;">Aguarde 3 votos para poder confirmar a versão final pro mercado.</p>' : ''}
         `;
         calcularPontos();
     }
@@ -194,11 +205,11 @@ function calcularPontos() {
     const vel = parseInt(document.getElementById('atr-vel').value);
     const hab = parseInt(document.getElementById('atr-hab').value);
 
-    document.getElementById('val-atq').innerText = atq;
-    document.getElementById('val-def').innerText = def;
-    document.getElementById('val-for').innerText = forca;
-    document.getElementById('val-vel').innerText = vel;
-    document.getElementById('val-hab').innerText = hab;
+    document.getElementById('val-atr-atq').innerText = atq;
+    document.getElementById('val-atr-def').innerText = def;
+    document.getElementById('val-atr-for').innerText = forca;
+    document.getElementById('val-atr-vel').innerText = vel;
+    document.getElementById('val-atr-hab').innerText = hab;
 
     const soma = atq + def + forca + vel + hab;
     const restantes = TETO_PONTOS - soma;
@@ -210,8 +221,7 @@ function calcularPontos() {
 
 function salvarProPlayer(isNovo) {
     const lblPontos = parseInt(document.getElementById('pontos-restantes').innerText);
-
-    if (lblPontos < 0) return alert(`Você ultrapassou o teto! Remova ${Math.abs(lblPontos)} pontos.`);
+    if (lblPontos < 0) return alert(`Você ultrapassou o teto da comunidade! Remova ${Math.abs(lblPontos)} pontos.`);
 
     const atributosBase = {
         ataque: parseInt(document.getElementById('atr-atq').value),
@@ -228,44 +238,32 @@ function salvarProPlayer(isNovo) {
         const pos = document.getElementById('pro-posicao').value;
         if (!nome) return alert("Dê um nome para a sua promessa!");
 
-        objAtualizacao = {
-            nome: nome,
-            posicao: pos,
-            criador: userLogado,
-            atributos_base: atributosBase,
-            status: "avaliando",
-            ajuste_concluido: false
-        };
+        objAtualizacao = { nome: nome, posicao: pos, criador: userLogado, atributos_base: atributosBase, status: "avaliando", ajuste_concluido: false };
     } else {
-        // Se está atualizando e já tem 3 votos, ele "trava" o jogador pra sempre
         let qtdVotos = meuProPlayer.avaliacoes ? Object.keys(meuProPlayer.avaliacoes).length : 0;
         if (qtdVotos >= 3) {
-            if(!confirm("Atenção! Ao finalizar a evolução, seus atributos serão travados permanentemente na base de dados. Confirmar?")) return;
+            if(!confirm("Atenção! Seus atributos serão travados permanentemente na base de dados para ir a leilão. Confirmar?")) return;
             objAtualizacao.ajuste_concluido = true;
-            objAtualizacao.status = "ativo"; // Pode entrar no mercado!
+            objAtualizacao.status = "ativo";
         }
     }
 
     db.ref(`ligas/${ligaLogada}/pro_players/${userLogado}`).update(objAtualizacao).then(() => {
-        alert("Atleta registrado/atualizado com sucesso!");
+        alert("Atleta registrado com sucesso!");
     });
 }
 
 // ========================================================
-// 3. COMUNIDADE: AVALIAR O JOGADOR DOS OUTROS (Inalterado)
+// 3. COMUNIDADE: AVALIAÇÃO DETALHADA
 // ========================================================
 function carregarAvaliacoesPendentes() {
     db.ref(`ligas/${ligaLogada}/pro_players`).on('value', snap => {
         const listaDiv = document.getElementById('lista-avaliacoes');
         const proPlayers = snap.val();
 
-        if (!proPlayers) {
-            listaDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #666;">Nenhum jogador na fila de avaliação.</div>`;
-            return;
-        }
+        if (!proPlayers) { listaDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #666;">Fila vazia.</div>`; return; }
 
-        listaDiv.innerHTML = "";
-        let temPendente = false;
+        listaDiv.innerHTML = ""; let temPendente = false;
 
         for (let dono in proPlayers) {
             if (dono === userLogado) continue;
@@ -280,15 +278,19 @@ function carregarAvaliacoesPendentes() {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <div>
                             <strong style="color: #fff; font-size: 15px;">${player.nome}</strong><br>
-                            <span style="font-size: 11px; color: #888;">Criado por: @${dono} | Pos: ${player.posicao} | Base: ${baseOvr}</span>
+                            <span style="font-size: 11px; color: #888;">Pos: ${player.posicao} | OVR Solicitado: ${baseOvr}</span>
                         </div>
                     </div>
-                    <p style="font-size: 12px; color: #ccc; margin-top: 0;">Qual o potencial real deste atleta?</p>
-                    <div style="display: flex; gap: 5px;">
-                        <button onclick="enviarNota('${dono}', 1)" style="flex:1; background: #dc3545; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">👎 Bagre</button>
-                        <button onclick="enviarNota('${dono}', 3)" style="flex:1; background: #ff8c00; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">😐 Médio</button>
-                        <button onclick="enviarNota('${dono}', 5)" style="flex:1; background: #00b853; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">⭐ Craque</button>
+                    <p style="font-size: 12px; color: #ccc; margin-top: 0; margin-bottom: 10px;">Refaça os atributos deste atleta como você acha justo (Máx 300 pts):</p>
+
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span style="color: #aaa; font-size: 12px;">Pontos Disponíveis:</span>
+                        <strong id="pts-rest_${dono}" style="color: var(--verde-campo);">0</strong>
                     </div>
+
+                    ${gerarSlidersHTML(player.atributos_base.ataque, player.atributos_base.defesa, player.atributos_base.forca, player.atributos_base.velocidade, player.atributos_base.habilidade, true, dono)}
+
+                    <button onclick="enviarAvaliacaoDetalhada('${dono}')" style="width:100%; background: var(--verde-campo); color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight:bold;">Enviar Avaliação</button>
                 </div>
             `;
         }
@@ -299,49 +301,59 @@ function carregarAvaliacoesPendentes() {
     });
 }
 
-function enviarNota(donoPlayer, nota) {
-    db.ref(`ligas/${ligaLogada}/pro_players/${donoPlayer}/avaliacoes/${userLogado}`).set({
-        nota_estrelas: nota,
+function calcularPontosAvaliacao(dono) {
+    const a = parseInt(document.getElementById(`atr-atq_${dono}`).value);
+    const d = parseInt(document.getElementById(`atr-def_${dono}`).value);
+    const f = parseInt(document.getElementById(`atr-for_${dono}`).value);
+    const v = parseInt(document.getElementById(`atr-vel_${dono}`).value);
+    const h = parseInt(document.getElementById(`atr-hab_${dono}`).value);
+
+    document.getElementById(`val-atr-atq_${dono}`).innerText = a;
+    document.getElementById(`val-atr-def_${dono}`).innerText = d;
+    document.getElementById(`val-atr-for_${dono}`).innerText = f;
+    document.getElementById(`val-atr-vel_${dono}`).innerText = v;
+    document.getElementById(`val-atr-hab_${dono}`).innerText = h;
+
+    const restantes = 300 - (a + d + f + v + h);
+    const lbl = document.getElementById(`pts-rest_${dono}`);
+    lbl.innerText = restantes;
+    lbl.style.color = restantes < 0 ? "#dc3545" : "var(--verde-campo)";
+}
+
+function enviarAvaliacaoDetalhada(dono) {
+    let pts = parseInt(document.getElementById(`pts-rest_${dono}`).innerText);
+    if (pts < 0) return alert("Você usou mais de 300 pontos na avaliação! Reduza os atributos para ser justo.");
+
+    let avaliacao = {
+        ataque: parseInt(document.getElementById(`atr-atq_${dono}`).value),
+        defesa: parseInt(document.getElementById(`atr-def_${dono}`).value),
+        forca: parseInt(document.getElementById(`atr-for_${dono}`).value),
+        velocidade: parseInt(document.getElementById(`atr-vel_${dono}`).value),
+        habilidade: parseInt(document.getElementById(`atr-hab_${dono}`).value),
         data: new Date().toISOString()
-    }).then(() => {
-        alert("Avaliação enviada!");
+    };
+
+    db.ref(`ligas/${ligaLogada}/pro_players/${dono}/avaliacoes/${userLogado}`).set(avaliacao).then(() => {
+        alert("Avaliação comunitária registrada!");
     });
 }
 
-// CONTROLE DO MENU MOBILE OTIMIZADO
 function toggleMenu() {
     const sidebar = document.querySelector('.sidebar');
     const menuAberto = sidebar.classList.toggle('aberta');
-
-    // Adiciona uma classe ao body para fazer o fundo escurecer
-    if (menuAberto) {
-        document.body.classList.add('menu-aberto');
-    } else {
-        document.body.classList.remove('menu-aberto');
-    }
+    if (menuAberto) document.body.classList.add('menu-aberto');
+    else document.body.classList.remove('menu-aberto');
 }
 
-// Fecha o menu se o cara tocar no fundo escuro ou em um botão do próprio menu
 document.addEventListener('click', (e) => {
     const sidebar = document.querySelector('.sidebar');
-
-    // Se a tela for pequena, e o menu tá aberto...
     if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('aberta')) {
-        // Se ele tocou em qualquer botão de ir pra outra página (tag A ou tag BUTTON)...
         if (e.target.tagName === 'BUTTON' && !e.target.classList.contains('btn-menu')) {
-            sidebar.classList.remove('aberta');
-            document.body.classList.remove('menu-aberto');
+            sidebar.classList.remove('aberta'); document.body.classList.remove('menu-aberto');
         }
-
-        // Se ele tocou fora do menu (no fundo escuro ou no X)
         if (!e.target.closest('.sidebar') && !e.target.closest('.btn-menu')) {
-            sidebar.classList.remove('aberta');
-            document.body.classList.remove('menu-aberto');
+            sidebar.classList.remove('aberta'); document.body.classList.remove('menu-aberto');
         }
     }
 });
-function deslogar() {
-    localStorage.removeItem('treinadorLiga');
-    localStorage.removeItem('treinadorUsuario');
-    window.location.href = "index.html";
-}
+function deslogar() { localStorage.removeItem('treinadorLiga'); localStorage.removeItem('treinadorUsuario'); window.location.href = "index.html"; }

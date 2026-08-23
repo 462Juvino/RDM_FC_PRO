@@ -163,28 +163,30 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                     let p = proPlayers[criador];
 
                     if (p.status === "avaliando") {
-                        let totalEstrelas = 0;
                         let qtdVotos = 0;
+                        let sA = 0, sD = 0, sF = 0, sV = 0, sH = 0;
 
                         if (p.avaliacoes) {
                             for (let v in p.avaliacoes) {
-                                totalEstrelas += p.avaliacoes[v].nota_estrelas;
+                                sA += p.avaliacoes[v].ataque; sD += p.avaliacoes[v].defesa;
+                                sF += p.avaliacoes[v].forca; sV += p.avaliacoes[v].velocidade;
+                                sH += p.avaliacoes[v].habilidade;
                                 qtdVotos++;
                             }
                         }
 
-                        // Média 3 se ninguém votar
-                        let media = qtdVotos > 0 ? (totalEstrelas / qtdVotos) : 3;
-
-                        // Cálculo do Multiplicador: Média 1 = 0.8x (-20%) | Média 5 = 1.2x (+20%)
-                        let mult = 0.8 + ((media - 1) * 0.1);
-
                         let at = p.atributos_base;
-                        let finalAtq = Math.min(99, Math.floor(at.ataque * mult));
-                        let finalDef = Math.min(99, Math.floor(at.defesa * mult));
-                        let finalFor = Math.min(99, Math.floor(at.forca * mult));
-                        let finalVel = Math.min(99, Math.floor(at.velocidade * mult));
-                        let finalHab = Math.min(99, Math.floor(at.habilidade * mult));
+                        let finalAtq = at.ataque; let finalDef = at.defesa;
+                        let finalFor = at.forca; let finalVel = at.velocidade; let finalHab = at.habilidade;
+
+                        // Se teve votos, a nota oficial do mercado será a Média exata definida pela comunidade!
+                        if (qtdVotos > 0) {
+                            finalAtq = Math.round(sA / qtdVotos);
+                            finalDef = Math.round(sD / qtdVotos);
+                            finalFor = Math.round(sF / qtdVotos);
+                            finalVel = Math.round(sV / qtdVotos);
+                            finalHab = Math.round(sH / qtdVotos);
+                        }
 
                         let ovrFinal = finalAtq + finalDef + finalFor + finalVel + finalHab;
                         let valorMercado = ovrFinal * 150000; // Precificação Base
