@@ -331,21 +331,37 @@ button:hover {
 }
 
 @media (max-width: 768px) {
-    .btn-menu { display: block; }
-    
-    /* Esconde o menu na esquerda */
+    .btn-menu { display: block; position: relative; z-index: 10000; }
+
     .sidebar {
         position: fixed;
-        left: -260px;
+        left: -300px;
         top: 0;
         height: 100%;
-        z-index: 1000;
+        z-index: 9999;
         transition: left 0.3s ease;
         box-shadow: 2px 0 15px rgba(0,0,0,0.8);
+        background: var(--fundo-escuro); /* Mais escuro no celular */
+        width: 250px;
+        max-width: 80vw;
     }
-    
-    /* Classe ativada via JavaScript para abrir o menu */
+
     .sidebar.aberta { left: 0; }
+
+    /* Cria um overlay escuro por cima da tela quando o menu abre */
+    body::after {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6);
+        z-index: 9998;
+        display: none;
+        transition: 0.3s;
+    }
+
+    body.menu-aberto::after {
+        display: block;
+    }
     
     .dashboard-widgets { grid-template-columns: 1fr; }
 }
