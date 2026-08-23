@@ -163,28 +163,30 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                     let p = proPlayers[criador];
 
                     if (p.status === "avaliando") {
-                        let totalEstrelas = 0;
                         let qtdVotos = 0;
+                        let sA = 0, sD = 0, sF = 0, sV = 0, sH = 0;
 
                         if (p.avaliacoes) {
                             for (let v in p.avaliacoes) {
-                                totalEstrelas += p.avaliacoes[v].nota_estrelas;
+                                sA += p.avaliacoes[v].ataque; sD += p.avaliacoes[v].defesa;
+                                sF += p.avaliacoes[v].forca; sV += p.avaliacoes[v].velocidade;
+                                sH += p.avaliacoes[v].habilidade;
                                 qtdVotos++;
                             }
                         }
 
-                        // Média 3 se ninguém votar
-                        let media = qtdVotos > 0 ? (totalEstrelas / qtdVotos) : 3;
-
-                        // Cálculo do Multiplicador: Média 1 = 0.8x (-20%) | Média 5 = 1.2x (+20%)
-                        let mult = 0.8 + ((media - 1) * 0.1);
-
                         let at = p.atributos_base;
-                        let finalAtq = Math.min(99, Math.floor(at.ataque * mult));
-                        let finalDef = Math.min(99, Math.floor(at.defesa * mult));
-                        let finalFor = Math.min(99, Math.floor(at.forca * mult));
-                        let finalVel = Math.min(99, Math.floor(at.velocidade * mult));
-                        let finalHab = Math.min(99, Math.floor(at.habilidade * mult));
+                        let finalAtq = at.ataque; let finalDef = at.defesa;
+                        let finalFor = at.forca; let finalVel = at.velocidade; let finalHab = at.habilidade;
+
+                        // Se teve votos, a nota oficial do mercado será a Média exata definida pela comunidade!
+                        if (qtdVotos > 0) {
+                            finalAtq = Math.round(sA / qtdVotos);
+                            finalDef = Math.round(sD / qtdVotos);
+                            finalFor = Math.round(sF / qtdVotos);
+                            finalVel = Math.round(sV / qtdVotos);
+                            finalHab = Math.round(sH / qtdVotos);
+                        }
 
                         let ovrFinal = finalAtq + finalDef + finalFor + finalVel + finalHab;
                         let valorMercado = ovrFinal * 150000; // Precificação Base
@@ -212,161 +214,180 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
             }
         }
 
-        // --- PASSO C: SIMULAR OS JOGOS DA RODADA DA LIGA ---
+        // --- PASSO C: MOTOR DE CALENDÁRIO INTELIGENTE (LIGA, COPA, MUNDIAL E FIM DE TEMPORADA) ---
         if (cal) {
-            let rodadaKey = `rodada_${rodadaAtual}`;
+            const agoraDT = new Date();
+            const diaBusca = agoraDT.getDate().toString().padStart(2, '0');
+            const mesBusca = (agoraDT.getMonth() + 1).toString().padStart(2, '0');
+            const hojeStr = `${diaBusca}/${mesBusca}`; // Ex: "23/08"
 
-            const simularDivisao = (divisaoObj) => {
-                if (!divisaoObj || !divisaoObj[rodadaKey]) return;
-                let jogos = divisaoObj[rodadaKey];
+            let teveJogoLiga = false;
 
-                for (let idJogo in jogos) {
-                    let jogo = jogos[idJogo];
-                    if (jogo.jogado || jogo.linhaDoTempo) continue;
+            // Função Central de Simulação para qualquer jogo (Liga ou Copa)
+            const processarPartidaAoVivo = (jogo, isMataMata = false) => {
+                if (jogo.jogado) return;
 
-                    let donoM = null; let donoV = null;
-                    let forcaM = times[jogo.mandante]?.forca_base || 500;
-                    let forcaV = times[jogo.visitante]?.forca_base || 500;
+                let donoM = null; let donoV = null;
+                let forcaM = times[jogo.mandante]?.forca_base || 500;
+                let forcaV = times[jogo.visitante]?.forca_base || 500;
+                let mentM = "Moderado"; let mentV = "Moderado";
 
-                    let mentM = "Moderado"; let mentV = "Moderado";
-
-                    for (let u in usuarios) {
-                        if (usuarios[u].timeAtual === jogo.mandante) {
-                            if (usuarios[u].forcaAtual) forcaM = usuarios[u].forcaAtual;
-                            mentM = usuarios[u].mentalidade || "Moderado";
-                            donoM = u;
-                        }
-                        if (usuarios[u].timeAtual === jogo.visitante) {
-                            if (usuarios[u].forcaAtual) forcaV = usuarios[u].forcaAtual;
-                            mentV = usuarios[u].mentalidade || "Moderado";
-                            donoV = u;
-                        }
-                    }
-
-                    // Multiplicadores Táticos
-                    let modM = 1.0; let modV = 1.0;
-                    let capGolsM = 99; let capGolsV = 99;
-
-                    if (mentM === "Retranca") { modM = 0.7; modV = 0.5; capGolsM = 1; }
-                    if (mentM === "Ofensivo") { modM = 1.3; modV = 1.2; }
-
-                    if (mentV === "Retranca") { modV *= 0.7; modM *= 0.5; capGolsV = 1; }
-                    if (mentV === "Ofensivo") { modV *= 1.3; modM *= 1.2; }
-
-                    // Função auxiliar para sortear jogador do elenco
-                    const sortearAtleta = (timeId) => {
-                        let elenco = times[timeId] && times[timeId].jogadores ? Object.keys(times[timeId].jogadores) : [];
-                        if (elenco.length === 0) return null;
-                        return elenco[Math.floor(Math.random() * elenco.length)];
-                    };
-
-                    let golsM = 0; let golsV = 0;
-                    let linhaTempo = [];
-
-                    for(let i=0; i<5; i++) {
-                        let chanceM = (forcaM / (forcaM + forcaV)) * modM;
-                        let chanceV = (forcaV / (forcaM + forcaV)) * modV;
-
-                        // GOL DO MANDANTE
-                        if (golsM < capGolsM && Math.random() < (chanceM * 0.6)) {
-                            golsM++;
-                            let idAutor = sortearAtleta(jogo.mandante);
-                            let idAssist = sortearAtleta(jogo.mandante);
-                            let nomeAutor = "Jogado Desconhecido";
-
-                            if (idAutor) {
-                                let jog = times[jogo.mandante].jogadores[idAutor];
-                                nomeAutor = jog.nome;
-
-                                // Estatísticas e Valorização (Gol = + R$ 1.000.000)
-                                jog.estatisticas = jog.estatisticas || { gols: 0, assistencias: 0 };
-                                jog.estatisticas.gols += 1;
-                                jog.valor_mercado = (jog.valor_mercado || 1000000) + 1000000;
-                                updates[`banco_global_times/${jogo.mandante}/jogadores/${idAutor}`] = jog;
-
-                                // Assistência (Se não for o mesmo cara)
-                                if (idAssist && idAssist !== idAutor) {
-                                    let jogAst = times[jogo.mandante].jogadores[idAssist];
-                                    jogAst.estatisticas = jogAst.estatisticas || { gols: 0, assistencias: 0 };
-                                    jogAst.estatisticas.assistencias += 1;
-                                    jogAst.valor_mercado = (jogAst.valor_mercado || 1000000) + 500000; // Assistência = + R$ 500.000
-                                    updates[`banco_global_times/${jogo.mandante}/jogadores/${idAssist}`] = jogAst;
-                                }
-                            }
-                            linhaTempo.push({ minuto: Math.floor(Math.random() * 90)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nomeAutor})`, cor: "#ff8c00" });
-                        }
-
-                        // GOL DO VISITANTE
-                        if (golsV < capGolsV && Math.random() < (chanceV * 0.6)) {
-                            golsV++;
-                            let idAutor = sortearAtleta(jogo.visitante);
-                            let idAssist = sortearAtleta(jogo.visitante);
-                            let nomeAutor = "Jogador Desconhecido";
-
-                            if (idAutor) {
-                                let jog = times[jogo.visitante].jogadores[idAutor];
-                                nomeAutor = jog.nome;
-
-                                jog.estatisticas = jog.estatisticas || { gols: 0, assistencias: 0 };
-                                jog.estatisticas.gols += 1;
-                                jog.valor_mercado = (jog.valor_mercado || 1000000) + 1000000;
-                                updates[`banco_global_times/${jogo.visitante}/jogadores/${idAutor}`] = jog;
-
-                                if (idAssist && idAssist !== idAutor) {
-                                    let jogAst = times[jogo.visitante].jogadores[idAssist];
-                                    jogAst.estatisticas = jogAst.estatisticas || { gols: 0, assistencias: 0 };
-                                    jogAst.estatisticas.assistencias += 1;
-                                    jogAst.valor_mercado = (jogAst.valor_mercado || 1000000) + 500000;
-                                    updates[`banco_global_times/${jogo.visitante}/jogadores/${idAssist}`] = jogAst;
-                                }
-                            }
-                            linhaTempo.push({ minuto: Math.floor(Math.random() * 90)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nomeAutor})`, cor: "#ff8c00" });
-                        }
-                    }
-
-                    linhaTempo.sort((a,b) => a.minuto - b.minuto);
-
-                    let moralM = donoM && usuarios[donoM].moral !== undefined ? usuarios[donoM].moral : 50;
-                    let moralV = donoV && usuarios[donoV].moral !== undefined ? usuarios[donoV].moral : 50;
-
-                    if (golsM > golsV) {
-                        moralM = Math.min(100, moralM + 10);
-                        moralV = Math.max(0, moralV - 10);
-                    } else if (golsV > golsM) {
-                        moralM = Math.max(0, moralM - 10);
-                        moralV = Math.min(100, moralV + 10);
-                    } else {
-                        moralM = Math.min(100, moralM + 2);
-                        moralV = Math.min(100, moralV + 2);
-                    }
-
-                    if (donoM) {
-                        let publico = 15000 + (moralM * 400);
-                        let ingresso = 60;
-                        let renda = publico * ingresso;
-
-                        usuarios[donoM].caixaClube += renda;
-                        updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
-                        updates[`ligas/${liga}/usuarios/${donoM}/moral`] = moralM;
-
-                        linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda da Partida: R$ ${renda.toLocaleString('pt-BR')} (${publico.toLocaleString('pt-BR')} pagantes)`, cor: "#888" });
-                    }
-                    if (donoV) {
-                        updates[`ligas/${liga}/usuarios/${donoV}/moral`] = moralV;
-                    }
-
-                    let dataInicio = new Date();
-                    dataInicio.setHours(HORA_PARTIDA, 0, 0, 0);
-
-                    jogo.linhaDoTempo = linhaTempo;
-                    jogo.horaInicio = dataInicio.getTime();
-                    jogo.placarMandante = golsM;
-                    jogo.placarVisitante = golsV;
+                for (let u in usuarios) {
+                    if (usuarios[u].timeAtual === jogo.mandante) { if (usuarios[u].forcaAtual) forcaM = usuarios[u].forcaAtual; mentM = usuarios[u].mentalidade || "Moderado"; donoM = u; }
+                    if (usuarios[u].timeAtual === jogo.visitante) { if (usuarios[u].forcaAtual) forcaV = usuarios[u].forcaAtual; mentV = usuarios[u].mentalidade || "Moderado"; donoV = u; }
                 }
+
+                // Fadiga
+                let fadigaM = (times[jogo.mandante]?.jogadores && Object.keys(times[jogo.mandante].jogadores).length > 11) ? 1.0 : 0.85;
+                let fadigaV = (times[jogo.visitante]?.jogadores && Object.keys(times[jogo.visitante].jogadores).length > 11) ? 1.0 : 0.85;
+
+                let modM = 1.0 * fadigaM; let modV = 1.0 * fadigaV;
+                let capGolsM = 99; let capGolsV = 99;
+
+                if (mentM === "Retranca") { modM *= 0.7; modV *= 0.5; capGolsM = 1; }
+                if (mentM === "Ofensivo") { modM *= 1.3; modV *= 1.2; }
+                if (mentV === "Retranca") { modV *= 0.7; modM *= 0.5; capGolsV = 1; }
+                if (mentV === "Ofensivo") { modV *= 1.3; modM *= 1.2; }
+
+                let golsM = 0; let golsV = 0;
+                let linhaTempo = [];
+
+                if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.mandante.replace(/_/g,' ')}: Fôlego novo vindo do banco!`, cor: "#aaa" });
+                if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração para dar gás na equipe!`, cor: "#aaa" });
+
+                const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
+
+                for(let i=0; i<5; i++) {
+                    if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
+                        golsM++;
+                        let idA = sortearAtleta(jogo.mandante);
+                        let nA = idA ? times[jogo.mandante].jogadores[idA].nome : "Jogador";
+                        if(idA) {
+                            let jg = times[jogo.mandante].jogadores[idA];
+                            jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+                            updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
+                        }
+                        linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
+                    }
+                    if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
+                        golsV++;
+                        let idA = sortearAtleta(jogo.visitante);
+                        let nA = idA ? times[jogo.visitante].jogadores[idA].nome : "Jogador";
+                        if(idA) {
+                            let jg = times[jogo.visitante].jogadores[idA];
+                            jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+                            updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
+                        }
+                        linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
+                    }
+                }
+
+                // Desempate por pênaltis na Copa
+                if (isMataMata && golsM === golsV) {
+                    linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!`, cor: "#dc3545" });
+                    if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: "penaltis_vence", texto: `🏆 O ${jogo.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!`, cor: "var(--verde-campo)" }); }
+                    else { golsV++; linhaTempo.push({ minuto: 99, tipo: "penaltis_vence", texto: `🏆 O ${jogo.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!`, cor: "var(--verde-campo)" }); }
+                }
+
+                linhaTempo.sort((a,b) => a.minuto - b.minuto);
+
+                if (donoM) {
+                    let pub = 15000 + ((usuarios[donoM].moral||50) * 400); let ren = pub * 60;
+                    usuarios[donoM].caixaClube += ren; updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
+                    linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes)`, cor: "#888" });
+                }
+
+                if (golsM > golsV) { if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.min(100, (usuarios[donoM].moral||50)+10); if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.max(0, (usuarios[donoV].moral||50)-10); }
+                else if (golsV > golsM) { if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10); if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10); }
+
+                let dataInicio = new Date(); dataInicio.setHours(HORA_PARTIDA, 0, 0, 0);
+                jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime(); jogo.placarMandante = golsM; jogo.placarVisitante = golsV;
             };
 
-            simularDivisao(cal.serieA);
-            simularDivisao(cal.serieB);
+            // 1. VARRE A LIGA (Procura os jogos de hoje)
+            let rodadaKey = `rodada_${cal.rodadaAtual || 1}`;
+            if (cal.serieA && cal.serieA[rodadaKey]) {
+                for (let j in cal.serieA[rodadaKey]) {
+                    let jogo = cal.serieA[rodadaKey][j];
+                    if (!jogo.jogado && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)) { processarPartidaAoVivo(jogo, false); teveJogoLiga = true; }
+                }
+            }
+            if (cal.serieB && cal.serieB[rodadaKey]) {
+                for (let j in cal.serieB[rodadaKey]) {
+                    let jogo = cal.serieB[rodadaKey][j];
+                    if (!jogo.jogado && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)) { processarPartidaAoVivo(jogo, false); }
+                }
+            }
+
+            if (teveJogoLiga && cal.rodadaAtual < 38) cal.rodadaAtual++;
+
+            // 2. VARRE A COPA (Avançando de fase automaticamente)
+            if (cal.copa) {
+                let fasesMata = ["oitavas", "quartas", "semis", "final", "mundial"];
+                for (let f of fasesMata) {
+                    if (cal.copa[f]) {
+                        for (let idJ in cal.copa[f]) {
+                            let jogo = cal.copa[f][idJ];
+                            if (!jogo.jogado && jogo.data_jogo && jogo.data_jogo.includes(hojeStr) && !jogo.mandante.includes("Vencedor") && !jogo.visitante.includes("Vencedor")) {
+
+                                processarPartidaAoVivo(jogo, true); // True = Pênaltis ativados
+
+                                let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
+                                let num = parseInt(idJ.split('_')[1]);
+
+                                // Joga o vencedor para a chave seguinte
+                                if (f === "oitavas" && cal.copa.quartas) { let tgt = `jogo_${9 + Math.floor((num-1)/2)}`; num%2!==0 ? cal.copa.quartas[tgt].mandante = vencedor : cal.copa.quartas[tgt].visitante = vencedor; }
+                                else if (f === "quartas" && cal.copa.semis) { let tgt = `jogo_${13 + Math.floor((num-9)/2)}`; num%2!==0 ? cal.copa.semis[tgt].mandante = vencedor : cal.copa.semis[tgt].visitante = vencedor; }
+                                else if (f === "semis" && cal.copa.final) { let tgt = `jogo_15`; num===13 ? cal.copa.final[tgt].mandante = vencedor : cal.copa.final[tgt].visitante = vencedor; }
+                                else if (f === "final") { cal.sistema_campeao_copa = vencedor; } // Guarda campeão da Copa
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. FIM DE TEMPORADA: MUNDIAL E HALL DA FAMA
+            let rodadaFinalJogada = cal.serieA["rodada_38"] ? Object.values(cal.serieA["rodada_38"]).every(x => x.jogado === true) : false;
+            let copaFinalJogada = cal.copa.final["jogo_15"]?.jogado === true;
+
+            if (rodadaFinalJogada && copaFinalJogada && !cal.temporada_encerrada && cal.copa.mundial) {
+                let mundial = cal.copa.mundial["jogo_mundial"];
+
+                if (mundial.mandante === "Campeão Nacional") {
+                    // Calcula o Campeão da Liga baseada em pontos da rodada 38
+                    let pts={};
+                    for(let r=1; r<=38; r++) {
+                        for(let k in cal.serieA[`rodada_${r}`]) {
+                            let jj = cal.serieA[`rodada_${r}`][k];
+                            if(jj.jogado && jj.mandante!=="Fantasma") {
+                                if(!pts[jj.mandante]) pts[jj.mandante] = {p:0, v:0, sg:0}; if(!pts[jj.visitante]) pts[jj.visitante] = {p:0, v:0, sg:0};
+                                if(jj.placarMandante>jj.placarVisitante){ pts[jj.mandante].p+=3; pts[jj.mandante].v++; }
+                                else if(jj.placarVisitante>jj.placarMandante){ pts[jj.visitante].p+=3; pts[jj.visitante].v++; }
+                                else { pts[jj.mandante].p+=1; pts[jj.visitante].p+=1; }
+                                pts[jj.mandante].sg += (jj.placarMandante - jj.placarVisitante);
+                                pts[jj.visitante].sg += (jj.placarVisitante - jj.placarMandante);
+                            }
+                        }
+                    }
+                    let campeaoLiga = Object.keys(pts).sort((a,b) => pts[b].p - pts[a].p || pts[b].v - pts[a].v || pts[b].sg - pts[a].sg)[0];
+                    let campeaoCopa = cal.sistema_campeao_copa;
+
+                    if (campeaoLiga === campeaoCopa) {
+                        // Papou tudo! Cancela mundial e encerra.
+                        mundial.jogado = true; mundial.mandante = campeaoLiga; mundial.visitante = "N/A (Coroa Dupla)";
+                        registrarHallDaFama(liga, campeaoLiga, campeaoCopa, campeaoLiga, usuarios);
+                        cal.temporada_encerrada = true;
+                    } else {
+                        mundial.mandante = campeaoLiga; mundial.visitante = campeaoCopa; // Prepara pro jogo que vai acontecer
+                    }
+                } else if (mundial.jogado === true && !cal.temporada_encerrada) {
+                    // O mundial aconteceu hoje! Registra no Hall.
+                    let vencedorMundial = mundial.placarMandante > mundial.placarVisitante ? mundial.mandante : mundial.visitante;
+                    registrarHallDaFama(liga, mundial.mandante, mundial.visitante, vencedorMundial, usuarios);
+                    cal.temporada_encerrada = true;
+                }
+            }
+
             updates[`ligas/${liga}/calendario`] = cal;
         }
 
@@ -386,4 +407,23 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
         console.error("Erro crítico no Motor P2P:", e);
         await lockRef.set(false);
     }
+}
+
+// ========================================================
+// 3. GRAVAR NO HALL DA FAMA (FIM DA TEMPORADA)
+// ========================================================
+function registrarHallDaFama(liga, timeLiga, timeCopa, timeMundial, usuarios) {
+    let donoL = "Sem Treinador"; let donoC = "Sem Treinador"; let donoM = "Sem Treinador";
+    for(let u in usuarios) {
+        if(usuarios[u].timeAtual === timeLiga) donoL = usuarios[u].nome || u;
+        if(usuarios[u].timeAtual === timeCopa) donoC = usuarios[u].nome || u;
+        if(usuarios[u].timeAtual === timeMundial) donoM = usuarios[u].nome || u;
+    }
+    let idTemp = "Temporada_" + new Date().getFullYear() + "_" + Math.floor(Math.random() * 1000);
+    db.ref(`ligas/${liga}/historico_campeoes/${idTemp}`).set({
+        nome_temporada: `Temporada Finalizada (${new Date().getFullYear()})`,
+        campeao_serie_a: { time: timeLiga.replace(/_/g, ' '), treinador: donoL },
+        campeao_copa: { time: timeCopa.replace(/_/g, ' '), treinador: donoC },
+        campeao_mundial: { time: timeMundial.replace(/_/g, ' '), treinador: donoM }
+    });
 }
