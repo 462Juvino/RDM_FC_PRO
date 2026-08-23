@@ -154,7 +154,12 @@ function renderizarPainelEvolucao() {
         let sA=0, sD=0, sF=0, sV=0, sH=0;
         for(let v in meuProPlayer.avaliacoes) {
             let av = meuProPlayer.avaliacoes[v];
-            sA+=av.ataque; sD+=av.defesa; sF+=av.forca; sV+=av.velocidade; sH+=av.habilidade;
+            // Se for uma nota antiga de estrela, assume 60 para não quebrar a conta (NaN)
+            sA += av.ataque || 60;
+            sD += av.defesa || 60;
+            sF += av.forca || 60;
+            sV += av.velocidade || 60;
+            sH += av.habilidade || 60;
         }
         mxA = Math.round(sA / qtdVotos); mxD = Math.round(sD / qtdVotos);
         mxF = Math.round(sF / qtdVotos); mxV = Math.round(sV / qtdVotos); mxH = Math.round(sH / qtdVotos);
@@ -254,43 +259,33 @@ function salvarProPlayer(isNovo) {
 }
 
 // ========================================================
-// 3. COMUNIDADE: AVALIAÇÃO DETALHADA
+// 3. COMUNIDADE: AVALIAÇÃO DETALHADA (MODAL)
 // ========================================================
+let proPlayersAvaliacao = {};
+
 function carregarAvaliacoesPendentes() {
     db.ref(`ligas/${ligaLogada}/pro_players`).on('value', snap => {
         const listaDiv = document.getElementById('lista-avaliacoes');
-        const proPlayers = snap.val();
+        proPlayersAvaliacao = snap.val();
 
-        if (!proPlayers) { listaDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #666;">Fila vazia.</div>`; return; }
+        if (!proPlayersAvaliacao) { listaDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #666;">Fila vazia.</div>`; return; }
 
         listaDiv.innerHTML = ""; let temPendente = false;
 
-        for (let dono in proPlayers) {
+        for (let dono in proPlayersAvaliacao) {
             if (dono === userLogado) continue;
-            let player = proPlayers[dono];
+            let player = proPlayersAvaliacao[dono];
             if (player.avaliacoes && player.avaliacoes[userLogado]) continue;
 
             temPendente = true;
-            let baseOvr = player.atributos_base.ataque + player.atributos_base.defesa + player.atributos_base.forca + player.atributos_base.velocidade + player.atributos_base.habilidade;
 
             listaDiv.innerHTML += `
-                <div style="background: #2a2a2a; border: 1px solid #444; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div>
-                            <strong style="color: #fff; font-size: 15px;">${player.nome}</strong><br>
-                            <span style="font-size: 11px; color: #888;">Pos: ${player.posicao} | OVR Solicitado: ${baseOvr}</span>
-                        </div>
+                <div style="background: #2a2a2a; border: 1px solid #444; padding: 10px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="color: #fff; font-size: 14px;">${player.nome}</strong><br>
+                        <span style="font-size: 11px; color: #888;">Criador: @${dono} | Pos: ${player.posicao}</span>
                     </div>
-                    <p style="font-size: 12px; color: #ccc; margin-top: 0; margin-bottom: 10px;">Refaça os atributos deste atleta como você acha justo (Máx 300 pts):</p>
-
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <span style="color: #aaa; font-size: 12px;">Pontos Disponíveis:</span>
-                        <strong id="pts-rest_${dono}" style="color: var(--verde-campo);">0</strong>
-                    </div>
-
-                    ${gerarSlidersHTML(player.atributos_base.ataque, player.atributos_base.defesa, player.atributos_base.forca, player.atributos_base.velocidade, player.atributos_base.habilidade, true, dono)}
-
-                    <button onclick="enviarAvaliacaoDetalhada('${dono}')" style="width:100%; background: var(--verde-campo); color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight:bold;">Enviar Avaliação</button>
+                    <button onclick="abrirModalAvaliacao('${dono}')" style="background: var(--verde-campo); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight:bold;">Avaliar 🔎</button>
                 </div>
             `;
         }
@@ -299,6 +294,26 @@ function carregarAvaliacoesPendentes() {
             listaDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--verde-campo);">Você já avaliou todos os jogadores pendentes! ✔️</div>`;
         }
     });
+}
+
+function abrirModalAvaliacao(dono) {
+    let player = proPlayersAvaliacao[dono];
+    if(!player) return;
+
+    document.getElementById('modal-nome-jogador').innerText = player.nome;
+    document.getElementById('modal-pos-jogador').innerText = player.posicao;
+
+    const at = player.atributos_base;
+    document.getElementById('modal-sliders').innerHTML = gerarSlidersHTML(at.ataque, at.defesa, at.forca, at.velocidade, at.habilidade, true, dono);
+
+    document.getElementById('btn-confirmar-aval').setAttribute('onclick', `enviarAvaliacaoDetalhada('${dono}')`);
+
+    document.getElementById('modal-avaliacao').style.display = 'flex';
+    calcularPontosAvaliacao(dono);
+}
+
+function fecharModalAvaliacao() {
+    document.getElementById('modal-avaliacao').style.display = 'none';
 }
 
 function calcularPontosAvaliacao(dono) {
@@ -315,13 +330,13 @@ function calcularPontosAvaliacao(dono) {
     document.getElementById(`val-atr-hab_${dono}`).innerText = h;
 
     const restantes = 300 - (a + d + f + v + h);
-    const lbl = document.getElementById(`pts-rest_${dono}`);
+    const lbl = document.getElementById(`modal-pontos-restantes`); // ID consertado para o modal
     lbl.innerText = restantes;
     lbl.style.color = restantes < 0 ? "#dc3545" : "var(--verde-campo)";
 }
 
 function enviarAvaliacaoDetalhada(dono) {
-    let pts = parseInt(document.getElementById(`pts-rest_${dono}`).innerText);
+    let pts = parseInt(document.getElementById(`modal-pontos-restantes`).innerText);
     if (pts < 0) return alert("Você usou mais de 300 pontos na avaliação! Reduza os atributos para ser justo.");
 
     let avaliacao = {
@@ -334,7 +349,8 @@ function enviarAvaliacaoDetalhada(dono) {
     };
 
     db.ref(`ligas/${ligaLogada}/pro_players/${dono}/avaliacoes/${userLogado}`).set(avaliacao).then(() => {
-        alert("Avaliação comunitária registrada!");
+        fecharModalAvaliacao();
+        alert("Avaliação registrada com sucesso!");
     });
 }
 
@@ -356,4 +372,5 @@ document.addEventListener('click', (e) => {
         }
     }
 });
+
 function deslogar() { localStorage.removeItem('treinadorLiga'); localStorage.removeItem('treinadorUsuario'); window.location.href = "index.html"; }

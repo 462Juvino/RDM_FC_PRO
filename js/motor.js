@@ -427,3 +427,87 @@ function registrarHallDaFama(liga, timeLiga, timeCopa, timeMundial, usuarios) {
         campeao_mundial: { time: timeMundial.replace(/_/g, ' '), treinador: donoM }
     });
 }
+
+// ========================================================
+// 4. SISTEMA GLOBAL DE NOTIFICAÇÕES (SINO CLICÁVEL)
+// ========================================================
+window.addEventListener('DOMContentLoaded', () => {
+    carregarNotificacoesGlobais();
+});
+
+let dropdownAberto = false;
+function toggleNotificacoes() {
+    dropdownAberto = !dropdownAberto;
+    const drop = document.getElementById('dropdown-notificacoes');
+    if(drop) drop.style.display = dropdownAberto ? 'block' : 'none';
+}
+
+async function carregarNotificacoesGlobais() {
+    const badge = document.getElementById('badge-notificacao');
+    const lista = document.getElementById('lista-notificacoes-drop');
+
+    // Só roda a função se a página atual possuir o ícone do sino nela
+    if(!badge || !lista) return;
+
+    db.ref(`ligas/${ligaMotor}`).on('value', async snapLiga => {
+        const ligaDados = snapLiga.val();
+        if(!ligaDados) return;
+
+        let countNotif = 0;
+        let htmlNotif = "";
+
+        // CHECAGEM 1: AVALIAÇÕES PENDENTES (Olheiro)
+        if (ligaDados.pro_players) {
+            let avaliacoesFaltando = 0;
+            for (let dono in ligaDados.pro_players) {
+                if (dono === userLogadoMotor) continue; // Pula o seu próprio
+                let p = ligaDados.pro_players[dono];
+                if (!p.avaliacoes || !p.avaliacoes[userLogadoMotor]) {
+                    avaliacoesFaltando++;
+                }
+            }
+            if (avaliacoesFaltando > 0) {
+                countNotif++;
+                htmlNotif += `<div onclick="window.location.href='perfil.html'" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #00b853; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                    <strong style="color:#00b853; font-size:12px;">Olheiro Comunitário</strong><br>
+                    <span style="color:#ccc; font-size:11px;">Você tem ${avaliacoesFaltando} promessa(s) para avaliar.</span>
+                </div>`;
+            }
+        }
+
+        // CHECAGEM 2: PROPOSTAS DE MERCADO
+        if (ligaDados.mercado_propostas) {
+            let meuTimeId = ligaDados.usuarios && ligaDados.usuarios[userLogadoMotor] ? ligaDados.usuarios[userLogadoMotor].timeAtual : null;
+
+            if (meuTimeId && meuTimeId !== "Sem Clube") {
+                const snapMeuTime = await db.ref(`banco_global_times/${meuTimeId}/jogadores`).once('value');
+                const meusJogadores = snapMeuTime.val() || {};
+                let propostasRecebidas = 0;
+
+                for (let idJogador in ligaDados.mercado_propostas) {
+                    if (meusJogadores[idJogador]) {
+                        // Tenho proposta num jogador meu!
+                        propostasRecebidas += Object.keys(ligaDados.mercado_propostas[idJogador]).length;
+                    }
+                }
+
+                if (propostasRecebidas > 0) {
+                    countNotif++;
+                    htmlNotif += `<div onclick="window.location.href='mercado.html'" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #ff8c00; cursor: pointer; transition: 0.2s; margin-top: 5px;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                        <strong style="color:#ff8c00; font-size:12px;">Mercado da Bola</strong><br>
+                        <span style="color:#ccc; font-size:11px;">O seu clube recebeu ${propostasRecebidas} oferta(s)!</span>
+                    </div>`;
+                }
+            }
+        }
+
+        if (countNotif > 0) {
+            badge.style.display = 'block';
+            badge.innerText = countNotif;
+            lista.innerHTML = htmlNotif;
+        } else {
+            badge.style.display = 'none';
+            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
+        }
+    });
+}
