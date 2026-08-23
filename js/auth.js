@@ -166,3 +166,39 @@ function registrarNovoTreinador() {
         });
     });
 }
+
+// ========================================================
+// INSTALAÇÃO DO APLICATIVO (PWA)
+// ========================================================
+let deferredPrompt;
+const btnInstalar = document.getElementById('btn-instalar-app');
+
+// O navegador dispara esse evento se o app puder ser instalado
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Previne a notificação padrão chata do Android
+    e.preventDefault();
+    // Guarda o evento para usarmos quando o usuário clicar no botão
+    deferredPrompt = e;
+    // Mostra o nosso botão bonito na tela
+    if (btnInstalar) {
+        btnInstalar.style.display = 'block';
+    }
+});
+
+// O que acontece quando o usuário clica em "Instalar Aplicativo"
+if (btnInstalar) {
+    btnInstalar.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            // Abre a janela nativa do celular perguntando se quer instalar
+            deferredPrompt.prompt();
+            // Aguarda o usuário dizer Sim ou Não
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                console.log('App instalado com sucesso!');
+                // Esconde o botão depois que o cara instala
+                btnInstalar.style.display = 'none';
+            }
+            deferredPrompt = null;
+        }
+    });
+}
