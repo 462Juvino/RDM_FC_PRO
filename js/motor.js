@@ -168,9 +168,12 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
 
                         if (p.avaliacoes) {
                             for (let v in p.avaliacoes) {
-                                sA += p.avaliacoes[v].ataque; sD += p.avaliacoes[v].defesa;
-                                sF += p.avaliacoes[v].forca; sV += p.avaliacoes[v].velocidade;
-                                sH += p.avaliacoes[v].habilidade;
+                                // Adiciona o || 60 para não quebrar com avaliações antigas (Prevenção de NaN)
+                                sA += p.avaliacoes[v].ataque || 60;
+                                sD += p.avaliacoes[v].defesa || 60;
+                                sF += p.avaliacoes[v].forca || 60;
+                                sV += p.avaliacoes[v].velocidade || 60;
+                                sH += p.avaliacoes[v].habilidade || 60;
                                 qtdVotos++;
                             }
                         }
