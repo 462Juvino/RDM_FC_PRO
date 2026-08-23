@@ -90,6 +90,16 @@ button:hover {
     display: flex;
     flex-direction: column;
     padding: 20px 0;
+    overflow-y: auto; /* Permite rolar a barra lateral em telas pequenas */
+}
+
+/* Deixa a barra de rolagem do menu lateral fina e elegante */
+.sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
 }
 
 .sidebar h2 {
