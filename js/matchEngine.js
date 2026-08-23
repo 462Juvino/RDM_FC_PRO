@@ -160,27 +160,6 @@ function iniciarTransmissao() {
                     statusTransmissao.innerText = "Aquecimento 🏃‍♂️";
                 }
             }
-                lblGolsM.innerText = jogoAoVivo.placarMandante;
-                lblGolsV.innerText = jogoAoVivo.placarVisitante;
-                cronometro.innerText = "FIM";
-                cronometro.style.color = "#dc3545";
-                statusTransmissao.innerText = "Partida Encerrada 🏁";
-
-                if(!eventosJaTocados.has("fim")) {
-                    canalEfeitos.src = 'sounds/final_do_jogo.mp3';
-                    canalEfeitos.play();
-                    canalTorcida.volume = 0.1; // Abaixa a torcida no fim
-                    eventosJaTocados.add("fim");
-                }
-            }
-            else if (jogoAoVivo.linhaDoTempo) {
-                statusTransmissao.innerText = "Ao Vivo 🔴";
-                statusTransmissao.style.animation = "piscar 1s infinite";
-                reproduzirLinhaDoTempo(jogoAoVivo.linhaDoTempo, jogoAoVivo.horaInicio);
-            }
-            else {
-                statusTransmissao.innerText = "Aguardando Horário ⏳";
-            }
         }
     });
 }

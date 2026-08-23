@@ -37,7 +37,12 @@ async function checarRotinas(liga) {
     const agora = new Date();
     const hora = agora.getHours();
     const minuto = agora.getMinutes();
-    const dataAtualStr = agora.toISOString().split('T')[0];
+
+    // Fuso horário local correto para evitar pular dias
+    const ano = agora.getFullYear();
+    const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
+    const dia = agora.getDate().toString().padStart(2, '0');
+    const dataAtualStr = `${ano}-${mes}-${dia}`;
 
     // Verifica se estamos na janela de simulação (ex: depois das 19:30)
     let horaDeRodar = false;
@@ -307,22 +312,39 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                 jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime(); jogo.placarMandante = golsM; jogo.placarVisitante = golsV;
             };
 
-            // 1. VARRE A LIGA (Procura os jogos de hoje)
-            let rodadaKey = `rodada_${cal.rodadaAtual || 1}`;
-            if (cal.serieA && cal.serieA[rodadaKey]) {
-                for (let j in cal.serieA[rodadaKey]) {
-                    let jogo = cal.serieA[rodadaKey][j];
-                    if (!jogo.jogado && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)) { processarPartidaAoVivo(jogo, false); teveJogoLiga = true; }
-                }
-            }
-            if (cal.serieB && cal.serieB[rodadaKey]) {
-                for (let j in cal.serieB[rodadaKey]) {
-                    let jogo = cal.serieB[rodadaKey][j];
-                    if (!jogo.jogado && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)) { processarPartidaAoVivo(jogo, false); }
-                }
+            // 1. VARRE A LIGA (Procura os jogos de hoje EM TODAS AS RODADAS)
+            let teveJogoLiga = false;
+            let proximaRodada = cal.rodadaAtual || 1;
+
+            for (let r = 1; r <= 38; r++) {
+                let rodadaKey = `rodada_${r}`;
+
+                const checarE_Simular = (divisaoObj) => {
+                    if (!divisaoObj || !divisaoObj[rodadaKey]) return;
+                    for (let j in divisaoObj[rodadaKey]) {
+                        let jogo = divisaoObj[rodadaKey][j];
+
+                        // Limpeza: Marca jogos já simulados ontem como definitivamente concluídos
+                        if (jogo.linhaDoTempo && !jogo.data_jogo.includes(hojeStr)) {
+                            jogo.jogado = true;
+                        }
+
+                        // Simula se for o jogo do dia
+                        if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)) {
+                            processarPartidaAoVivo(jogo, false);
+                            teveJogoLiga = true;
+                            if (r >= proximaRodada) proximaRodada = r + 1; // Prepara a interface para avançar
+                        }
+                    }
+                };
+
+                checarE_Simular(cal.serieA);
+                checarE_Simular(cal.serieB);
             }
 
-            if (teveJogoLiga && cal.rodadaAtual < 38) cal.rodadaAtual++;
+            if (teveJogoLiga && proximaRodada <= 38) {
+                cal.rodadaAtual = proximaRodada;
+            }
 
             // 2. VARRE A COPA (Avançando de fase automaticamente)
             if (cal.copa) {
