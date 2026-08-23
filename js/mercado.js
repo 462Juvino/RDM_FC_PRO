@@ -44,9 +44,11 @@ function carregarMundo() {
                 let objJogador = {
                     id_banco: idJog,
                     nome: j.nome,
+                    idade: j.idade || 20, // Puxa a idade do banco
                     clube: time.replace(/_/g, ' '),
                     posicao: j.posicoes.p,
                     forca: ovr,
+                    atributos: at,
                     valor: j.valor_mercado
                 };
 
@@ -84,15 +86,15 @@ function renderizarMercado(termoBusca = "") {
         let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
         let btnAcao = ehDoMeuTime
             ? `<button disabled style="background:#555; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Seu Atleta</button>`
-            : `<button onclick="fazerProposta('${j.id_banco}', '${j.nome}', ${j.valor}, '${j.clube}')" style="background:#ff8c00; border:none; color:#fff; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">Fazer Proposta</button>`;
+            : `<button onclick="fazerProposta('${j.id_banco}')" style="background:#ff8c00; border:none; color:#fff; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">Fazer Proposta</button>`;
 
         tbody.innerHTML += `
             <tr style="border-bottom: 1px solid #333;">
                 <td style="text-align: left; padding: 12px; font-weight: bold; color: #fff;">${j.nome}</td>
-                <td>${j.posicao}</td>
-                <td style="color: var(--verde-campo); font-weight: bold;">${j.forca}</td>
+                <td style="font-size: 13px;">${j.posicao}</td>
+                <td style="color: #ff8c00; font-weight: bold;">${j.forca}</td>
                 <td style="font-size: 13px; color: #aaa;">${j.clube}</td>
-                <td style="color: #ddd;">${formatarDinheiro(j.valor)}</td>
+                <td style="color: #ddd; font-size: 13px;">${formatarDinheiro(j.valor)}</td>
                 <td>${btnAcao}</td>
             </tr>
         `;
@@ -110,16 +112,28 @@ function pesquisarJogador() {
 // ========================================================
 let propostaPendente = { idJogador: null, nome: "", valorBase: 0, clubeDono: "" };
 
-function fazerProposta(idJogador, nome, valorBase, clubeDono) {
-    propostaPendente = { idJogador, nome, valorBase, clubeDono };
+function fazerProposta(idJogador) {
+    let j = todosJogadores.find(x => x.id_banco === idJogador);
+    if (!j) return;
 
-    // Preenche o modal
-    document.getElementById('prop-nome-jogador').innerText = nome;
-    document.getElementById('prop-clube-dono').innerText = clubeDono.replace(/_/g, ' ');
-    document.getElementById('prop-valor-base').innerText = formatarDinheiro(valorBase);
+    propostaPendente = { idJogador: j.id_banco, nome: j.nome, valorBase: j.valor, clubeDono: j.clube };
+
+    // Preenche o modal com o Raio-X do jogador
+    document.getElementById('prop-nome-jogador').innerText = j.nome;
+    document.getElementById('prop-clube-dono').innerText = j.clube;
+    document.getElementById('prop-idade-jogador').innerText = j.idade + " anos";
+    document.getElementById('prop-ovr-jogador').innerText = j.forca;
+
+    document.getElementById('prop-atq').innerText = j.atributos.ataque;
+    document.getElementById('prop-def').innerText = j.atributos.defesa;
+    document.getElementById('prop-for').innerText = j.atributos.forca;
+    document.getElementById('prop-vel').innerText = j.atributos.velocidade;
+    document.getElementById('prop-hab').innerText = j.atributos.habilidade;
+
+    document.getElementById('prop-valor-base').innerText = formatarDinheiro(j.valor);
     document.getElementById('prop-seu-caixa').innerText = formatarDinheiro(saldoAtual);
 
-    document.getElementById('input-valor-proposta').value = valorBase;
+    document.getElementById('input-valor-proposta').value = j.valor;
 
     // Popula o select com os seus próprios jogadores
     const selectTroca = document.getElementById('select-jogador-troca');
