@@ -6,7 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manager BR 26 - Login</title>
     <link rel="stylesheet" href="css/style.css">
-    
+
+    <!-- Instalador PWA -->
+    <link rel="manifest" href="manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+    </script>
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
@@ -16,6 +22,9 @@
     <div class="login-container">
         <h1>Manager BR 26</h1>
         <p>Acesse o painel do Treinador</p>
+
+        <!-- BOTÃO DE INSTALAR APP (Invisível por padrão) -->
+        <button id="btn-instalar-app" style="display: none; background-color: #007bff; border-color: #007bff; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">📲 Instalar Aplicativo</button>
 
         <!-- CAIXA DE LOGIN / CADASTRO -->
         <div id="form-box">
