@@ -28,12 +28,28 @@
         <!-- 2. SORTEIO DE TIMES E CALENDÁRIO -->
         <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
             <h3 style="color: #ff8c00; margin-top: 0;">2. Sortear Clubes e Tabela 🎲</h3>
-            <p style="font-size: 13px; color: #ccc;">Sorteia times para os treinadores cadastrados e gera automaticamente as 38 rodadas.</p>
-            <select id="sorteio-liga-id" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #1a1a1a; color: white; border: 1px solid #444; border-radius: 6px;">
+            <p style="font-size: 13px; color: #ccc;">Selecione a liga, marque apenas quem vai pro campeonato oficial e gere as chaves.</p>
+
+            <select id="sorteio-liga-id" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #1a1a1a; color: white; border: 1px solid #444; border-radius: 6px;" onchange="carregarFilaSorteio()">
                 <option value="">Aguardando ligas...</option>
             </select>
+
+            <!-- FILA DE SORTEIO COM CHECKBOX -->
+            <div id="fila-sorteio" style="background: #111; padding: 10px; border: 1px dashed #555; border-radius: 6px; margin-bottom: 15px; max-height: 150px; overflow-y: auto; font-size: 13px; color: #aaa;">
+                Selecione uma liga para ver os treinadores sem clube.
+            </div>
+
             <button style="background: #ff8c00;" onclick="sortearTimesLiga()">Realizar Sorteio Completo</button>
+
+            <hr style="border-color: #444; margin: 15px 0;">
+            <p style="color: #aaa; font-size: 13px; margin-bottom: 5px;">Fim de Temporada:</p>
+            <div style="display: flex; gap: 10px;">
+                <button style="background: #333; border: 1px solid #555; color: #fff; font-size: 12px; padding: 10px;" onclick="novaTemporadaManterClubes()">🔄 Nova Temporada (Manter Clubes)</button>
+                <button style="background: transparent; border: 1px solid #dc3545; color: #dc3545; font-size: 12px; padding: 10px;" onclick="resetarLigaCorrente()">🚨 Zerar Liga (Sorteio do Zero)</button>
+            </div>
         </div>
+
+
 
         <!-- 3. GERENCIAMENTO DE TREINADORES -->
         <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
@@ -63,6 +79,20 @@
         <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
             <h3 style="color: #666; margin-top: 0;">4. Banco de Dados (Setup Inicial)</h3>
             <button style="background: transparent; border: 1px solid #666; color: #888;" onclick="injetarTimesIniciais()">⚠️ Injetar 40 Times no Servidor</button>
+        </div>
+
+        <!-- 5. GERENCIADOR DE ESCUDOS (SÉRIE B E FANTASMAS) -->
+        <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+            <h3 style="color: #00b853; margin-top: 0;">5. Gerenciador de Escudos 🛡️</h3>
+            <p style="font-size: 13px; color: #ccc;">Adicione a URL da imagem para os times que não possuem escudo na pasta local.</p>
+
+            <select id="select-time-escudo" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #1a1a1a; color: white; border: 1px solid #444; border-radius: 6px;">
+                <option value="">Carregando times do servidor...</option>
+            </select>
+
+            <input type="text" id="url-escudo" placeholder="Cole a URL da imagem aqui (Ex: https://.../escudo.png)" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #1a1a1a; color: white; border: 1px solid #444; border-radius: 6px; box-sizing: border-box;">
+
+            <button style="background: #00b853;" onclick="salvarEscudoBanco()">Salvar Escudo no Banco</button>
         </div>
 
         <button style="background: #dc3545;" onclick="deslogarADM()">Sair do Painel</button>

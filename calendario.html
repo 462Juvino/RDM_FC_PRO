@@ -4,13 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manager BR 26 - Calendário</title>
+    <title>Manager BR 26 - Calendário e Copa</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="manifest" href="manifest.json">
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <style>
+        .aba-btn {
+            background: #2a2a2a; color: #888; border: 1px solid #444; padding: 8px 15px;
+            border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 0; width: auto; font-size: 13px;
+        }
+        .aba-btn.ativo { background: var(--verde-campo); color: white; border-color: var(--verde-campo); }
+        .aba-btn:hover:not(.ativo) { background: #333; color: white; }
+    </style>
 </head>
 <body style="align-items: flex-start;">
 
@@ -24,6 +33,7 @@
             <button onclick="window.location.href='ranking.html'">🏆 Classificação</button>
             <button onclick="window.location.href='mercado.html'">🛒 Mercado</button>
             <button onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button onclick="window.location.href='pelada.html'">⚽ Pelada (Sorteio)</button>
             <button style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ IR PARA O JOGO</button>
             <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
         </aside>
@@ -39,17 +49,23 @@
                         <strong id="nome-time" style="color: var(--verde-campo);">...</strong>
                     </div>
                 </div>
-                <div class="info-caixa" id="saldo-treinador">R$ 0,00</div>
             </header>
 
             <section class="area-trabalho">
+
+                <!-- NOVO: ABAS CAMPEONATO E COPA -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="aba-camp" class="aba-btn ativo" onclick="mudarAbaCalendario('camp')">🏆 Campeonato Nacional</button>
+                    <button id="aba-copa" class="aba-btn" onclick="mudarAbaCalendario('copa')">⚔️ Copa (Mata-Mata)</button>
+                </div>
+
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
-                    <h2 style="margin: 0;">Calendário Oficial 🗓️</h2>
+                    <h2 id="titulo-calendario" style="margin: 0;">Calendário Oficial 🗓️</h2>
 
                     <div style="display: flex; align-items: center; gap: 15px;">
-                        <span style="color: #aaa; font-size: 14px;">Rodada Atual: <strong id="lbl-rodada-atual" style="color: var(--verde-campo);">1</strong></span>
+                        <span id="lbl-status-rodada" style="color: #aaa; font-size: 14px;">Rodada Atual: <strong id="lbl-rodada-atual" style="color: var(--verde-campo);">1</strong></span>
                         <select id="seletor-rodada" style="width: auto; padding: 8px; margin: 0; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px;" onchange="renderizarRodada()">
-                            <!-- Opções de 1 a 38 geradas via JS -->
+                            <!-- Opções geradas via JS -->
                         </select>
                     </div>
                 </div>
@@ -67,5 +83,6 @@
     <script src="js/firebase-config.js"></script>
     <script src="js/calendario.js"></script>
     <script src="js/motor.js"></script>
+    <script src="js/midia.js"></script>
 </body>
 </html>

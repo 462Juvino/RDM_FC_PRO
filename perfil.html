@@ -10,11 +10,16 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <style>
+        .atributo-slider { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #ddd; }
+        .atributo-slider span:first-child { width: 60px; }
+        .atributo-slider input { flex: 1; margin: 0 10px; cursor: pointer; }
+        .atributo-slider span:last-child { width: 30px; text-align: right; font-weight: bold; color: #ff8c00; }
+    </style>
 </head>
 <body style="align-items: flex-start;">
 
     <div class="dashboard-layout">
-        <!-- Menu Lateral -->
         <aside class="sidebar">
             <h2>Manager BR</h2>
             <button onclick="window.location.href='dashboard.html'">📊 Visão Geral</button>
@@ -23,6 +28,7 @@
             <button onclick="window.location.href='ranking.html'">🏆 Classificação</button>
             <button onclick="window.location.href='mercado.html'">🛒 Mercado</button>
             <button class="ativo" onclick="window.location.href='perfil.html'">👤 Pro Player</button>
+            <button onclick="window.location.href='pelada.html'">⚽ Pelada (Sorteio)</button>
             <button style="margin-top: 20px; background-color: #ff8c00; color: #fff; font-weight: bold; border-radius: 6px;" onclick="window.location.href='partida.html'">⚡ IR PARA O JOGO</button>
             <button class="btn-sair" onclick="deslogar()">Sair do Jogo</button>
         </aside>
@@ -38,6 +44,12 @@
                         <strong id="nome-time" style="color: var(--verde-campo);">...</strong>
                     </div>
                 </div>
+
+                <!-- SINO DE NOTIFICAÇÃO -->
+                <div style="position: relative; cursor: pointer;">
+                    <span style="font-size: 24px;">🔔</span>
+                    <div id="alerta-notificacao" style="display: none; position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 50%;">!</div>
+                </div>
             </header>
 
             <section class="area-trabalho">
@@ -45,39 +57,18 @@
                     <h2 style="margin: 0;">Centro de Treinamento da Base 👤</h2>
                 </div>
 
+                <!-- ALERTA DE EVOLUÇÃO NA TELA -->
+                <div id="painel-notificacao" style="display: none; background: rgba(255, 140, 0, 0.1); border: 1px solid #ff8c00; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <h3 style="margin-top: 0; color: #ff8c00;">Atenção do Olheiro!</h3>
+                    <p style="color: #ddd; font-size: 14px; margin-bottom: 0;" id="texto-notificacao">...</p>
+                </div>
+
                 <div class="dashboard-widgets" style="grid-template-columns: 1fr 1fr;">
 
-                    <!-- WIDGET: CRIAR SEU PRO PLAYER -->
+                    <!-- WIDGET: SEU PRO PLAYER (CRIAÇÃO OU EVOLUÇÃO) -->
                     <div class="widget-card" id="box-criar-player">
-                        <h3 style="color: #ff8c00;">Forjar Promessa (Pro Player)</h3>
-                        <p style="font-size: 13px; color: #ccc;">Crie um jogador com um teto de <strong>300 pontos iniciais</strong>. Os outros treinadores avaliarão seu atleta para definir o OVR final. Ele entrará no mercado na 5ª Rodada!</p>
-
-                        <input type="text" id="pro-nome" placeholder="Nome do Jogador" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; margin-bottom: 10px;">
-
-                        <select id="pro-posicao" style="width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #555; color: white; border-radius: 6px; margin-bottom: 15px;">
-                            <option value="Atacante">Atacante</option>
-                            <option value="Meia">Meia</option>
-                            <option value="Volante">Volante</option>
-                            <option value="Zagueiro">Zagueiro</option>
-                            <option value="Lateral">Lateral</option>
-                            <option value="Goleiro">Goleiro</option>
-                        </select>
-
-                        <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444; margin-bottom: 15px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #aaa; font-size: 13px;">Pontos Disponíveis:</span>
-                                <strong id="pontos-restantes" style="color: var(--verde-campo);">300</strong>
-                            </div>
-
-                            <!-- Sliders de Atributos -->
-                            <div class="atributo-slider"><span>Ataque:</span> <input type="range" id="atr-atq" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-atq">60</span></div>
-                            <div class="atributo-slider"><span>Defesa:</span> <input type="range" id="atr-def" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-def">60</span></div>
-                            <div class="atributo-slider"><span>Força:</span> <input type="range" id="atr-for" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-for">60</span></div>
-                            <div class="atributo-slider"><span>Veloc.:</span> <input type="range" id="atr-vel" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-vel">60</span></div>
-                            <div class="atributo-slider"><span>Habil.:</span> <input type="range" id="atr-hab" min="10" max="90" value="60" oninput="calcularPontos()"> <span id="val-hab">60</span></div>
-                        </div>
-
-                        <button onclick="salvarProPlayer()" style="background: var(--verde-campo); width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; color: white; border: none; cursor: pointer;">Registrar Atleta</button>
+                        <!-- O Javascript vai injetar aqui o form de criação OU o painel de evolução -->
+                        <div style="text-align: center; color: #aaa; padding: 20px;">Carregando status do atleta...</div>
                     </div>
 
                     <!-- WIDGET: AVALIAR JOGADORES DOS OUTROS -->
@@ -91,19 +82,25 @@
                     </div>
 
                 </div>
+
+                <!-- WIDGET: HALL DA FAMA (HISTÓRICO) -->
+                <div class="dashboard-widgets" style="grid-template-columns: 1fr; margin-top: 20px;">
+                    <div class="widget-card" style="border-top: 4px solid #ffd700;">
+                        <h3 style="color: #ffd700; text-align: center; margin-top: 0; font-size: 22px;">🏆 Hall da Fama - Histórico de Campeões</h3>
+                        <p style="text-align: center; font-size: 13px; color: #aaa;">Os nomes gravados na eternidade do servidor.</p>
+
+                        <div id="lista-historico" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                            <div style="text-align: center; padding: 20px; color: #666;">Buscando registros de glória...</div>
+                        </div>
+                    </div>
+                </div>
+
             </section>
         </main>
     </div>
 
     <script src="js/firebase-config.js"></script>
     <script src="js/perfil.js"></script>
-    <script src="js/motor.js"></script>
-
-    <style>
-        .atributo-slider { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #ddd; }
-        .atributo-slider span:first-child { width: 60px; }
-        .atributo-slider input { flex: 1; margin: 0 10px; cursor: pointer; }
-        .atributo-slider span:last-child { width: 30px; text-align: right; font-weight: bold; color: #ff8c00; }
-    </style>
+    <script src="js/midia.js"></script>
 </body>
 </html>
