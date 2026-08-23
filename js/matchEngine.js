@@ -32,6 +32,7 @@ const cronometro = document.getElementById('tempo-jogo');
 const statusTransmissao = document.getElementById('status-transmissao');
 const narracao = document.getElementById('narracao-container');
 
+
 window.addEventListener('DOMContentLoaded', async () => {
     try {
         const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
@@ -41,15 +42,22 @@ window.addEventListener('DOMContentLoaded', async () => {
         const snapTime = await db.ref(`banco_global_times/${dadosUsuario.timeAtual}`).once('value');
         if (snapTime.exists()) divisaoAtual = snapTime.val().divisao;
 
-        // Pede pro usuário clicar para liberar o som
-        narracao.innerHTML = `
-            <div style="text-align: center; padding: 30px;">
-                <h3 style="color: #ff8c00;">A transmissão está pronta!</h3>
-                <button onclick="liberarAudio()" style="background: var(--verde-campo); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">▶️ LIGAR SOM E TRANSMISSÃO</button>
-            </div>`;
+        narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 20px;">Buscando sinal do satélite...</div>`;
 
+        // Inicia a leitura do banco imediatamente
+        iniciarTransmissao();
     } catch (e) { console.error(e); }
 });
+
+function liberarAudio() {
+    audioLiberado = true;
+    narracao.innerHTML = `<div style="color: #aaa; text-align: center;">Áudio e vídeo conectados! Aguardando rolar a bola...</div>`;
+
+    // Força a atualização da tela caso o jogo já esteja rolando
+    if (jogoAtual && jogoAtual.linhaDoTempo) {
+        reproduzirLinhaDoTempo(jogoAtual.linhaDoTempo, jogoAtual.horaInicio);
+    }
+}
 
 // Helper para Escudos Inteligentes (Tenta Local, se falhar pega do Banco/Padrão)
 function gerarImgEscudo(timeId, dadosTimeBanco) {
@@ -61,11 +69,7 @@ function gerarImgEscudo(timeId, dadosTimeBanco) {
     return `<img src="esculdos/${timeId}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
 }
 
-function liberarAudio() {
-    audioLiberado = true;
-    narracao.innerHTML = `<div style="color: #aaa; text-align: center;">Conectando com o satélite...</div>`;
-    iniciarTransmissao();
-}
+
 
 function iniciarTransmissao() {
     db.ref(`ligas/${ligaLogada}/calendario`).on('value', (snapCal) => {
@@ -96,14 +100,66 @@ function iniciarTransmissao() {
             lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
             lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
-            // Toca a torcida do mandante de fundo (Ou genérica se não tiver arquivo)
-            if (audioLiberado && canalTorcida.src === "") {
-                canalTorcida.src = getTorcida(jogoAoVivo.mandante);
-                canalTorcida.onerror = () => { canalTorcida.src = 'sounds/torcida_generica.mp3'; canalTorcida.play(); };
-                canalTorcida.play();
-            }
-
             if (jogoAoVivo.jogado) {
+                lblGolsM.innerText = jogoAoVivo.placarMandante;
+                lblGolsV.innerText = jogoAoVivo.placarVisitante;
+                cronometro.innerText = "FIM";
+                cronometro.style.color = "#dc3545";
+                statusTransmissao.innerText = "Partida Encerrada 🏁";
+
+                if (!audioLiberado) {
+                    narracao.innerHTML = `<div style="color: #666; text-align: center; padding: 20px;">A transmissão desta partida já foi encerrada. Veja os gols no painel.</div>`;
+                }
+
+                if(audioLiberado && !eventosJaTocados.has("fim")) {
+                    canalEfeitos.src = 'sounds/final_do_jogo.mp3';
+                    canalEfeitos.play();
+                    canalTorcida.volume = 0.1;
+                    eventosJaTocados.add("fim");
+                }
+            }
+            else {
+                // TRAVA DE TEMPO: Só libera o botão 20 mins antes (19:40)
+                const agora = new Date();
+                const horaAtual = agora.getHours();
+                const minAtual = agora.getMinutes();
+                const HORA_JOGO = 20; // 20:00
+
+                let horarioPermitido = false;
+                if (horaAtual > (HORA_JOGO - 1)) horarioPermitido = true; // 20:00 em diante
+                if (horaAtual === (HORA_JOGO - 1) && minAtual >= 40) horarioPermitido = true; // 19:40 em diante
+
+                if (!horarioPermitido) {
+                    statusTransmissao.innerText = "Aguardando Horário ⏳";
+                    narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 30px;">
+                        <h3 style="color: #666;">Os portões do estádio ainda estão fechados.</h3>
+                        <p>A transmissão abrirá 20 minutos antes do jogo (19:40).</p>
+                    </div>`;
+                }
+                else if (!audioLiberado) {
+                    statusTransmissao.innerText = "Sinal Encontrado 📡";
+                    narracao.innerHTML = `
+                        <div style="text-align: center; padding: 30px;">
+                            <h3 style="color: #ff8c00;">A transmissão está pronta!</h3>
+                            <button onclick="liberarAudio()" style="background: var(--verde-campo); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">▶️ LIGAR SOM E ENTRAR NO ESTÁDIO</button>
+                        </div>`;
+                }
+                else if (jogoAoVivo.linhaDoTempo) {
+                    statusTransmissao.innerText = "Ao Vivo 🔴";
+                    statusTransmissao.style.animation = "piscar 1s infinite";
+
+                    if (canalTorcida.src === "") {
+                        canalTorcida.src = getTorcida(jogoAoVivo.mandante);
+                        canalTorcida.onerror = () => { canalTorcida.src = 'sounds/torcida_generica.mp3'; canalTorcida.play(); };
+                        canalTorcida.play();
+                    }
+
+                    reproduzirLinhaDoTempo(jogoAoVivo.linhaDoTempo, jogoAoVivo.horaInicio);
+                }
+                else {
+                    statusTransmissao.innerText = "Aquecimento 🏃‍♂️";
+                }
+            }
                 lblGolsM.innerText = jogoAoVivo.placarMandante;
                 lblGolsV.innerText = jogoAoVivo.placarVisitante;
                 cronometro.innerText = "FIM";
