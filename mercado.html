@@ -63,16 +63,11 @@
 
                 <!-- Lista de Jogadores no Mercado -->
                 <div style="background: var(--card-bg); border: 1px solid #444; border-radius: 8px; padding: 15px; overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: center; color: #ccc; min-width: 800px;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: center; color: #ccc; min-width: 600px;">
                         <thead>
                             <tr style="border-bottom: 1px solid #444;">
                                 <th style="text-align: left; padding: 10px; color: var(--verde-campo);">Atleta</th>
                                 <th>Posição</th>
-                                <th title="Ataque">Atq</th>
-                                <th title="Defesa">Def</th>
-                                <th title="Força Física">For</th>
-                                <th title="Velocidade">Vel</th>
-                                <th title="Habilidade">Hab</th>
                                 <th style="color: #ff8c00;" title="Força Total">OVR</th>
                                 <th>Clube Atual</th>
                                 <th>Passe (Valor)</th>
@@ -80,7 +75,7 @@
                             </tr>
                         </thead>
                         <tbody id="tabela-mercado">
-                            <tr><td colspan="11" style="padding: 20px;">Carregando banco de dados da FIFA...</td></tr>
+                            <tr><td colspan="6" style="padding: 20px;">Carregando banco de dados da FIFA...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -101,9 +96,27 @@
             </div>
 
             <div style="padding: 20px; color: #ccc; font-size: 14px;">
-                <p style="margin-top: 0;"><strong>Jogador Alvo:</strong> <span id="prop-nome-jogador" style="color: #fff;">...</span></p>
-                <p><strong>Clube Atual:</strong> <span id="prop-clube-dono" style="color: #fff;">...</span></p>
-                <p style="border-bottom: 1px solid #444; padding-bottom: 10px;"><strong>Valor de Mercado:</strong> <span id="prop-valor-base" style="color: var(--verde-campo); font-weight: bold;">...</span></p>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px;">
+                    <div>
+                        <p style="margin-top: 0; margin-bottom: 5px;"><strong>Jogador Alvo:</strong> <span id="prop-nome-jogador" style="color: #fff; font-size: 16px; font-weight: bold;">...</span></p>
+                        <p style="margin: 0; font-size: 12px; color: #aaa;">Clube: <span id="prop-clube-dono" style="color: #fff;">...</span> | Idade: <span id="prop-idade-jogador" style="color: #fff;">...</span></p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="margin: 0; font-size: 12px; color: #aaa;">OVR</p>
+                        <p id="prop-ovr-jogador" style="margin: 0; font-size: 24px; font-weight: bold; color: #ff8c00;">...</p>
+                    </div>
+                </div>
+
+                <!-- RAIO-X DOS ATRIBUTOS -->
+                <div style="display: flex; justify-content: space-between; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333; margin-bottom: 15px; font-size: 12px; text-align: center;">
+                    <div><span style="color:#aaa;">Atq</span><br><strong id="prop-atq">...</strong></div>
+                    <div><span style="color:#aaa;">Def</span><br><strong id="prop-def">...</strong></div>
+                    <div><span style="color:#aaa;">For</span><br><strong id="prop-for">...</strong></div>
+                    <div><span style="color:#aaa;">Vel</span><br><strong id="prop-vel">...</strong></div>
+                    <div><span style="color:#aaa;">Hab</span><br><strong id="prop-hab">...</strong></div>
+                </div>
+
+                <p style="border-bottom: 1px solid #444; padding-bottom: 10px;"><strong>Passe Estipulado:</strong> <span id="prop-valor-base" style="color: var(--verde-campo); font-weight: bold;">...</span></p>
 
                 <!-- SEÇÃO DE OFERTA -->
                 <p style="margin-top: 15px; margin-bottom: 10px;"><strong>Seu Caixa Atual:</strong> <span id="prop-seu-caixa" style="color: var(--verde-campo);">...</span></p>
