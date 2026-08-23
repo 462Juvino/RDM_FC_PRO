@@ -46,10 +46,17 @@
                     </div>
                 </div>
 
-                <!-- SINO DE NOTIFICAÇÃO -->
-                <div style="position: relative; cursor: pointer;">
+                <!-- SINO DE NOTIFICAÇÃO COM DROPDOWN -->
+                <div style="position: relative; cursor: pointer;" onclick="toggleNotificacoes()">
                     <span style="font-size: 24px;">🔔</span>
-                    <div id="alerta-notificacao" style="display: none; position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 50%;">!</div>
+                    <div id="badge-notificacao" style="display: none; position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 50%;">0</div>
+
+                    <div id="dropdown-notificacoes" style="display: none; position: absolute; top: 35px; right: 0; background: var(--card-bg); border: 1px solid #444; border-radius: 8px; width: 280px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10000; padding: 10px; cursor: default; text-align: left;">
+                        <h4 style="margin: 0 0 10px 0; color: #fff; font-size: 14px; border-bottom: 1px solid #333; padding-bottom: 5px;">Avisos do Sistema</h4>
+                        <div id="lista-notificacoes-drop" style="display: flex; flex-direction: column; gap: 5px;">
+                            <span style="color:#888; font-size:12px;">Nenhuma notificação.</span>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -103,5 +110,31 @@
     <script src="js/firebase-config.js"></script>
     <script src="js/perfil.js"></script>
     <script src="js/midia.js"></script>
+
+    <!-- MODAL DE AVALIAÇÃO COMUNITÁRIA -->
+    <div id="modal-avaliacao" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
+        <div style="background: var(--card-bg); width: 100%; max-width: 450px; border-radius: 12px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; overflow: hidden;">
+            <div style="background: #2a2a2a; padding: 15px 20px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #00b853; font-size: 18px;">🔎 Olheiro Comunitário</h3>
+                <button onclick="fecharModalAvaliacao()" style="background: transparent; color: #aaa; border: none; font-size: 24px; cursor: pointer; padding: 0; margin: 0; width: auto;">&times;</button>
+            </div>
+            <div style="padding: 20px; color: #ccc; font-size: 14px;">
+                <p style="margin-top: 0; margin-bottom: 5px;"><strong>Atleta:</strong> <span id="modal-nome-jogador" style="color: #fff; font-size: 16px;">...</span></p>
+                <p style="margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;"><strong>Posição:</strong> <span id="modal-pos-jogador" style="color: #fff;">...</span></p>
+                <p style="font-size: 12px; color: #aaa; margin-bottom: 10px;">Refaça os atributos como você acha justo. O limite é de 300 pontos totais.</p>
+
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span style="color: #aaa; font-size: 12px;">Pontos Disponíveis:</span>
+                    <strong id="modal-pontos-restantes" style="color: var(--verde-campo);">0</strong>
+                </div>
+
+                <div id="modal-sliders" style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444;"></div>
+            </div>
+            <div style="padding: 15px 20px; border-top: 1px solid #444; background: #2a2a2a; display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="fecharModalAvaliacao()" style="background: #444; border: 1px solid #555; color: white; padding: 8px 15px; border-radius: 6px;">Cancelar</button>
+                <button id="btn-confirmar-aval" style="background: var(--verde-campo); border: none; color: white; padding: 8px 20px; border-radius: 6px; font-weight: bold;">Enviar Avaliação</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
