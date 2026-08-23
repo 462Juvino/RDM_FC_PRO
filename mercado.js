@@ -47,6 +47,7 @@ function carregarMundo() {
                     clube: time.replace(/_/g, ' '),
                     posicao: j.posicoes.p,
                     forca: ovr,
+                    atributos: at, // GUARDA OS DADOS SEPARADOS
                     valor: j.valor_mercado
                 };
 
@@ -89,10 +90,15 @@ function renderizarMercado(termoBusca = "") {
         tbody.innerHTML += `
             <tr style="border-bottom: 1px solid #333;">
                 <td style="text-align: left; padding: 12px; font-weight: bold; color: #fff;">${j.nome}</td>
-                <td>${j.posicao}</td>
-                <td style="color: var(--verde-campo); font-weight: bold;">${j.forca}</td>
+                <td style="font-size: 13px;">${j.posicao}</td>
+                <td style="color: #aaa; font-size: 13px;">${j.atributos.ataque}</td>
+                <td style="color: #aaa; font-size: 13px;">${j.atributos.defesa}</td>
+                <td style="color: #aaa; font-size: 13px;">${j.atributos.forca}</td>
+                <td style="color: #aaa; font-size: 13px;">${j.atributos.velocidade}</td>
+                <td style="color: #aaa; font-size: 13px;">${j.atributos.habilidade}</td>
+                <td style="color: #ff8c00; font-weight: bold;">${j.forca}</td>
                 <td style="font-size: 13px; color: #aaa;">${j.clube}</td>
-                <td style="color: #ddd;">${formatarDinheiro(j.valor)}</td>
+                <td style="color: #ddd; font-size: 13px;">${formatarDinheiro(j.valor)}</td>
                 <td>${btnAcao}</td>
             </tr>
         `;
@@ -195,7 +201,38 @@ function formatarDinheiro(valor) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 }
 
-function toggleMenu() { document.querySelector('.sidebar').classList.toggle('aberta'); }
+// CONTROLE DO MENU MOBILE OTIMIZADO
+function toggleMenu() {
+    const sidebar = document.querySelector('.sidebar');
+    const menuAberto = sidebar.classList.toggle('aberta');
+
+    // Adiciona uma classe ao body para fazer o fundo escurecer
+    if (menuAberto) {
+        document.body.classList.add('menu-aberto');
+    } else {
+        document.body.classList.remove('menu-aberto');
+    }
+}
+
+// Fecha o menu se o cara tocar no fundo escuro ou em um botão do próprio menu
+document.addEventListener('click', (e) => {
+    const sidebar = document.querySelector('.sidebar');
+
+    // Se a tela for pequena, e o menu tá aberto...
+    if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('aberta')) {
+        // Se ele tocou em qualquer botão de ir pra outra página (tag A ou tag BUTTON)...
+        if (e.target.tagName === 'BUTTON' && !e.target.classList.contains('btn-menu')) {
+            sidebar.classList.remove('aberta');
+            document.body.classList.remove('menu-aberto');
+        }
+
+        // Se ele tocou fora do menu (no fundo escuro ou no X)
+        if (!e.target.closest('.sidebar') && !e.target.closest('.btn-menu')) {
+            sidebar.classList.remove('aberta');
+            document.body.classList.remove('menu-aberto');
+        }
+    }
+});
 function deslogar() {
     localStorage.removeItem('treinadorLiga');
     localStorage.removeItem('treinadorUsuario');
