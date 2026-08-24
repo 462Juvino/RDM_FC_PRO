@@ -307,6 +307,12 @@ function abrirModalAvaliacao(dono) {
 
     document.getElementById('btn-confirmar-aval').setAttribute('onclick', `enviarAvaliacaoDetalhada('${dono}')`);
 
+    // Ajusta a interface para o novo limite de Avaliador (Muda o texto dinamicamente)
+    const lblPontos = document.getElementById('modal-pontos-restantes');
+    if (lblPontos && lblPontos.previousElementSibling) {
+        lblPontos.previousElementSibling.innerText = "Total Avaliado (Mín 270 / Máx 330):";
+    }
+
     document.getElementById('modal-avaliacao').style.display = 'flex';
     calcularPontosAvaliacao(dono);
 }
@@ -328,15 +334,20 @@ function calcularPontosAvaliacao(dono) {
     document.getElementById(`val-atr-vel_${dono}`).innerText = v;
     document.getElementById(`val-atr-hab_${dono}`).innerText = h;
 
-    const restantes = 300 - (a + d + f + v + h);
-    const lbl = document.getElementById(`modal-pontos-restantes`); // ID consertado para o modal
-    lbl.innerText = restantes;
-    lbl.style.color = restantes < 0 ? "#dc3545" : "var(--verde-campo)";
+    const soma = a + d + f + v + h;
+    const lbl = document.getElementById(`modal-pontos-restantes`);
+
+    lbl.innerText = soma;
+    // Pinta de vermelho se estourar o limite (menos que 270 ou mais que 330)
+    lbl.style.color = (soma < 270 || soma > 330) ? "#dc3545" : "var(--verde-campo)";
 }
 
 function enviarAvaliacaoDetalhada(dono) {
-    let pts = parseInt(document.getElementById(`modal-pontos-restantes`).innerText);
-    if (pts < 0) return alert("Você usou mais de 300 pontos na avaliação! Reduza os atributos para ser justo.");
+    let soma = parseInt(document.getElementById(`modal-pontos-restantes`).innerText);
+
+    // Travas exclusivas do Avaliador Comunitário
+    if (soma < 270) return alert("A avaliação está muito baixa! Você deve distribuir no mínimo 270 pontos.");
+    if (soma > 330) return alert("A avaliação estourou o limite! Você pode distribuir no máximo 330 pontos.");
 
     let avaliacao = {
         ataque: parseInt(document.getElementById(`atr-atq_${dono}`).value),
