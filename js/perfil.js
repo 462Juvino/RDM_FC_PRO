@@ -167,7 +167,6 @@ function renderizarPainelEvolucao() {
         TETO_PONTOS = mxA + mxD + mxF + mxV + mxH; // O Teto total se ajusta à media
 
         if (!meuProPlayer.ajuste_concluido) {
-            document.getElementById('alerta-notificacao').style.display = "block";
             document.getElementById('painel-notificacao').style.display = "block";
             document.getElementById('texto-notificacao').innerHTML = `A liga reavaliou o seu atleta! Os seus novos limites de atributos agora são baseados na média da comunidade. Você possui <strong>${TETO_PONTOS} pts</strong> permitidos para redistribuir!`;
         }

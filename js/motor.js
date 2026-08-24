@@ -213,10 +213,13 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         updates[`banco_global_times/Agentes_Livres/divisao`] = "Livre";
                         updates[`banco_global_times/Agentes_Livres/jogadores/${idUnico}`] = jogadorPronto;
 
+                        // Calcula uma nota de 1 a 5 baseada no OVR final para o jornal
+                        let notaConvertida = (ovrFinal / 300) * 5;
+
                         // Atualiza o status do perfil do criador
                         updates[`ligas/${liga}/pro_players/${criador}/status`] = "mercado";
                         updates[`ligas/${liga}/pro_players/${criador}/ovr_final`] = ovrFinal;
-                        updates[`ligas/${liga}/pro_players/${criador}/nota_comunidade`] = media.toFixed(1);
+                        updates[`ligas/${liga}/pro_players/${criador}/nota_comunidade`] = notaConvertida.toFixed(1);
                     }
                 }
             }
