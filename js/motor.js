@@ -375,10 +375,10 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
             }
 
             // 3. FIM DE TEMPORADA: MUNDIAL E HALL DA FAMA
-            let rodadaFinalJogada = cal.serieA["rodada_38"] ? Object.values(cal.serieA["rodada_38"]).every(x => x.jogado === true) : false;
-            let copaFinalJogada = cal.copa.final["jogo_15"]?.jogado === true;
+            let rodadaFinalJogada = (cal.serieA && cal.serieA["rodada_38"]) ? Object.values(cal.serieA["rodada_38"]).every(x => x.jogado === true) : false;
+            let copaFinalJogada = (cal.copa && cal.copa.final && cal.copa.final["jogo_15"]) ? cal.copa.final["jogo_15"].jogado === true : false;
 
-            if (rodadaFinalJogada && copaFinalJogada && !cal.temporada_encerrada && cal.copa.mundial) {
+            if (rodadaFinalJogada && copaFinalJogada && !cal.temporada_encerrada && cal.copa && cal.copa.mundial) {
                 let mundial = cal.copa.mundial["jogo_mundial"];
 
                 if (mundial.mandante === "Campeão Nacional") {

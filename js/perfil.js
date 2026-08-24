@@ -167,8 +167,13 @@ function renderizarPainelEvolucao() {
         TETO_PONTOS = mxA + mxD + mxF + mxV + mxH; // O Teto total se ajusta à media
 
         if (!meuProPlayer.ajuste_concluido) {
-            document.getElementById('painel-notificacao').style.display = "block";
-            document.getElementById('texto-notificacao').innerHTML = `A liga reavaliou o seu atleta! Os seus novos limites de atributos agora são baseados na média da comunidade. Você possui <strong>${TETO_PONTOS} pts</strong> permitidos para redistribuir!`;
+            let painelNotif = document.getElementById('painel-notificacao');
+            let textoNotif = document.getElementById('texto-notificacao');
+            // Check de segurança: Só acende se o painel existir no HTML
+            if(painelNotif && textoNotif) {
+                painelNotif.style.display = "block";
+                textoNotif.innerHTML = `A liga reavaliou o seu atleta! Os seus novos limites de atributos agora são baseados na média da comunidade. Você possui <strong>${TETO_PONTOS} pts</strong> permitidos para redistribuir!`;
+            }
         }
     } else {
         TETO_PONTOS = 300;
@@ -307,7 +312,7 @@ function abrirModalAvaliacao(dono) {
 
     document.getElementById('btn-confirmar-aval').setAttribute('onclick', `enviarAvaliacaoDetalhada('${dono}')`);
 
-    // Ajusta a interface para o novo limite de Avaliador (Muda o texto dinamicamente)
+    // Muda a interface para mostrar o limite do avaliador
     const lblPontos = document.getElementById('modal-pontos-restantes');
     if (lblPontos && lblPontos.previousElementSibling) {
         lblPontos.previousElementSibling.innerText = "Total Avaliado (Mín 270 / Máx 330):";
@@ -335,19 +340,19 @@ function calcularPontosAvaliacao(dono) {
     document.getElementById(`val-atr-hab_${dono}`).innerText = h;
 
     const soma = a + d + f + v + h;
-    const lbl = document.getElementById(`modal-pontos-restantes`);
+    const lbl = document.getElementById('modal-pontos-restantes');
 
     lbl.innerText = soma;
-    // Pinta de vermelho se estourar o limite (menos que 270 ou mais que 330)
+    // Fica vermelho se estourar pra menos de 270 ou mais de 330
     lbl.style.color = (soma < 270 || soma > 330) ? "#dc3545" : "var(--verde-campo)";
 }
 
 function enviarAvaliacaoDetalhada(dono) {
-    let soma = parseInt(document.getElementById(`modal-pontos-restantes`).innerText);
+    let soma = parseInt(document.getElementById('modal-pontos-restantes').innerText);
 
-    // Travas exclusivas do Avaliador Comunitário
-    if (soma < 270) return alert("A avaliação está muito baixa! Você deve distribuir no mínimo 270 pontos.");
-    if (soma > 330) return alert("A avaliação estourou o limite! Você pode distribuir no máximo 330 pontos.");
+    // Travas exclusivas do Avaliador (270 a 330)
+    if (soma < 270) return alert("Avaliação muito baixa! Você deve distribuir no mínimo 270 pontos.");
+    if (soma > 330) return alert("Avaliação estourou o limite! O máximo é 330 pontos.");
 
     let avaliacao = {
         ataque: parseInt(document.getElementById(`atr-atq_${dono}`).value),
