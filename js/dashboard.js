@@ -277,20 +277,42 @@ async function gerarNoticia(meuTime) {
         const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
         const cal = snapCal.val();
 
-        // 1. FOFOCA SOBRE GOLEADAS (Humilhações)
+        // 1. FOFOCA SOBRE RESULTADOS (Goleadas e Seu Time)
         if (cal && cal.rodadaAtual > 1) {
             let rodadaAnterior = `rodada_${cal.rodadaAtual - 1}`;
-            let jogos = {...(cal.serieA[rodadaAnterior] || {}), ...(cal.serieB[rodadaAnterior] || {})};
+            let jogosA = cal.serieA ? cal.serieA[rodadaAnterior] : {};
+            let jogosB = cal.serieB ? cal.serieB[rodadaAnterior] : {};
+            let jogos = {...jogosA, ...jogosB};
 
             for (let j in jogos) {
                 let jogo = jogos[j];
-                if (jogo.jogado) {
+                if (jogo.jogado || jogo.linhaDoTempo) {
+                    let m = jogo.mandante.replace(/_/g,' ');
+                    let v = jogo.visitante.replace(/_/g,' ');
                     let dif = Math.abs(jogo.placarMandante - jogo.placarVisitante);
-                    if (dif >= 4) {
-                        let humilhado = jogo.placarMandante < jogo.placarVisitante ? jogo.mandante : jogo.visitante;
-                        let carrasco = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
-                        noticias.push(`"VEXAME HISTÓRICO! O time do ${humilhado.replace(/_/g,' ')} foi atropelado e humilhado pelo ${carrasco.replace(/_/g,' ')} na última partida. Clima tenso no vestiário!"`);
-                        noticias.push(`"A torcida do ${carrasco.replace(/_/g,' ')} não perdoa e espalha memes após a goleada brutal de ontem. Que passeio!"`);
+
+                    // Notícias de Goleada (3 gols ou mais de diferença)
+                    if (dif >= 3) {
+                        let humilhado = jogo.placarMandante < jogo.placarVisitante ? m : v;
+                        let carrasco = jogo.placarMandante > jogo.placarVisitante ? m : v;
+                        noticias.push(`"VEXAME! O time do ${humilhado} foi atropelado e humilhado pelo ${carrasco} na última rodada. Clima tenso no vestiário!"`);
+                        noticias.push(`"Máquina de gols! A torcida do ${carrasco} está em êxtase após a goleada brutal de ontem."`);
+                    }
+
+                    // Notícias sobre o SEU TIME especificamente
+                    if (jogo.mandante === dadosUsuario.timeAtual || jogo.visitante === dadosUsuario.timeAtual) {
+                        let meusGols = jogo.mandante === dadosUsuario.timeAtual ? jogo.placarMandante : jogo.placarVisitante;
+                        let advGols = jogo.mandante === dadosUsuario.timeAtual ? jogo.placarVisitante : jogo.placarMandante;
+
+                        if (meusGols > advGols) {
+                            noticias.push(`"Embalou! A cidade está em festa após a bela vitória do ${meuTime} na última rodada!"`);
+                            noticias.push(`"A tática funcionou perfeitamente e o ${meuTime} garantiu +3 pontos importantes no campeonato."`);
+                        } else if (meusGols < advGols) {
+                            noticias.push(`"Sinal de alerta! A dura derrota na última rodada colocou o treinador do ${meuTime} sob pressão da diretoria."`);
+                            noticias.push(`"Reunião a portas fechadas: O elenco do ${meuTime} tenta entender os erros cometidos na última partida."`);
+                        } else {
+                            noticias.push(`"Jogo truncado! O empate na última rodada deixou um gosto amargo para os torcedores do ${meuTime}."`);
+                        }
                     }
                 }
             }
