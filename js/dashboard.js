@@ -226,8 +226,8 @@ async function buscarMeuProximoJogo(timeIdBanco) {
             lblRodada.innerHTML = `<strong style="color: #fff;">${campeonatoNome} - Rodada ${rodada}</strong><br><span style="color: var(--verde-campo); font-size: 12px; font-weight: bold;">📅 ${dataHora}</span>`;
 
             btnIrJogo.style.display = "block";
-            if (meuJogo.jogado) {
-                lblRodada.innerHTML += ` <span style="color: #dc3545; font-size: 11px; text-transform: uppercase;">(Partida Encerrada)</span>`;
+            if (meuJogo.jogado || meuJogo.linhaDoTempo) {
+                lblRodada.innerHTML += ` <span style="color: #dc3545; font-size: 11px; text-transform: uppercase;">(Partida Rolando / Encerrada)</span>`;
                 btnIrJogo.innerText = "Ver Resultado e Gols";
                 btnIrJogo.style.background = "#333";
                 btnIrJogo.style.borderColor = "#555";
@@ -408,7 +408,7 @@ async function carregarMiniTabela(meuTimeId) {
             for (let rodada in jogosDivisao) {
                 for (let idJogo in jogosDivisao[rodada]) {
                     let jogo = jogosDivisao[rodada][idJogo];
-                    if (jogo.jogado) {
+                    if (jogo.jogado || jogo.linhaDoTempo) {
                         let m = jogo.mandante; let v = jogo.visitante;
                         let gm = jogo.placarMandante; let gv = jogo.placarVisitante;
                         if (m === "Fantasma" || v === "Fantasma") continue;

@@ -83,7 +83,8 @@ function renderizarTabela() {
             for (let idJogo in jogos) {
                 let jogo = jogos[idJogo];
 
-                if (jogo.jogado) {
+                // Pontua se o jogo já foi marcado como jogado OU se já teve simulação hoje
+                if (jogo.jogado || jogo.linhaDoTempo) {
                     let mand = jogo.mandante;
                     let vis = jogo.visitante;
                     let gm = jogo.placarMandante;

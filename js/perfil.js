@@ -169,8 +169,7 @@ function renderizarPainelEvolucao() {
         if (!meuProPlayer.ajuste_concluido) {
             let painelNotif = document.getElementById('painel-notificacao');
             let textoNotif = document.getElementById('texto-notificacao');
-            // Check de segurança: Só acende se o painel existir no HTML
-            if(painelNotif && textoNotif) {
+            if (painelNotif && textoNotif) {
                 painelNotif.style.display = "block";
                 textoNotif.innerHTML = `A liga reavaliou o seu atleta! Os seus novos limites de atributos agora são baseados na média da comunidade. Você possui <strong>${TETO_PONTOS} pts</strong> permitidos para redistribuir!`;
             }

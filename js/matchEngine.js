@@ -169,7 +169,21 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
     const diferencaSegundos = Math.floor((agora - horaInicioTstamp) / 1000);
     let minutoAtualJogo = diferencaSegundos;
 
-    if (minutoAtualJogo > 90) return;
+    if (minutoAtualJogo > 95) { // Passou do tempo, mostra o fim!
+        cronometro.innerText = "FIM";
+        statusTransmissao.innerText = "Partida Encerrada 🏁";
+        statusTransmissao.style.animation = "none";
+        lblGolsM.innerText = jogoAtual.placarMandante;
+        lblGolsV.innerText = jogoAtual.placarVisitante;
+
+        if(!eventosJaTocados.has("fim") && audioLiberado) {
+            canalEfeitos.src = 'sounds/final_do_jogo.mp3';
+            canalEfeitos.play();
+            canalTorcida.volume = 0.1;
+            eventosJaTocados.add("fim");
+        }
+        return;
+    }
 
     cronometro.innerText = minutoAtualJogo + "'";
 

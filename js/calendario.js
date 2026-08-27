@@ -155,8 +155,8 @@ function renderizarRodada() {
                     </div>
                 </div>
 
-                ${jogo.jogado
-                    ? `<div style="margin-top: 10px; font-size: 12px; color: var(--verde-campo); background: rgba(0,184,83,0.1); padding: 3px 8px; border-radius: 4px;">Partida Encerrada</div>`
+                ${jogo.jogado || jogo.linhaDoTempo
+                    ? `<div style="margin-top: 10px; font-size: 12px; color: var(--verde-campo); background: rgba(0,184,83,0.1); padding: 3px 8px; border-radius: 4px;">Placar Oficial: ${jogo.placarMandante} x ${jogo.placarVisitante}</div>`
                     : `<div style="margin-top: 10px; font-size: 12px; color: #aaa;">Aguardando Simulação</div>`
                 }
             </div>
