@@ -122,28 +122,35 @@ function renderizarPartida() {
         let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
         let jaTerminouDeVerdade = jogoAoVivo.jogado || tempoPassado > 95;
 
-        if (jaTerminouDeVerdade) {
-            // CORREÇÃO DO UNDEFINED: Conta os gols na marra se a variável falhar
-            let golsMCount = jogoAoVivo.linhaDoTempo ? jogoAoVivo.linhaDoTempo.filter(e => e.tipo === 'gol_mandante').length : 0;
-            let golsVCount = jogoAoVivo.linhaDoTempo ? jogoAoVivo.linhaDoTempo.filter(e => e.tipo === 'gol_visitante').length : 0;
+        // 🛡️ PROTEÇÃO FIREBASE: Garante que a linha do tempo seja lida, mesmo se o Firebase transformar em Objeto ou apagar (0 a 0)
+        let linhaObj = jogoAoVivo.linhaDoTempo || [];
+        let linhaArray = Array.isArray(linhaObj) ? linhaObj : Object.values(linhaObj);
 
-            lblGolsM.innerText = jogoAoVivo.placarMandante !== undefined ? jogoAoVivo.placarMandante : golsMCount;
-            lblGolsV.innerText = jogoAoVivo.placarVisitante !== undefined ? jogoAoVivo.placarVisitante : golsVCount;
+        // Conta os gols na marra caso a simulação antiga não tenha gravado o placar final
+        let golsMCount = linhaArray.filter(e => e.tipo && e.tipo.includes('gol_mandante')).length;
+        let golsVCount = linhaArray.filter(e => e.tipo && e.tipo.includes('gol_visitante')).length;
+
+        let placarMReal = jogoAoVivo.placarMandante !== undefined ? jogoAoVivo.placarMandante : golsMCount;
+        let placarVReal = jogoAoVivo.placarVisitante !== undefined ? jogoAoVivo.placarVisitante : golsVCount;
+
+        if (jaTerminouDeVerdade) {
+            lblGolsM.innerText = placarMReal;
+            lblGolsV.innerText = placarVReal;
 
             cronometro.innerText = "FIM";
             cronometro.style.color = "#dc3545";
             statusTransmissao.innerText = "Partida Encerrada 🏁";
 
-            if (jogoAoVivo.linhaDoTempo) {
+            if (linhaArray.length > 0) {
                 narracao.innerHTML = `<div style="text-align:center; padding: 10px; color:#ff8c00; font-weight:bold; border-bottom:1px solid #333; margin-bottom:10px;">Resumo da Partida:</div>`;
-                jogoAoVivo.linhaDoTempo.forEach(evento => {
+                linhaArray.forEach(evento => {
                     let escudoID = evento.tipo.includes("mandante") ? jogoAoVivo.mandante : jogoAoVivo.visitante;
                     let escudoHTML = `<img src="esculdos/${escudoID}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
                     let txt = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
                     adicionarNarraçao(`${evento.minuto}'`, txt, evento.cor);
                 });
             } else {
-                 narracao.innerHTML = `<div style="text-align:center; padding: 20px; color:#aaa;">Os melhores momentos não estão disponíveis para esta partida.</div>`;
+                 narracao.innerHTML = `<div style="text-align:center; padding: 20px; color:#aaa;">O juiz apitou o fim de jogo! Partida sem lances de perigo ou melhores momentos (0x0).</div>`;
             }
 
             if(!eventosJaTocados.has(`fim_${rodadaExibicao}`) && audioLiberado && rodadaExibicao === rodadaSistema) {
@@ -188,7 +195,7 @@ function renderizarPartida() {
                         <button onclick="liberarAudio()" style="background: var(--verde-campo); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">▶️ LIGAR SOM E ENTRAR NO ESTÁDIO</button>
                     </div>`;
             }
-            else if (jogoAoVivo.linhaDoTempo) {
+            else if (linhaArray.length > 0) {
                 statusTransmissao.innerText = "Ao Vivo 🔴";
                 statusTransmissao.style.animation = "piscar 1s infinite";
 
@@ -198,7 +205,7 @@ function renderizarPartida() {
                     canalTorcida.play();
                 }
 
-                reproduzirLinhaDoTempo(jogoAoVivo.linhaDoTempo, jogoAoVivo.horaInicio);
+                reproduzirLinhaDoTempo(linhaArray, jogoAoVivo.horaInicio, placarMReal, placarVReal);
             }
             else {
                 statusTransmissao.innerText = "Aquecimento 🏃‍♂️";
@@ -215,7 +222,7 @@ function renderizarPartida() {
     }
 }
 
-function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
+function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFinal) {
     const agora = Date.now();
     const diferencaSegundos = Math.floor((agora - horaInicioTstamp) / 1000);
     let minutoAtualJogo = diferencaSegundos;
@@ -224,8 +231,8 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
         cronometro.innerText = "FIM";
         statusTransmissao.innerText = "Partida Encerrada 🏁";
         statusTransmissao.style.animation = "none";
-        lblGolsM.innerText = jogoAtual.placarMandante;
-        lblGolsV.innerText = jogoAtual.placarVisitante;
+        lblGolsM.innerText = placarMFinal;
+        lblGolsV.innerText = placarVFinal;
 
         if(!eventosJaTocados.has("fim") && audioLiberado) {
             canalEfeitos.src = 'sounds/final_do_jogo.mp3';
@@ -244,10 +251,10 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
 
     linha.forEach(evento => {
         if (evento.minuto <= minutoAtualJogo) {
-            if (evento.tipo === "gol_mandante") golsM++;
-            if (evento.tipo === "gol_visitante") golsV++;
+            if (evento.tipo.includes("gol_mandante")) golsM++;
+            if (evento.tipo.includes("gol_visitante")) golsV++;
 
-            let escudoID = evento.tipo === "gol_mandante" ? jogoAtual.mandante : jogoAtual.visitante;
+            let escudoID = evento.tipo.includes("mandante") ? jogoAtual.mandante : jogoAtual.visitante;
             let escudoHTML = `<img src="esculdos/${escudoID}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
             let textoComEscudo = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
 
