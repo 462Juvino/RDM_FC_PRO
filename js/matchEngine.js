@@ -32,7 +32,6 @@ const cronometro = document.getElementById('tempo-jogo');
 const statusTransmissao = document.getElementById('status-transmissao');
 const narracao = document.getElementById('narracao-container');
 
-
 window.addEventListener('DOMContentLoaded', async () => {
     try {
         const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
@@ -44,7 +43,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 20px;">Buscando sinal do satélite...</div>`;
 
-        // Inicia a leitura do banco imediatamente
         iniciarTransmissao();
     } catch (e) { console.error(e); }
 });
@@ -53,24 +51,21 @@ function liberarAudio() {
     audioLiberado = true;
     narracao.innerHTML = `<div style="color: #aaa; text-align: center;">Áudio e vídeo conectados! Aguardando rolar a bola...</div>`;
 
-    // Força a atualização da tela caso o jogo já esteja rolando
     if (jogoAtual && jogoAtual.linhaDoTempo) {
         reproduzirLinhaDoTempo(jogoAtual.linhaDoTempo, jogoAtual.horaInicio);
     }
 }
 
-// Helper para Escudos Inteligentes (Tenta Local, se falhar pega do Banco/Padrão)
 function gerarImgEscudo(timeId, dadosTimeBanco) {
-    // Se o time tiver o escudo salvo em Base64 ou URL no banco, usa ele
     if (dadosTimeBanco && dadosTimeBanco.escudo_base64) {
         return `<img src="${dadosTimeBanco.escudo_base64}" class="escudo-mini">`;
     }
-    // Senão, tenta puxar da pasta local. Se falhar (Série B sem imagem), mostra um escudo genérico
     return `<img src="esculdos/${timeId}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
 }
 
-
-
+// ==========================================
+// LÓGICA DE TRANSMISSÃO COM SELETOR DE RODADAS
+// ==========================================
 let calGlobal = null;
 let rodadaExibicao = null;
 
@@ -119,16 +114,16 @@ function renderizarPartida() {
     if (jogoAoVivo) {
         jogoAtual = jogoAoVivo;
 
-        document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.visitante)}')`;
+        document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('estadios/${jogoAoVivo.visitante}.jpg')`;
 
-        lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
-        lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
+        lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="esculdos/${jogoAoVivo.mandante}.png" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
+        lblVisitante.innerHTML = `<img src="esculdos/${jogoAoVivo.visitante}.png" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
         let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
         let jaTerminouDeVerdade = jogoAoVivo.jogado || tempoPassado > 95;
 
         if (jaTerminouDeVerdade) {
-            // CORREÇÃO DO UNDEFINED: Conta os gols se a variável não existir no banco
+            // CORREÇÃO DO UNDEFINED: Conta os gols na marra se a variável falhar
             let golsMCount = jogoAoVivo.linhaDoTempo ? jogoAoVivo.linhaDoTempo.filter(e => e.tipo === 'gol_mandante').length : 0;
             let golsVCount = jogoAoVivo.linhaDoTempo ? jogoAoVivo.linhaDoTempo.filter(e => e.tipo === 'gol_visitante').length : 0;
 
@@ -143,7 +138,7 @@ function renderizarPartida() {
                 narracao.innerHTML = `<div style="text-align:center; padding: 10px; color:#ff8c00; font-weight:bold; border-bottom:1px solid #333; margin-bottom:10px;">Resumo da Partida:</div>`;
                 jogoAoVivo.linhaDoTempo.forEach(evento => {
                     let escudoID = evento.tipo.includes("mandante") ? jogoAoVivo.mandante : jogoAoVivo.visitante;
-                    let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
+                    let escudoHTML = `<img src="esculdos/${escudoID}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
                     let txt = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
                     adicionarNarraçao(`${evento.minuto}'`, txt, evento.cor);
                 });
@@ -151,11 +146,11 @@ function renderizarPartida() {
                  narracao.innerHTML = `<div style="text-align:center; padding: 20px; color:#aaa;">Os melhores momentos não estão disponíveis para esta partida.</div>`;
             }
 
-            if(!eventosJaTocados.has("fim") && audioLiberado && rodadaExibicao === rodadaSistema) {
+            if(!eventosJaTocados.has(`fim_${rodadaExibicao}`) && audioLiberado && rodadaExibicao === rodadaSistema) {
                 canalEfeitos.src = 'sounds/final_do_jogo.mp3';
                 canalEfeitos.play();
                 canalTorcida.volume = 0.1;
-                eventosJaTocados.add("fim");
+                eventosJaTocados.add(`fim_${rodadaExibicao}`);
             }
         }
         else {
@@ -198,7 +193,7 @@ function renderizarPartida() {
                 statusTransmissao.style.animation = "piscar 1s infinite";
 
                 if (canalTorcida.src === "") {
-                    canalTorcida.src = getTorcida(jogoAoVivo.mandante);
+                    canalTorcida.src = `sounds/torcida_${jogoAoVivo.mandante}.mp3`;
                     canalTorcida.onerror = () => { canalTorcida.src = 'sounds/torcida_generica.mp3'; canalTorcida.play(); };
                     canalTorcida.play();
                 }
@@ -225,7 +220,7 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
     const diferencaSegundos = Math.floor((agora - horaInicioTstamp) / 1000);
     let minutoAtualJogo = diferencaSegundos;
 
-    if (minutoAtualJogo > 95) { // Passou do tempo, mostra o fim!
+    if (minutoAtualJogo > 95) {
         cronometro.innerText = "FIM";
         statusTransmissao.innerText = "Partida Encerrada 🏁";
         statusTransmissao.style.animation = "none";
@@ -247,20 +242,17 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
     let golsM = 0; let golsV = 0;
     narracao.innerHTML = "";
 
-    // Dentro da função reproduzirLinhaDoTempo, no forEach:
     linha.forEach(evento => {
         if (evento.minuto <= minutoAtualJogo) {
             if (evento.tipo === "gol_mandante") golsM++;
             if (evento.tipo === "gol_visitante") golsV++;
 
-            // INJETA O ESCUDO NO TEXTO DA NARRAÇÃO
             let escudoID = evento.tipo === "gol_mandante" ? jogoAtual.mandante : jogoAtual.visitante;
             let escudoHTML = `<img src="esculdos/${escudoID}.png" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
             let textoComEscudo = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
 
             adicionarNarraçao(`${evento.minuto}'`, textoComEscudo, evento.cor);
 
-            // Gatilho de Áudio (Gol!)
             let idEvento = `${evento.minuto}_${evento.tipo}`;
             if (evento.tipo.includes("gol") && !eventosJaTocados.has(idEvento) && audioLiberado) {
                 eventosJaTocados.add(idEvento);
@@ -272,7 +264,6 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
     lblGolsM.innerText = golsM;
     lblGolsV.innerText = golsV;
 
-    // Dinâmica da Torcida: Ganhar = Empolgação (Volume 0.8), Perder = Silêncio (Volume 0.2)
     let souMandante = (dadosUsuario.timeAtual === jogoAtual.mandante);
     if (souMandante) {
         if (golsM > golsV) canalTorcida.volume = 0.8;
@@ -282,26 +273,22 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
 }
 
 function dispararAudioGol(timeQueMarcou) {
-    // 1. Abaixa a torcida momentaneamente
     let volAnterior = canalTorcida.volume;
     canalTorcida.volume = 0.1;
 
-    // 2. Grito de Gol genérico
     canalEfeitos.src = 'sounds/gol_generico.mp3';
     canalEfeitos.play();
 
-    // 3. Toca o hino do time
     setTimeout(() => {
-        canalHino.src = getHino(timeQueMarcou);
+        canalHino.src = `sounds/hino_${timeQueMarcou}.mp3`;
         canalHino.play();
 
-        // Corta o hino depois de 10 segundos e volta a torcida
         setTimeout(() => {
             canalHino.pause();
-            canalTorcida.volume = volAnterior; // Volta a cantar
+            canalTorcida.volume = volAnterior;
         }, 10000);
 
-    }, 2000); // Toca o hino 2 segundos depois do grito de gol começar
+    }, 2000);
 }
 
 function adicionarNarraçao(tempo, texto, cor = "#ccc") {
@@ -317,34 +304,24 @@ function adicionarNarraçao(tempo, texto, cor = "#ccc") {
 function toggleMenu() {
     const sidebar = document.querySelector('.sidebar');
     const menuAberto = sidebar.classList.toggle('aberta');
-
-    // Adiciona uma classe ao body para fazer o fundo escurecer
-    if (menuAberto) {
-        document.body.classList.add('menu-aberto');
-    } else {
-        document.body.classList.remove('menu-aberto');
-    }
+    if (menuAberto) document.body.classList.add('menu-aberto');
+    else document.body.classList.remove('menu-aberto');
 }
 
-// Fecha o menu se o cara tocar no fundo escuro ou em um botão do próprio menu
 document.addEventListener('click', (e) => {
     const sidebar = document.querySelector('.sidebar');
-
-    // Se a tela for pequena, e o menu tá aberto...
     if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('aberta')) {
-        // Se ele tocou em qualquer botão de ir pra outra página (tag A ou tag BUTTON)...
         if (e.target.tagName === 'BUTTON' && !e.target.classList.contains('btn-menu')) {
             sidebar.classList.remove('aberta');
             document.body.classList.remove('menu-aberto');
         }
-
-        // Se ele tocou fora do menu (no fundo escuro ou no X)
         if (!e.target.closest('.sidebar') && !e.target.closest('.btn-menu')) {
             sidebar.classList.remove('aberta');
             document.body.classList.remove('menu-aberto');
         }
     }
 });
+
 function deslogar() {
     localStorage.removeItem('treinadorLiga');
     localStorage.removeItem('treinadorUsuario');
