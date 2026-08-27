@@ -38,47 +38,47 @@ async function checarRotinas(liga) {
     const hora = agora.getHours();
     const minuto = agora.getMinutes();
 
-    // Fuso horário local correto para evitar pular dias
     const ano = agora.getFullYear();
     const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
     const dia = agora.getDate().toString().padStart(2, '0');
     const dataAtualStr = `${ano}-${mes}-${dia}`;
 
-    // Verifica se estamos na janela de simulação (ex: depois das 19:30)
     let horaDeRodar = false;
     if (hora === (HORA_PARTIDA - 1) && minuto >= (60 - MINUTOS_PRE_JOGO)) horaDeRodar = true;
     if (hora >= HORA_PARTIDA) horaDeRodar = true;
-
-    if (!horaDeRodar) return; // Ainda é cedo, não faz nada.
 
     try {
         const snapData = await db.ref(`ligas/${liga}/sistema/ultima_simulacao`).once('value');
         const ultimaData = snapData.val();
 
-        // Se o evento de hoje AINDA NÃO ocorreu...
-        if (ultimaData !== dataAtualStr) {
-            const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
+        // Descobre a data de "Ontem"
+        const ontem = new Date(agora);
+        ontem.setDate(ontem.getDate() - 1);
+        const ontemStr = `${ontem.getFullYear()}-${(ontem.getMonth() + 1).toString().padStart(2, '0')}-${ontem.getDate().toString().padStart(2, '0')}`;
 
-            // Tenta pegar a chave do servidor! (Evita duplicidade se 10 pessoas entrarem às 19:30)
-            lockRef.transaction((currentLock) => {
-                if (currentLock === true) return; // Alguém já pegou
-                return true; // Eu peguei!
-            }, (error, committed) => {
-                if (committed) {
-                    console.log("🔥 MOTOR P2P: Assumindo controle do servidor para a Liga: " + liga);
-                    processarTudo(liga, dataAtualStr, lockRef);
-                }
-            });
-        }
+        // DECISÃO DE RODAR O MOTOR:
+        let rodarHoje = (horaDeRodar && ultimaData !== dataAtualStr); // Dá a hora e faz as coisas de hoje
+        let rodarAtrasados = (!ultimaData || ultimaData < ontemStr);  // Abriu o site e tá devendo jogo
+
+        if (!rodarHoje && !rodarAtrasados) return; // Se tá tudo em dia, descansa.
+
+        const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
+        lockRef.transaction((currentLock) => {
+            if (currentLock === true) return;
+            return true;
+        }, (error, committed) => {
+            if (committed) {
+                console.log("🔥 MOTOR P2P: Iniciando varredura (Atrasados ou Rotina de Hoje)...");
+                // Manda as variáveis novas para a função que faz a mágica
+                processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar);
+            }
+        });
     } catch (e) {
         console.error("Falha no Motor P2P:", e);
     }
 }
-
-// ========================================================
-// 2. A GRANDE ROTINA: MERCADO + TROCAS + PRO PLAYERS + JOGOS
-// ========================================================
-async function processarTudo(liga, dataAtualStr, lockRef) {
+// ATENÇÃO: Mudamos a primeira linha (assinatura) da função!
+async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar) {
     try {
         const snapTimesGlobais = await db.ref('banco_global_times').once('value');
         const times = snapTimesGlobais.val() || {};
@@ -97,7 +97,8 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
 
         let transferenciasRealizadas = 0;
 
-        if (propostas) {
+        // Roda o mercado apenas no horário oficial da noite
+        if (propostas && horaDeRodar) {
             for (let idAlvo in propostas) {
                 let lances = propostas[idAlvo];
                 let maiorScore = 0;
@@ -159,7 +160,7 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
         // --- PASSO B: FORMATURA DOS PRO PLAYERS (A PARTIR DA 5ª RODADA) ---
         let rodadaAtual = cal ? (cal.rodadaAtual || 1) : 1;
 
-        if (rodadaAtual >= 5) {
+        if (rodadaAtual >= 5 && horaDeRodar) {
             const snapProPlayers = await db.ref(`ligas/${liga}/pro_players`).once('value');
             const proPlayers = snapProPlayers.val();
 
@@ -173,7 +174,6 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
 
                         if (p.avaliacoes) {
                             for (let v in p.avaliacoes) {
-                                // Adiciona o || 60 para não quebrar com avaliações antigas (Prevenção de NaN)
                                 sA += p.avaliacoes[v].ataque || 60;
                                 sD += p.avaliacoes[v].defesa || 60;
                                 sF += p.avaliacoes[v].forca || 60;
@@ -187,7 +187,6 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         let finalAtq = at.ataque; let finalDef = at.defesa;
                         let finalFor = at.forca; let finalVel = at.velocidade; let finalHab = at.habilidade;
 
-                        // Se teve votos, a nota oficial do mercado será a Média exata definida pela comunidade!
                         if (qtdVotos > 0) {
                             finalAtq = Math.round(sA / qtdVotos);
                             finalDef = Math.round(sD / qtdVotos);
@@ -197,7 +196,7 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         }
 
                         let ovrFinal = finalAtq + finalDef + finalFor + finalVel + finalHab;
-                        let valorMercado = ovrFinal * 150000; // Precificação Base
+                        let valorMercado = ovrFinal * 150000;
 
                         let jogadorPronto = {
                             nome: p.nome + " (PRO)",
@@ -208,15 +207,10 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         };
 
                         let idUnico = "PRO_" + criador;
-
-                        // Cria o time Agentes_Livres caso não exista para hospedar o jogador
                         updates[`banco_global_times/Agentes_Livres/divisao`] = "Livre";
                         updates[`banco_global_times/Agentes_Livres/jogadores/${idUnico}`] = jogadorPronto;
 
-                        // Calcula uma nota de 1 a 5 baseada no OVR final para o jornal
                         let notaConvertida = (ovrFinal / 300) * 5;
-
-                        // Atualiza o status do perfil do criador
                         updates[`ligas/${liga}/pro_players/${criador}/status`] = "mercado";
                         updates[`ligas/${liga}/pro_players/${criador}/ovr_final`] = ovrFinal;
                         updates[`ligas/${liga}/pro_players/${criador}/nota_comunidade`] = notaConvertida.toFixed(1);
@@ -225,16 +219,11 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
             }
         }
 
-        // --- PASSO C: MOTOR DE CALENDÁRIO INTELIGENTE (LIGA, COPA, MUNDIAL E FIM DE TEMPORADA) ---
+        // --- PASSO C: MOTOR DE CALENDÁRIO INTELIGENTE ---
         if (cal) {
             const agoraDT = new Date();
-            const diaBusca = agoraDT.getDate().toString().padStart(2, '0');
-            const mesBusca = (agoraDT.getMonth() + 1).toString().padStart(2, '0');
-            const hojeStr = `${diaBusca}/${mesBusca}`; // Ex: "23/08"
-
             let teveJogoLiga = false;
 
-            // Função Central de Simulação para qualquer jogo (Liga ou Copa)
             const processarPartidaAoVivo = (jogo, isMataMata = false) => {
                 if (jogo.jogado) return;
 
@@ -248,7 +237,6 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                     if (usuarios[u].timeAtual === jogo.visitante) { if (usuarios[u].forcaAtual) forcaV = usuarios[u].forcaAtual; mentV = usuarios[u].mentalidade || "Moderado"; donoV = u; }
                 }
 
-                // Fadiga
                 let fadigaM = (times[jogo.mandante]?.jogadores && Object.keys(times[jogo.mandante].jogadores).length > 11) ? 1.0 : 0.85;
                 let fadigaV = (times[jogo.visitante]?.jogadores && Object.keys(times[jogo.visitante].jogadores).length > 11) ? 1.0 : 0.85;
 
@@ -277,7 +265,7 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                             let jg = times[jogo.mandante].jogadores[idA];
                             jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
 
-                            // GERA ASSISTÊNCIA
+                            // Assistência Mandante
                             if (Math.random() > 0.4) {
                                 let idAst = sortearAtleta(jogo.mandante);
                                 if (idAst && idAst !== idA) {
@@ -298,7 +286,7 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                             let jg = times[jogo.visitante].jogadores[idA];
                             jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
 
-                            // GERA ASSISTÊNCIA
+                            // Assistência Visitante
                             if (Math.random() > 0.4) {
                                 let idAst = sortearAtleta(jogo.visitante);
                                 if (idAst && idAst !== idA) {
@@ -313,7 +301,6 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                     }
                 }
 
-                // Desempate por pênaltis na Copa
                 if (isMataMata && golsM === golsV) {
                     linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!`, cor: "#dc3545" });
                     if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: "penaltis_vence", texto: `🏆 O ${jogo.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!`, cor: "var(--verde-campo)" }); }
@@ -334,14 +321,13 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                 let dataInicio = new Date(); dataInicio.setHours(HORA_PARTIDA, 0, 0, 0);
                 jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime();
                 jogo.placarMandante = golsM; jogo.placarVisitante = golsV;
-                jogo.jogado = true; // O Jogo acaba oficialmente no banco na mesma hora!
+                jogo.jogado = true; // JOGO OFICIALIZADO E ENCERRADO!
             };
 
-            // 1. VARRE A LIGA (Procura jogos de HOJE e ATRASADOS em todas as rodadas)
-            let teveJogoLiga = false;
             let proximaRodada = cal.rodadaAtual || 1;
             const hojeDT = new Date(); hojeDT.setHours(0,0,0,0);
 
+            // 1. VARRE A LIGA (Inteligência: Atrados rodam agora. O de hoje respeita a hora)
             for (let r = 1; r <= 38; r++) {
                 let rodadaKey = `rodada_${r}`;
 
@@ -350,15 +336,17 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                     for (let j in divisaoObj[rodadaKey]) {
                         let jogo = divisaoObj[rodadaKey][j];
 
+                        // Ajuste para não deixar jogo órfão do "limbo"
+                        if (jogo.linhaDoTempo && jogo.jogado === false) jogo.jogado = true;
+
                         if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo) {
-                            // Converte a data do jogo para comparar
-                            let dataJogoStr = jogo.data_jogo.split(' ')[0]; // Pega o "24/08"
+                            let dataJogoStr = jogo.data_jogo.split(' ')[0];
                             let [dJ, mJ] = dataJogoStr.split('/');
                             let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                             jogoDT.setHours(0,0,0,0);
 
-                            // Se a data do jogo for Hoje ou Menor que Hoje (Atrasado), SIMULA!
-                            if (jogoDT <= hojeDT) {
+                            // O TRATOR: Se for de ONTEM pra trás (Atrasado), RODA NA HORA. Se for de HOJE, só se 'horaDeRodar' for true.
+                            if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && horaDeRodar)) {
                                 processarPartidaAoVivo(jogo, false);
                                 teveJogoLiga = true;
                                 if (r >= proximaRodada) proximaRodada = r + 1;
@@ -366,7 +354,6 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         }
                     }
                 };
-
                 checarE_Simular(cal.serieA);
                 checarE_Simular(cal.serieB);
             }
@@ -375,32 +362,36 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                 cal.rodadaAtual = proximaRodada;
             }
 
-            // 2. VARRE A COPA (Avançando de fase automaticamente)
+            // 2. VARRE A COPA
             if (cal.copa) {
                 let fasesMata = ["oitavas", "quartas", "semis", "final", "mundial"];
                 for (let f of fasesMata) {
                     if (cal.copa[f]) {
                         for (let idJ in cal.copa[f]) {
                             let jogo = cal.copa[f][idJ];
-                            if (!jogo.jogado && jogo.data_jogo && jogo.data_jogo.includes(hojeStr) && !jogo.mandante.includes("Vencedor") && !jogo.visitante.includes("Vencedor")) {
 
-                                processarPartidaAoVivo(jogo, true); // True = Pênaltis ativados
+                            if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo && !jogo.mandante.includes("Vencedor") && !jogo.visitante.includes("Vencedor")) {
+                                let dataJogoStr = jogo.data_jogo.split(' ')[0];
+                                let [dJ, mJ] = dataJogoStr.split('/');
+                                let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
+                                jogoDT.setHours(0,0,0,0);
 
-                                let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
-                                let num = parseInt(idJ.split('_')[1]);
+                                if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && horaDeRodar)) {
+                                    processarPartidaAoVivo(jogo, true); // True = Pênaltis
 
-                                // Joga o vencedor para a chave seguinte
-                                if (f === "oitavas" && cal.copa.quartas) { let tgt = `jogo_${9 + Math.floor((num-1)/2)}`; num%2!==0 ? cal.copa.quartas[tgt].mandante = vencedor : cal.copa.quartas[tgt].visitante = vencedor; }
-                                else if (f === "quartas" && cal.copa.semis) { let tgt = `jogo_${13 + Math.floor((num-9)/2)}`; num%2!==0 ? cal.copa.semis[tgt].mandante = vencedor : cal.copa.semis[tgt].visitante = vencedor; }
-                                else if (f === "semis" && cal.copa.final) { let tgt = `jogo_15`; num===13 ? cal.copa.final[tgt].mandante = vencedor : cal.copa.final[tgt].visitante = vencedor; }
-                                else if (f === "final") { cal.sistema_campeao_copa = vencedor; } // Guarda campeão da Copa
+                                    let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
+                                    let num = parseInt(idJ.split('_')[1]);
+
+                                    if (f === "oitavas" && cal.copa.quartas) { let tgt = `jogo_${9 + Math.floor((num-1)/2)}`; num%2!==0 ? cal.copa.quartas[tgt].mandante = vencedor : cal.copa.quartas[tgt].visitante = vencedor; }
+                                    else if (f === "quartas" && cal.copa.semis) { let tgt = `jogo_${13 + Math.floor((num-9)/2)}`; num%2!==0 ? cal.copa.semis[tgt].mandante = vencedor : cal.copa.semis[tgt].visitante = vencedor; }
+                                    else if (f === "semis" && cal.copa.final) { let tgt = `jogo_15`; num===13 ? cal.copa.final[tgt].mandante = vencedor : cal.copa.final[tgt].visitante = vencedor; }
+                                    else if (f === "final") { cal.sistema_campeao_copa = vencedor; }
+                                }
                             }
                         }
                     }
                 }
             }
-
-            // 3. FIM DE TEMPORADA: MUNDIAL E HALL DA FAMA
             let rodadaFinalJogada = (cal.serieA && cal.serieA["rodada_38"]) ? Object.values(cal.serieA["rodada_38"]).every(x => x.jogado === true) : false;
             let copaFinalJogada = (cal.copa && cal.copa.final && cal.copa.final["jogo_15"]) ? cal.copa.final["jogo_15"].jogado === true : false;
 
@@ -446,7 +437,11 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
         }
 
         // --- PASSO D: FINALIZAR E AVISAR ---
-        updates[`ligas/${liga}/sistema/ultima_simulacao`] = dataAtualStr;
+        if (horaDeRodar) {
+            updates[`ligas/${liga}/sistema/ultima_simulacao`] = dataAtualStr;
+        } else {
+            updates[`ligas/${liga}/sistema/ultima_simulacao`] = ontemStr;
+        }
         await db.ref().update(updates);
         await lockRef.set(false);
 
