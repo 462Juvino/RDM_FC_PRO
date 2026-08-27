@@ -101,7 +101,7 @@ function iniciarTransmissao() {
             lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
             let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
-            let jaTerminouDeVerdade = jogoAoVivo.jogado && tempoPassado > 95;
+            let jaTerminouDeVerdade = jogoAoVivo.jogado || tempoPassado > 95;
 
             if (jaTerminouDeVerdade) {
                 lblGolsM.innerText = jogoAoVivo.placarMandante;
@@ -191,8 +191,8 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
             canalTorcida.volume = 0.1;
             eventosJaTocados.add("fim");
         }
-        return
         location.reload();
+        return;
     }
 
     cronometro.innerText = minutoAtualJogo + "'";
