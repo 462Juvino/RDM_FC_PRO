@@ -161,7 +161,7 @@ function carregarVisaoGeralClube() {
     `;
 
     buscarMeuProximoJogo(timeIdBanco);
-    carregarEstatisticasGerais();
+    carregarEstatisticasGerais(timeIdBanco);
     carregarMiniTabela(timeIdBanco);
     carregarRadarMercado();
 
@@ -343,18 +343,17 @@ async function gerarNoticia(meuTime) {
     }, 300);
 }
 
-// ========================================================
-// 7. CARREGAMENTO DE ESTATÍSTICAS E MINI TABELA
-// ========================================================
-async function carregarEstatisticasGerais() {
+async function carregarEstatisticasGerais(meuTimeId) {
     try {
         const snapTimes = await db.ref('banco_global_times').once('value');
         const times = snapTimes.val();
         let todosJogadores = [];
+        let minhaDivisao = times && times[meuTimeId] ? times[meuTimeId].divisao : "A";
 
         if (times) {
             for (let t in times) {
-                if (times[t].jogadores) {
+                // FILTRA OS DESTAQUES APENAS DA SUA DIVISÃO!
+                if (times[t].divisao === minhaDivisao && times[t].jogadores) {
                     for (let j in times[t].jogadores) {
                         let jog = times[t].jogadores[j];
                         jog.timeOrigem = t;
@@ -408,17 +407,21 @@ async function carregarMiniTabela(meuTimeId) {
             for (let rodada in jogosDivisao) {
                 for (let idJogo in jogosDivisao[rodada]) {
                     let jogo = jogosDivisao[rodada][idJogo];
+
                     if (jogo.jogado || jogo.linhaDoTempo) {
                         let m = jogo.mandante; let v = jogo.visitante;
-                        let gm = jogo.placarMandante; let gv = jogo.placarVisitante;
+                        let gm = jogo.placarMandante || 0; let gv = jogo.placarVisitante || 0;
                         if (m === "Fantasma" || v === "Fantasma") continue;
 
-                        if(tabela[m]) { tabela[m].J++; tabela[m].GP += gm; tabela[m].GC += gv; }
-                        if(tabela[v]) { tabela[v].J++; tabela[v].GP += gv; tabela[v].GC += gm; }
+                        if(!tabela[m]) tabela[m] = { id: m, Pts: 0, J: 0, V: 0, SG: 0, GP: 0, GC: 0 };
+                        if(!tabela[v]) tabela[v] = { id: v, Pts: 0, J: 0, V: 0, SG: 0, GP: 0, GC: 0 };
 
-                        if (gm > gv) { if(tabela[m]){ tabela[m].Pts += 3; tabela[m].V++; } }
-                        else if (gv > gm) { if(tabela[v]){ tabela[v].Pts += 3; tabela[v].V++; } }
-                        else { if(tabela[m]) tabela[m].Pts += 1; if(tabela[v]) tabela[v].Pts += 1; }
+                        tabela[m].J++; tabela[m].GP += gm; tabela[m].GC += gv;
+                        tabela[v].J++; tabela[v].GP += gv; tabela[v].GC += gm;
+
+                        if (gm > gv) { tabela[m].Pts += 3; tabela[m].V++; }
+                        else if (gv > gm) { tabela[v].Pts += 3; tabela[v].V++; }
+                        else { tabela[m].Pts += 1; tabela[v].Pts += 1; }
                     }
                 }
             }
@@ -441,7 +444,7 @@ async function carregarMiniTabela(meuTimeId) {
             let ehMeu = (t.id === meuTimeId);
             if (ehMeu) acheiMeuTime = true;
 
-            // Mostra os 4 primeiros
+            // Mostra os 4 primeiros ou o seu time
             if (i < 4 || ehMeu) {
                 let cor = ehMeu ? "#ff8c00" : "#fff";
                 let peso = ehMeu ? "bold" : "normal";

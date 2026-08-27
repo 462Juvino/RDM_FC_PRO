@@ -276,6 +276,16 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         if(idA) {
                             let jg = times[jogo.mandante].jogadores[idA];
                             jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+
+                            // GERA ASSISTÊNCIA
+                            if (Math.random() > 0.4) {
+                                let idAst = sortearAtleta(jogo.mandante);
+                                if (idAst && idAst !== idA) {
+                                    let jgAst = times[jogo.mandante].jogadores[idAst];
+                                    jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++;
+                                    updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst;
+                                }
+                            }
                             updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
                         }
                         linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
@@ -287,6 +297,16 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                         if(idA) {
                             let jg = times[jogo.visitante].jogadores[idA];
                             jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+
+                            // GERA ASSISTÊNCIA
+                            if (Math.random() > 0.4) {
+                                let idAst = sortearAtleta(jogo.visitante);
+                                if (idAst && idAst !== idA) {
+                                    let jgAst = times[jogo.visitante].jogadores[idAst];
+                                    jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++;
+                                    updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst;
+                                }
+                            }
                             updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                         }
                         linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
@@ -312,12 +332,15 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                 else if (golsV > golsM) { if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10); if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10); }
 
                 let dataInicio = new Date(); dataInicio.setHours(HORA_PARTIDA, 0, 0, 0);
-                jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime(); jogo.placarMandante = golsM; jogo.placarVisitante = golsV;
+                jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime();
+                jogo.placarMandante = golsM; jogo.placarVisitante = golsV;
+                jogo.jogado = true; // O Jogo acaba oficialmente no banco na mesma hora!
             };
 
-            // 1. VARRE A LIGA (Procura os jogos de hoje EM TODAS AS RODADAS)
+            // 1. VARRE A LIGA (Procura jogos de HOJE e ATRASADOS em todas as rodadas)
             let teveJogoLiga = false;
             let proximaRodada = cal.rodadaAtual || 1;
+            const hojeDT = new Date(); hojeDT.setHours(0,0,0,0);
 
             for (let r = 1; r <= 38; r++) {
                 let rodadaKey = `rodada_${r}`;
@@ -327,16 +350,19 @@ async function processarTudo(liga, dataAtualStr, lockRef) {
                     for (let j in divisaoObj[rodadaKey]) {
                         let jogo = divisaoObj[rodadaKey][j];
 
-                        // Limpeza: Marca jogos já simulados ontem como definitivamente concluídos
-                        if (jogo.linhaDoTempo && !jogo.data_jogo.includes(hojeStr)) {
-                            jogo.jogado = true;
-                        }
+                        if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo) {
+                            // Converte a data do jogo para comparar
+                            let dataJogoStr = jogo.data_jogo.split(' ')[0]; // Pega o "24/08"
+                            let [dJ, mJ] = dataJogoStr.split('/');
+                            let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
+                            jogoDT.setHours(0,0,0,0);
 
-                        // Simula se for o jogo do dia
-                        if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)) {
-                            processarPartidaAoVivo(jogo, false);
-                            teveJogoLiga = true;
-                            if (r >= proximaRodada) proximaRodada = r + 1; // Prepara a interface para avançar
+                            // Se a data do jogo for Hoje ou Menor que Hoje (Atrasado), SIMULA!
+                            if (jogoDT <= hojeDT) {
+                                processarPartidaAoVivo(jogo, false);
+                                teveJogoLiga = true;
+                                if (r >= proximaRodada) proximaRodada = r + 1;
+                            }
                         }
                     }
                 };

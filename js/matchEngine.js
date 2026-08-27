@@ -100,20 +100,29 @@ function iniciarTransmissao() {
             lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
             lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
-            if (jogoAoVivo.jogado) {
+            let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
+            let jaTerminouDeVerdade = jogoAoVivo.jogado && tempoPassado > 95;
+
+            if (jaTerminouDeVerdade) {
                 lblGolsM.innerText = jogoAoVivo.placarMandante;
                 lblGolsV.innerText = jogoAoVivo.placarVisitante;
                 cronometro.innerText = "FIM";
                 cronometro.style.color = "#dc3545";
                 statusTransmissao.innerText = "Partida Encerrada 🏁";
 
-                if (!audioLiberado) {
-                    narracao.innerHTML = `<div style="color: #666; text-align: center; padding: 20px;">A transmissão desta partida já foi encerrada. Veja os gols no painel.</div>`;
+                if (jogoAoVivo.linhaDoTempo) {
+                    narracao.innerHTML = `<div style="text-align:center; padding: 10px; color:#ff8c00; font-weight:bold; border-bottom:1px solid #333; margin-bottom:10px;">Resumo da Partida:</div>`;
+                    jogoAoVivo.linhaDoTempo.forEach(evento => {
+                        let escudoID = evento.tipo.includes("mandante") ? jogoAoVivo.mandante : jogoAoVivo.visitante;
+                        let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
+                        let txt = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
+                        adicionarNarraçao(`${evento.minuto}'`, txt, evento.cor);
+                    });
                 }
 
-                if(audioLiberado && !eventosJaTocados.has("fim")) {
+                if(!eventosJaTocados.has("fim")) {
                     canalEfeitos.src = 'sounds/final_do_jogo.mp3';
-                    canalEfeitos.play();
+                    if(audioLiberado) canalEfeitos.play();
                     canalTorcida.volume = 0.1;
                     eventosJaTocados.add("fim");
                 }
@@ -182,7 +191,8 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
             canalTorcida.volume = 0.1;
             eventosJaTocados.add("fim");
         }
-        return;
+        return
+        location.reload();
     }
 
     cronometro.innerText = minutoAtualJogo + "'";
