@@ -71,18 +71,41 @@ function gerarImgEscudo(timeId, dadosTimeBanco) {
 
 
 
+let calGlobal = null;
+let rodadaExibicao = null;
+
 function iniciarTransmissao() {
     db.ref(`ligas/${ligaLogada}/calendario`).on('value', (snapCal) => {
-        const cal = snapCal.val();
-        if (!cal) return;
+        calGlobal = snapCal.val();
+        if (!calGlobal) return;
 
-        rodadaSistema = cal.rodadaAtual || 1;
-        document.getElementById('lbl-rodada-top').innerText = rodadaSistema;
+        rodadaSistema = calGlobal.rodadaAtual || 1;
+        if (!rodadaExibicao) rodadaExibicao = rodadaSistema;
 
-        const rodadaKey = `rodada_${rodadaSistema}`;
-        const jogosDaDivisao = divisaoAtual === "A" ? cal.serieA[rodadaKey] : cal.serieB[rodadaKey];
+        renderizarPartida();
+    });
+}
 
-        let jogoAoVivo = null;
+window.mudarRodadaTransmissao = function(novaRodada) {
+    rodadaExibicao = parseInt(novaRodada);
+    renderizarPartida();
+};
+
+function renderizarPartida() {
+    // 1. Cria o Filtro (Dropdown) na Interface
+    let selectHtml = `<select onchange="mudarRodadaTransmissao(this.value)" style="background:#1a1a1a; color:var(--verde-campo); border:1px solid #444; padding:2px 5px; border-radius:4px; font-weight:bold; outline:none; margin-left: 5px; cursor: pointer;">`;
+    for (let r = 1; r <= rodadaSistema; r++) {
+        selectHtml += `<option value="${r}" ${r === rodadaExibicao ? 'selected' : ''}>Rodada ${r}</option>`;
+    }
+    selectHtml += `</select>`;
+    document.getElementById('lbl-rodada-top').innerHTML = selectHtml;
+
+    // 2. Busca o Jogo da Rodada Selecionada
+    const rodadaKey = `rodada_${rodadaExibicao}`;
+    const jogosDaDivisao = divisaoAtual === "A" ? calGlobal.serieA[rodadaKey] : calGlobal.serieB[rodadaKey];
+
+    let jogoAoVivo = null;
+    if (jogosDaDivisao) {
         for (let j in jogosDaDivisao) {
             if (jogosDaDivisao[j].mandante === dadosUsuario.timeAtual || jogosDaDivisao[j].visitante === dadosUsuario.timeAtual) {
                 meuJogoId = j;
@@ -90,87 +113,111 @@ function iniciarTransmissao() {
                 break;
             }
         }
+    }
 
-        if (jogoAoVivo) {
-            jogoAtual = jogoAoVivo;
+    // 3. Renderiza a Tela
+    if (jogoAoVivo) {
+        jogoAtual = jogoAoVivo;
 
-            // 🟢 INJETA ESTÁDIO DO VISITANTE NO FUNDO
-            document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.visitante)}')`;
+        document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.visitante)}')`;
 
-            lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
-            lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
+        lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
+        lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
-            let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
-            let jaTerminouDeVerdade = jogoAoVivo.jogado || tempoPassado > 95;
+        let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
+        let jaTerminouDeVerdade = jogoAoVivo.jogado || tempoPassado > 95;
 
-            if (jaTerminouDeVerdade) {
-                lblGolsM.innerText = jogoAoVivo.placarMandante;
-                lblGolsV.innerText = jogoAoVivo.placarVisitante;
-                cronometro.innerText = "FIM";
-                cronometro.style.color = "#dc3545";
-                statusTransmissao.innerText = "Partida Encerrada 🏁";
+        if (jaTerminouDeVerdade) {
+            // CORREÇÃO DO UNDEFINED: Conta os gols se a variável não existir no banco
+            let golsMCount = jogoAoVivo.linhaDoTempo ? jogoAoVivo.linhaDoTempo.filter(e => e.tipo === 'gol_mandante').length : 0;
+            let golsVCount = jogoAoVivo.linhaDoTempo ? jogoAoVivo.linhaDoTempo.filter(e => e.tipo === 'gol_visitante').length : 0;
 
-                if (jogoAoVivo.linhaDoTempo) {
-                    narracao.innerHTML = `<div style="text-align:center; padding: 10px; color:#ff8c00; font-weight:bold; border-bottom:1px solid #333; margin-bottom:10px;">Resumo da Partida:</div>`;
-                    jogoAoVivo.linhaDoTempo.forEach(evento => {
-                        let escudoID = evento.tipo.includes("mandante") ? jogoAoVivo.mandante : jogoAoVivo.visitante;
-                        let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
-                        let txt = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
-                        adicionarNarraçao(`${evento.minuto}'`, txt, evento.cor);
-                    });
-                }
+            lblGolsM.innerText = jogoAoVivo.placarMandante !== undefined ? jogoAoVivo.placarMandante : golsMCount;
+            lblGolsV.innerText = jogoAoVivo.placarVisitante !== undefined ? jogoAoVivo.placarVisitante : golsVCount;
 
-                if(!eventosJaTocados.has("fim")) {
-                    canalEfeitos.src = 'sounds/final_do_jogo.mp3';
-                    if(audioLiberado) canalEfeitos.play();
-                    canalTorcida.volume = 0.1;
-                    eventosJaTocados.add("fim");
-                }
+            cronometro.innerText = "FIM";
+            cronometro.style.color = "#dc3545";
+            statusTransmissao.innerText = "Partida Encerrada 🏁";
+
+            if (jogoAoVivo.linhaDoTempo) {
+                narracao.innerHTML = `<div style="text-align:center; padding: 10px; color:#ff8c00; font-weight:bold; border-bottom:1px solid #333; margin-bottom:10px;">Resumo da Partida:</div>`;
+                jogoAoVivo.linhaDoTempo.forEach(evento => {
+                    let escudoID = evento.tipo.includes("mandante") ? jogoAoVivo.mandante : jogoAoVivo.visitante;
+                    let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
+                    let txt = evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`);
+                    adicionarNarraçao(`${evento.minuto}'`, txt, evento.cor);
+                });
+            } else {
+                 narracao.innerHTML = `<div style="text-align:center; padding: 20px; color:#aaa;">Os melhores momentos não estão disponíveis para esta partida.</div>`;
             }
-            else {
-                // TRAVA DE TEMPO: Só libera o botão 20 mins antes (19:40)
-                const agora = new Date();
-                const horaAtual = agora.getHours();
-                const minAtual = agora.getMinutes();
-                const HORA_JOGO = 20; // 20:00
 
-                let horarioPermitido = false;
-                if (horaAtual > (HORA_JOGO - 1)) horarioPermitido = true; // 20:00 em diante
-                if (horaAtual === (HORA_JOGO - 1) && minAtual >= 40) horarioPermitido = true; // 19:40 em diante
-
-                if (!horarioPermitido) {
-                    statusTransmissao.innerText = "Aguardando Horário ⏳";
-                    narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 30px;">
-                        <h3 style="color: #666;">Os portões do estádio ainda estão fechados.</h3>
-                        <p>A transmissão abrirá 20 minutos antes do jogo (19:40).</p>
-                    </div>`;
-                }
-                else if (!audioLiberado) {
-                    statusTransmissao.innerText = "Sinal Encontrado 📡";
-                    narracao.innerHTML = `
-                        <div style="text-align: center; padding: 30px;">
-                            <h3 style="color: #ff8c00;">A transmissão está pronta!</h3>
-                            <button onclick="liberarAudio()" style="background: var(--verde-campo); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">▶️ LIGAR SOM E ENTRAR NO ESTÁDIO</button>
-                        </div>`;
-                }
-                else if (jogoAoVivo.linhaDoTempo) {
-                    statusTransmissao.innerText = "Ao Vivo 🔴";
-                    statusTransmissao.style.animation = "piscar 1s infinite";
-
-                    if (canalTorcida.src === "") {
-                        canalTorcida.src = getTorcida(jogoAoVivo.mandante);
-                        canalTorcida.onerror = () => { canalTorcida.src = 'sounds/torcida_generica.mp3'; canalTorcida.play(); };
-                        canalTorcida.play();
-                    }
-
-                    reproduzirLinhaDoTempo(jogoAoVivo.linhaDoTempo, jogoAoVivo.horaInicio);
-                }
-                else {
-                    statusTransmissao.innerText = "Aquecimento 🏃‍♂️";
-                }
+            if(!eventosJaTocados.has("fim") && audioLiberado && rodadaExibicao === rodadaSistema) {
+                canalEfeitos.src = 'sounds/final_do_jogo.mp3';
+                canalEfeitos.play();
+                canalTorcida.volume = 0.1;
+                eventosJaTocados.add("fim");
             }
         }
-    });
+        else {
+            lblGolsM.innerText = "0";
+            lblGolsV.innerText = "0";
+            cronometro.innerText = "00'";
+            cronometro.style.color = "#fff";
+
+            // TRAVA DE TEMPO
+            const agora = new Date();
+            const horaAtual = agora.getHours();
+            const minAtual = agora.getMinutes();
+            const HORA_JOGO = 20; // 20:00
+
+            let horarioPermitido = false;
+            if (horaAtual > (HORA_JOGO - 1)) horarioPermitido = true;
+            if (horaAtual === (HORA_JOGO - 1) && minAtual >= 40) horarioPermitido = true;
+
+            if (rodadaExibicao < rodadaSistema) {
+                 statusTransmissao.innerText = "Atrasado ⚠️";
+                 narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 30px;">Aguardando o processamento desta partida no servidor...</div>`;
+            }
+            else if (!horarioPermitido) {
+                statusTransmissao.innerText = "Aguardando Horário ⏳";
+                narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 30px;">
+                    <h3 style="color: #666;">Os portões do estádio ainda estão fechados.</h3>
+                    <p>A transmissão abrirá 20 minutos antes do jogo (19:40).</p>
+                </div>`;
+            }
+            else if (!audioLiberado) {
+                statusTransmissao.innerText = "Sinal Encontrado 📡";
+                narracao.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <h3 style="color: #ff8c00;">A transmissão está pronta!</h3>
+                        <button onclick="liberarAudio()" style="background: var(--verde-campo); color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">▶️ LIGAR SOM E ENTRAR NO ESTÁDIO</button>
+                    </div>`;
+            }
+            else if (jogoAoVivo.linhaDoTempo) {
+                statusTransmissao.innerText = "Ao Vivo 🔴";
+                statusTransmissao.style.animation = "piscar 1s infinite";
+
+                if (canalTorcida.src === "") {
+                    canalTorcida.src = getTorcida(jogoAoVivo.mandante);
+                    canalTorcida.onerror = () => { canalTorcida.src = 'sounds/torcida_generica.mp3'; canalTorcida.play(); };
+                    canalTorcida.play();
+                }
+
+                reproduzirLinhaDoTempo(jogoAoVivo.linhaDoTempo, jogoAoVivo.horaInicio);
+            }
+            else {
+                statusTransmissao.innerText = "Aquecimento 🏃‍♂️";
+            }
+        }
+    } else {
+        lblMandante.innerHTML = "Folga";
+        lblVisitante.innerHTML = "Folga";
+        lblGolsM.innerText = "-";
+        lblGolsV.innerText = "-";
+        cronometro.innerText = "--'";
+        statusTransmissao.innerText = "Sem Jogo";
+        narracao.innerHTML = `<div style="text-align:center; padding: 30px; color:#aaa;">O seu clube não joga nesta rodada.</div>`;
+    }
 }
 
 function reproduzirLinhaDoTempo(linha, horaInicioTstamp) {
