@@ -28,15 +28,14 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('saldo-treinador').innerText = formatarDinheiro(dadosUsuario.caixaClube);
 
         if (dadosUsuario.timeAtual === "Sem Clube" || !dadosUsuario.timeAtual) {
-           telaAguardandoSorteio();
+           sortearTimeParaNovoTreinador();
         } else {
             carregarVisaoGeralClube();
         }
     });
 });
 
-// TELA: AGUARDANDO SORTEIO DA DIRETORIA
-function telaAguardandoSorteio() {
+async function sortearTimeParaNovoTreinador() {
     const area = document.getElementById('area-trabalho');
     if (!document.getElementById('animacao-espera')) {
         const style = document.createElement('style');
@@ -47,19 +46,59 @@ function telaAguardandoSorteio() {
 
     area.innerHTML = `
         <div style="text-align: center; margin-top: 80px;">
-            <h2 style="color: #ff8c00; font-size: 32px;">🎲 Aguardando Sorteio</h2>
-            <p style="color: #aaa; font-size: 18px; max-width: 600px; margin: 20px auto; line-height: 1.6;">
-                Você está cadastrado na liga <strong>${ligaLogada}</strong>.<br>
-                A administração ainda não realizou o sorteio oficial dos clubes.
-            </p>
-            <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; border: 1px solid #444; max-width: 400px; margin: 0 auto;">
-                <div style="font-size: 50px; animation: spin 4s linear infinite; display: inline-block;">⏳</div>
-                <p style="color: var(--verde-campo); margin-top: 15px; font-weight: bold;">
-                    Fique de olho! Esta tela será atualizada automaticamente quando seu time for definido.
-                </p>
-            </div>
+            <div style="font-size: 50px; animation: spin 2s linear infinite; display: inline-block; margin-bottom: 20px;">🎲</div>
+            <h2 style="color: #ff8c00; font-size: 28px;">Sorteando o seu Clube...</h2>
+            <p style="color: #aaa; font-size: 16px;">Assinando papéis e buscando o comando de um time na liga...</p>
         </div>
     `;
+
+    try {
+        // 1. Puxa todos os times do banco global
+        const snapTimes = await db.ref('banco_global_times').once('value');
+        const times = snapTimes.val() || {};
+
+        // 2. Puxa os usuários para ver quais times já estão ocupados
+        const snapUsuarios = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        const usuarios = snapUsuarios.val() || {};
+
+        let timesOcupados = [];
+        for (let u in usuarios) {
+            if (usuarios[u].timeAtual && usuarios[u].timeAtual !== "Sem Clube") {
+                timesOcupados.push(usuarios[u].timeAtual);
+            }
+        }
+
+        // 3. Filtra apenas as vagas abertas
+        let timesDisponiveis = [];
+        for (let t in times) {
+            if (t !== "Agentes_Livres" && t !== "Fantasma" && !timesOcupados.includes(t)) {
+                timesDisponiveis.push(t);
+            }
+        }
+
+        if (timesDisponiveis.length === 0) {
+            area.innerHTML = `
+                <div style="text-align: center; margin-top: 80px;">
+                    <h2 style="color: #dc3545; font-size: 28px;">⚠️ Liga Lotada</h2>
+                    <p style="color: #aaa; font-size: 16px;">Infelizmente, todos os clubes já possuem um treinador ativo.</p>
+                </div>`;
+            return;
+        }
+
+        // 4. Sorteia um time para o técnico e o amarra a ele!
+        const timeSorteado = timesDisponiveis[Math.floor(Math.random() * timesDisponiveis.length)];
+
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+            timeAtual: timeSorteado
+        });
+
+        // 5. Recarrega a página para abrir o Dashboard direto!
+        window.location.reload();
+
+    } catch (erro) {
+        console.error("Erro no sorteio:", erro);
+        area.innerHTML = `<p style="text-align:center; color:#dc3545;">Ocorreu um erro no sorteio. Tente atualizar a página com F5.</p>`;
+    }
 }
 
 function carregarVisaoGeralClube() {

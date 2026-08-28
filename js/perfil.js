@@ -146,7 +146,8 @@ function renderizarPainelEvolucao() {
     const box = document.getElementById('box-criar-player');
     let at = meuProPlayer.atributos_base;
 
-    // A MÁGICA DA MÉDIA: O valor base do criador é o 1º voto oficial.
+    let ovrCriacao = at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade;
+
     let qtdVotos = 1;
     let sA = at.ataque, sD = at.defesa, sF = at.forca, sV = at.velocidade, sH = at.habilidade;
 
@@ -161,40 +162,33 @@ function renderizarPainelEvolucao() {
 
     let mxA = Math.round(sA / qtdVotos); let mxD = Math.round(sD / qtdVotos);
     let mxF = Math.round(sF / qtdVotos); let mxV = Math.round(sV / qtdVotos); let mxH = Math.round(sH / qtdVotos);
-    let OVR = mxA + mxD + mxF + mxV + mxH;
 
-    // Se o jogo já formou ele pro mercado na rodada 5
-    if (meuProPlayer.status === "mercado") {
-        box.innerHTML = `
-            <h3 style="color: var(--verde-campo);">Craque Formado: ${meuProPlayer.nome}</h3>
-            <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px solid #333; margin-bottom: 15px;">
-                <p style="margin-top:0; color:#aaa; font-size:13px;">Posição: <strong>${meuProPlayer.posicao}</strong></p>
-                <p style="color:#aaa; font-size:13px;">Força OVR Oficial: <strong style="color:var(--verde-campo);">${OVR}</strong></p>
-                <hr style="border-color:#333; margin: 10px 0;">
-                <p style="color: #666; font-size: 12px; margin-bottom:0;">O seu atleta já está devidamente registrado no mercado da liga. A fase de avaliações encerrou!</p>
+    let ovrAvaliado = mxA + mxD + mxF + mxV + mxH;
+
+    let statusTxt = meuProPlayer.status === "mercado"
+        ? `<p style="font-size: 13px; color: var(--verde-campo);">Atleta Ativo! Olheiros: <strong>${qtdVotos - 1}</strong> (OVR Dinâmico Ativado)</p>`
+        : `<p style="font-size: 13px; color: #ccc;">Na Base! Olheiros: <strong>${qtdVotos - 1}</strong></p>`;
+
+    box.innerHTML = `
+        <h3 style="color: var(--verde-campo);">Acompanhe seu Craque: ${meuProPlayer.nome}</h3>
+        ${statusTxt}
+        <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444; margin-bottom: 15px;">
+
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">
+                <span style="color: #aaa; font-size: 13px;">OVR Criação: <strong style="color: #fff;">${ovrCriacao}</strong></span>
+                <span style="color: #aaa; font-size: 13px;">Média Atual (OVR): <strong style="color: var(--verde-campo);">${ovrAvaliado}</strong></span>
             </div>
-        `;
-    } else {
-        // Painel de Acompanhamento (Não pode mais editar)
-        box.innerHTML = `
-            <h3 style="color: var(--verde-campo);">Acompanhe seu Craque: ${meuProPlayer.nome}</h3>
-            <p style="font-size: 13px; color: #ccc;">A comunidade está avaliando! Olheiros que votaram: <strong>${qtdVotos - 1}</strong></p>
-            <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444; margin-bottom: 15px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
-                    <span style="color: #aaa; font-size: 13px;">Média Atual (OVR):</span>
-                    <strong style="color: var(--verde-campo); font-size: 16px;">${OVR}</strong>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 8px; color: #ddd; font-size: 14px;">
-                    <div style="display:flex; justify-content:space-between;"><span>Ataque:</span> <strong style="color:#ff8c00;">${mxA}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span>Defesa:</span> <strong style="color:#ff8c00;">${mxD}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span>Força:</span> <strong style="color:#ff8c00;">${mxF}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span>Velocidade:</span> <strong style="color:#ff8c00;">${mxV}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span>Habilidade:</span> <strong style="color:#ff8c00;">${mxH}</strong></div>
-                </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; color: #ddd; font-size: 13px;">
+                <div style="display:flex; justify-content:space-between;"><span>Ataque:</span> <span>Orig: ${at.ataque} <strong style="color:#ff8c00; margin-left:5px;">➔ ${mxA}</strong></span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Defesa:</span> <span>Orig: ${at.defesa} <strong style="color:#ff8c00; margin-left:5px;">➔ ${mxD}</strong></span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Força:</span> <span>Orig: ${at.forca} <strong style="color:#ff8c00; margin-left:5px;">➔ ${mxF}</strong></span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Velocidade:</span> <span>Orig: ${at.velocidade} <strong style="color:#ff8c00; margin-left:5px;">➔ ${mxV}</strong></span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Habilidade:</span> <span>Orig: ${at.habilidade} <strong style="color:#ff8c00; margin-left:5px;">➔ ${mxH}</strong></span></div>
             </div>
-            <p style="font-size: 11px; color: #666; text-align:center; margin-top: 10px;">Os seus atributos iniciais contam como o 1º voto. A média da comunidade fechará a nota oficial do jogador!</p>
-        `;
-    }
+        </div>
+        <p style="font-size: 11px; color: #666; text-align:center; margin-top: 10px;">A avaliação está permanentemente aberta. A média da comunidade continuará afetando os atributos do seu jogador!</p>
+    `;
 }
 
 function calcularPontos() {
