@@ -14,10 +14,7 @@ window.addEventListener('DOMContentLoaded', () => {
     db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value').then(snapshot => {
         dadosUsuario = snapshot.val();
 
-        if(!dadosUsuario || dadosUsuario.timeAtual === "Sem Clube") {
-            alert("Assine com um clube antes de entrar no mercado!");
-            return window.location.href = "dashboard.html";
-        }
+        if(!dadosUsuario) return window.location.href = "index.html";
 
         document.getElementById('nome-treinador').innerText = dadosUsuario.nome;
         document.getElementById('nome-time').innerText = dadosUsuario.timeAtual.replace(/_/g, ' ');
@@ -83,10 +80,17 @@ function renderizarMercado(termoBusca = "") {
         if (termoBusca && !j.nome.toLowerCase().includes(termoBusca.toLowerCase())) continue;
         if (exibidos >= 50) break;
 
-        let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
-        let btnAcao = ehDoMeuTime
-            ? `<button disabled style="background:#555; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Seu Atleta</button>`
-            : `<button onclick="fazerProposta('${j.id_banco}')" style="background:#ff8c00; border:none; color:#fff; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">Fazer Proposta</button>`;
+        let btnAcao = "";
+
+        // Se for "Sem Clube", ele só olha a vitrine (botão cinza bloqueado)
+        if (dadosUsuario.timeAtual === "Sem Clube") {
+            btnAcao = `<button disabled style="background:#555; border:none; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px; cursor:not-allowed;">Requer Clube</button>`;
+        } else {
+            let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
+            btnAcao = ehDoMeuTime
+                ? `<button disabled style="background:#555; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Seu Atleta</button>`
+                : `<button onclick="fazerProposta('${j.id_banco}')" style="background:#ff8c00; border:none; color:#fff; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">Fazer Proposta</button>`;
+        }
 
         tbody.innerHTML += `
             <tr style="border-bottom: 1px solid #333;">

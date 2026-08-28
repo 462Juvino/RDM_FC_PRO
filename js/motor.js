@@ -254,9 +254,34 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
 
                 const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
 
+                // NOVO: Identifica os goleiros da partida para registrar a estatística
+                let gkM_id = Object.keys(times[jogo.mandante]?.jogadores || {}).find(k => times[jogo.mandante].jogadores[k].posicoes?.p === "Goleiro");
+                let gkV_id = Object.keys(times[jogo.visitante]?.jogadores || {}).find(k => times[jogo.visitante].jogadores[k].posicoes?.p === "Goleiro");
+
+                if (gkM_id) {
+                    let gkM = times[jogo.mandante].jogadores[gkM_id];
+                    gkM.estatisticas = gkM.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0};
+                    gkM.estatisticas.jogos = (gkM.estatisticas.jogos || 0) + 1;
+                    updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM;
+                }
+                if (gkV_id) {
+                    let gkV = times[jogo.visitante].jogadores[gkV_id];
+                    gkV.estatisticas = gkV.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0};
+                    gkV.estatisticas.jogos = (gkV.estatisticas.jogos || 0) + 1;
+                    updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV;
+                }
+
                 for(let i=0; i<5; i++) {
                     if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
                         golsM++;
+
+                        // Punição pro Goleiro Visitante
+                        if (gkV_id) {
+                            let gkV = times[jogo.visitante].jogadores[gkV_id];
+                            gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1;
+                            updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV;
+                        }
+
                         let idA = sortearAtleta(jogo.mandante);
                         let nA = idA ? times[jogo.mandante].jogadores[idA].nome : "Jogador";
                         if(idA) {
@@ -296,6 +321,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                             updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                         }
                         linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
+                    }
+
+                    if (gkM_id) {
+                        let gkM = times[jogo.mandante].jogadores[gkM_id];
+                        gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1;
+                        updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM;
                     }
                 }
 
@@ -416,18 +447,51 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     let campeaoCopa = cal.sistema_campeao_copa;
 
                     if (campeaoLiga === campeaoCopa) {
-                        // Papou tudo! Cancela mundial e encerra.
                         mundial.jogado = true; mundial.mandante = campeaoLiga; mundial.visitante = "N/A (Coroa Dupla)";
                         registrarHallDaFama(liga, campeaoLiga, campeaoCopa, campeaoLiga, usuarios);
                         cal.temporada_encerrada = true;
                     } else {
-                        mundial.mandante = campeaoLiga; mundial.visitante = campeaoCopa; // Prepara pro jogo que vai acontecer
+                        mundial.mandante = campeaoLiga; mundial.visitante = campeaoCopa;
                     }
                 } else if (mundial.jogado === true && !cal.temporada_encerrada) {
-                    // O mundial aconteceu hoje! Registra no Hall.
                     let vencedorMundial = mundial.placarMandante > mundial.placarVisitante ? mundial.mandante : mundial.visitante;
                     registrarHallDaFama(liga, mundial.mandante, mundial.visitante, vencedorMundial, usuarios);
                     cal.temporada_encerrada = true;
+                }
+
+                // 🏆 SISTEMA DE RECOMPENSAS (BÔNUS DE +5 PONTOS)
+                if (cal.temporada_encerrada) {
+                    let todosJgs = [];
+                    for (let t in times) {
+                        if (times[t].jogadores) {
+                            for (let j in times[t].jogadores) {
+                                let jog = times[t].jogadores[j];
+                                jog.idBanco = j; jog.timeBanco = t;
+                                todosJgs.push(jog);
+                            }
+                        }
+                    }
+
+                    // 1. Top 3 Artilheiros (+5 Ataque)
+                    let arts = [...todosJgs].filter(j => j.estatisticas && j.estatisticas.gols > 0).sort((a,b) => b.estatisticas.gols - a.estatisticas.gols).slice(0, 3);
+                    arts.forEach(j => {
+                        let novoValor = Math.min(99, (j.atributos.ataque || 60) + 5);
+                        updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/ataque`] = novoValor;
+                    });
+
+                    // 2. Top 3 Assistências (+5 Habilidade)
+                    let asts = [...todosJgs].filter(j => j.estatisticas && j.estatisticas.assistencias > 0).sort((a,b) => b.estatisticas.assistencias - a.estatisticas.assistencias).slice(0, 3);
+                    asts.forEach(j => {
+                        let novoValor = Math.min(99, (j.atributos.habilidade || 60) + 5);
+                        updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/habilidade`] = novoValor;
+                    });
+
+                    // 3. Top 3 Goleiros Menos Vazados (+5 Defesa) -> Precisa ter jogado pelo menos 5 partidas
+                    let gks = [...todosJgs].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos >= 5);
+                    gks.sort((a,b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)).slice(0, 3).forEach(j => {
+                        let novoValor = Math.min(99, (j.atributos.defesa || 60) + 5);
+                        updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/defesa`] = novoValor;
+                    });
                 }
             }
 
