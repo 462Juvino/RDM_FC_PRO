@@ -115,14 +115,16 @@ function renderizarPartida() {
 
         // Tenta puxar o estádio, se der erro ignora para não travar
         try {
-            document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.visitante)}')`;
+            // CORRIGIDO: Puxa o estádio do Mandante (Dono da Casa)
+            document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.mandante)}')`;
         } catch(e) {}
 
         if (lblMandante) lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
         if (lblVisitante) lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
 
-        let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 999;
-        let jaTerminouDeVerdade = jogoAoVivo.jogado || tempoPassado > 95;
+        // CORRIGIDO: Se a hora de início não existe, o tempo passado é ZERO, não infinito.
+        let tempoPassado = jogoAoVivo.horaInicio ? (Date.now() - jogoAoVivo.horaInicio) / 1000 : 0;
+        let jaTerminouDeVerdade = jogoAoVivo.jogado || (jogoAoVivo.horaInicio && tempoPassado > 95);
 
         // 🛡️ PROTEÇÃO FIREBASE
         let linhaObj = jogoAoVivo.linhaDoTempo || [];

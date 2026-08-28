@@ -145,64 +145,55 @@ function checarMeuProPlayer() {
 function renderizarPainelEvolucao() {
     const box = document.getElementById('box-criar-player');
     let at = meuProPlayer.atributos_base;
-    let qtdVotos = meuProPlayer.avaliacoes ? Object.keys(meuProPlayer.avaliacoes).length : 0;
 
-    let mxA = 90, mxD = 90, mxF = 90, mxV = 90, mxH = 90;
+    // A MÁGICA DA MÉDIA: O valor base do criador é o 1º voto oficial.
+    let qtdVotos = 1;
+    let sA = at.ataque, sD = at.defesa, sF = at.forca, sV = at.velocidade, sH = at.habilidade;
 
-    // Lógica Inteligente: A Média da Comunidade vira o "Limite" do jogador
-    if (qtdVotos > 0) {
-        let sA=0, sD=0, sF=0, sV=0, sH=0;
-        for(let v in meuProPlayer.avaliacoes) {
+    if (meuProPlayer.avaliacoes) {
+        for (let v in meuProPlayer.avaliacoes) {
             let av = meuProPlayer.avaliacoes[v];
-            // Se for uma nota antiga de estrela, assume 60 para não quebrar a conta (NaN)
-            sA += av.ataque || 60;
-            sD += av.defesa || 60;
-            sF += av.forca || 60;
-            sV += av.velocidade || 60;
-            sH += av.habilidade || 60;
+            sA += av.ataque || 60; sD += av.defesa || 60;
+            sF += av.forca || 60; sV += av.velocidade || 60; sH += av.habilidade || 60;
+            qtdVotos++;
         }
-        mxA = Math.round(sA / qtdVotos); mxD = Math.round(sD / qtdVotos);
-        mxF = Math.round(sF / qtdVotos); mxV = Math.round(sV / qtdVotos); mxH = Math.round(sH / qtdVotos);
-
-        TETO_PONTOS = mxA + mxD + mxF + mxV + mxH; // O Teto total se ajusta à media
-
-        if (!meuProPlayer.ajuste_concluido) {
-            let painelNotif = document.getElementById('painel-notificacao');
-            let textoNotif = document.getElementById('texto-notificacao');
-            if (painelNotif && textoNotif) {
-                painelNotif.style.display = "block";
-                textoNotif.innerHTML = `A liga reavaliou o seu atleta! Os seus novos limites de atributos agora são baseados na média da comunidade. Você possui <strong>${TETO_PONTOS} pts</strong> permitidos para redistribuir!`;
-            }
-        }
-    } else {
-        TETO_PONTOS = 300;
     }
 
-    if (meuProPlayer.ajuste_concluido) {
+    let mxA = Math.round(sA / qtdVotos); let mxD = Math.round(sD / qtdVotos);
+    let mxF = Math.round(sF / qtdVotos); let mxV = Math.round(sV / qtdVotos); let mxH = Math.round(sH / qtdVotos);
+    let OVR = mxA + mxD + mxF + mxV + mxH;
+
+    // Se o jogo já formou ele pro mercado na rodada 5
+    if (meuProPlayer.status === "mercado") {
         box.innerHTML = `
             <h3 style="color: var(--verde-campo);">Craque Formado: ${meuProPlayer.nome}</h3>
             <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px solid #333; margin-bottom: 15px;">
                 <p style="margin-top:0; color:#aaa; font-size:13px;">Posição: <strong>${meuProPlayer.posicao}</strong></p>
-                <p style="color:#aaa; font-size:13px;">Força OVR Oficial: <strong style="color:var(--verde-campo);">${at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade}</strong></p>
+                <p style="color:#aaa; font-size:13px;">Força OVR Oficial: <strong style="color:var(--verde-campo);">${OVR}</strong></p>
                 <hr style="border-color:#333; margin: 10px 0;">
-                <p style="color: #666; font-size: 12px; margin-bottom:0;">O seu atleta já está devidamente registrado no mercado. Nenhuma alteração a mais pode ser feita.</p>
+                <p style="color: #666; font-size: 12px; margin-bottom:0;">O seu atleta já está devidamente registrado no mercado da liga. A fase de avaliações encerrou!</p>
             </div>
         `;
     } else {
+        // Painel de Acompanhamento (Não pode mais editar)
         box.innerHTML = `
-            <h3 style="color: var(--verde-campo);">Ajuste seu Craque: ${meuProPlayer.nome}</h3>
-            <p style="font-size: 13px; color: #ccc;">Avaliações recebidas: <strong>${qtdVotos} Olheiro(s)</strong></p>
+            <h3 style="color: var(--verde-campo);">Acompanhe seu Craque: ${meuProPlayer.nome}</h3>
+            <p style="font-size: 13px; color: #ccc;">A comunidade está avaliando! Olheiros que votaram: <strong>${qtdVotos - 1}</strong></p>
             <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px dashed #444; margin-bottom: 15px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <span style="color: #aaa; font-size: 13px;">Novo Teto: <strong>${TETO_PONTOS}</strong> | Restantes:</span>
-                    <strong id="pontos-restantes" style="color: var(--verde-campo);">0</strong>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    <span style="color: #aaa; font-size: 13px;">Média Atual (OVR):</span>
+                    <strong style="color: var(--verde-campo); font-size: 16px;">${OVR}</strong>
                 </div>
-                ${gerarSlidersHTML(at.ataque, at.defesa, at.forca, at.velocidade, at.habilidade, false, "", mxA, mxD, mxF, mxV, mxH)}
+                <div style="display: flex; flex-direction: column; gap: 8px; color: #ddd; font-size: 14px;">
+                    <div style="display:flex; justify-content:space-between;"><span>Ataque:</span> <strong style="color:#ff8c00;">${mxA}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Defesa:</span> <strong style="color:#ff8c00;">${mxD}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Força:</span> <strong style="color:#ff8c00;">${mxF}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Velocidade:</span> <strong style="color:#ff8c00;">${mxV}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Habilidade:</span> <strong style="color:#ff8c00;">${mxH}</strong></div>
+                </div>
             </div>
-            <button onclick="salvarProPlayer(false)" style="background: #ff8c00; width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; color: white; border: none; cursor: pointer;">${qtdVotos >= 3 ? "✅ Aceitar Limites e Travar Atleta" : "💾 Atualizar Atributos"}</button>
-            ${qtdVotos < 3 ? '<p style="font-size: 11px; color: #666; text-align:center; margin-top: 10px;">Aguarde 3 votos para poder confirmar a versão final pro mercado.</p>' : ''}
+            <p style="font-size: 11px; color: #666; text-align:center; margin-top: 10px;">Os seus atributos iniciais contam como o 1º voto. A média da comunidade fechará a nota oficial do jogador!</p>
         `;
-        calcularPontos();
     }
 }
 

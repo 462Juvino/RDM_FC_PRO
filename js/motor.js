@@ -169,8 +169,11 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     let p = proPlayers[criador];
 
                     if (p.status === "avaliando") {
-                        let qtdVotos = 0;
-                        let sA = 0, sD = 0, sF = 0, sV = 0, sH = 0;
+                        let at = p.atributos_base;
+
+                        // O Criador conta como o voto número 1
+                        let qtdVotos = 1;
+                        let sA = at.ataque, sD = at.defesa, sF = at.forca, sV = at.velocidade, sH = at.habilidade;
 
                         if (p.avaliacoes) {
                             for (let v in p.avaliacoes) {
@@ -183,17 +186,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                             }
                         }
 
-                        let at = p.atributos_base;
-                        let finalAtq = at.ataque; let finalDef = at.defesa;
-                        let finalFor = at.forca; let finalVel = at.velocidade; let finalHab = at.habilidade;
-
-                        if (qtdVotos > 0) {
-                            finalAtq = Math.round(sA / qtdVotos);
-                            finalDef = Math.round(sD / qtdVotos);
-                            finalFor = Math.round(sF / qtdVotos);
-                            finalVel = Math.round(sV / qtdVotos);
-                            finalHab = Math.round(sH / qtdVotos);
-                        }
+                        // Calcula a média exata (Criador + Comunidade)
+                        let finalAtq = Math.round(sA / qtdVotos);
+                        let finalDef = Math.round(sD / qtdVotos);
+                        let finalFor = Math.round(sF / qtdVotos);
+                        let finalVel = Math.round(sV / qtdVotos);
+                        let finalHab = Math.round(sH / qtdVotos);
 
                         let ovrFinal = finalAtq + finalDef + finalFor + finalVel + finalHab;
                         let valorMercado = ovrFinal * 150000;
