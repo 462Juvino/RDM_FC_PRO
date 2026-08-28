@@ -26,44 +26,102 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function carregarMundo() {
-    db.ref('banco_global_times').once('value').then(snap => {
-        const banco = snap.val();
-        todosJogadores = [];
-        meuElenco = []; // Limpa o elenco
+    // Busca os times normais E a base de Pro Players da sua liga simultaneamente
+    Promise.all([
+        db.ref('banco_global_times').once('value'),
+        db.ref(`ligas/${ligaLogada}/pro_players`).once('value')
+    ]).then(([snapBanco, snapPro]) => {
+        const banco = snapBanco.val() || {};
+        const pros = snapPro.val() || {};
 
+        todosJogadores = [];
+        meuElenco = [];
+
+        // 1. CARREGA O MUNDO REAL E OS PRO PLAYERS JÁ COMPRADOS
         for (let time in banco) {
+            // Se for um time de Agentes Livres, garante que seja APENAS o da SUA liga
+            if (time.startsWith("Agentes_Livres") && time !== `Agentes_Livres_${ligaLogada}`) continue;
+
             let elenco = banco[time].jogadores;
+            if (!elenco) continue;
+
             for (let idJog in elenco) {
                 let j = elenco[idJog];
-                let at = j.atributos;
-                let ovr = at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade;
+                let at = j.atributos || {ataque:50, defesa:50, forca:50, velocidade:50, habilidade:50};
+
+                // CORREÇÃO DO OVR: Agora é a MÉDIA dos atributos para ficar igual a todos
+                let ovrAvg = Math.round(((at.ataque||0) + (at.defesa||0) + (at.forca||0) + (at.velocidade||0) + (at.habilidade||0)) / 5);
 
                 let objJogador = {
                     id_banco: idJog,
                     nome: j.nome,
-                    idade: j.idade || 20, // Puxa a idade do banco
-                    clube: time.replace(/_/g, ' '),
-                    posicao: j.posicoes.p,
-                    forca: ovr,
+                    idade: j.idade || 20,
+                    clube: time.startsWith("Agentes_Livres") ? "Agentes Livres" : time.replace(/_/g, ' '),
+                    posicao: j.posicoes ? j.posicoes.p : "N/A",
+                    forca: ovrAvg,
                     atributos: at,
-                    valor: j.valor_mercado
+                    valor: j.valor_mercado || 0,
+                    isPro: j.pro_player || j.nome.includes("(PRO)")
                 };
 
                 todosJogadores.push(objJogador);
 
-                // Se o time do loop for o MEU TIME, salva o jogador na lista privada de trocas
                 if (time === dadosUsuario.timeAtual) {
                     meuElenco.push(objJogador);
                 }
             }
         }
+
+        // 2. CARREGA A VITRINE (PRO PLAYERS EM AVALIAÇÃO)
+        for (let dono in pros) {
+            let p = pros[dono];
+            if (p.status === "avaliando" || !p.status) {
+                let at = p.atributos_base;
+                let qtdVotos = 1;
+                let sA = at.ataque, sD = at.defesa, sF = at.forca, sV = at.velocidade, sH = at.habilidade;
+
+                if (p.avaliacoes) {
+                    for (let v in p.avaliacoes) {
+                        let av = p.avaliacoes[v];
+                        sA += av.ataque || 60; sD += av.defesa || 60;
+                        sF += av.forca || 60; sV += av.velocidade || 60; sH += av.habilidade || 60;
+                        qtdVotos++;
+                    }
+                }
+
+                let mxA = Math.round(sA / qtdVotos); let mxD = Math.round(sD / qtdVotos);
+                let mxF = Math.round(sF / qtdVotos); let mxV = Math.round(sV / qtdVotos); let mxH = Math.round(sH / qtdVotos);
+                let ovrDinâmico = Math.round((mxA + mxD + mxF + mxV + mxH) / 5);
+
+                todosJogadores.push({
+                    id_banco: "PRO_" + dono,
+                    nome: p.nome + " (PRO)",
+                    idade: 17,
+                    clube: "Base (Em Avaliação)",
+                    posicao: p.posicao,
+                    forca: ovrDinâmico,
+                    atributos: { ataque: mxA, defesa: mxD, forca: mxF, velocidade: mxV, habilidade: mxH },
+                    valor: 0,
+                    isPro: true,
+                    avaliando: true // Trava o botão de proposta
+                });
+            }
+        }
+
         todosJogadores.sort((a, b) => b.forca - a.forca);
         renderizarMercado();
     });
 }
 
 function renderizarMercado(termoBusca = "") {
-    const filtroPos = document.getElementById('filtro-posicao').value;
+    const selectPos = document.getElementById('filtro-posicao');
+
+    // Injeta o filtro de PRO Players automaticamente no HTML se ele não existir
+    if (selectPos && !document.getElementById('opt-pro')) {
+        selectPos.innerHTML += `<option id="opt-pro" value="PRO_PLAYERS" style="color:var(--verde-campo); font-weight:bold;">🌟 Apenas Pro Players</option>`;
+    }
+
+    const filtroPos = selectPos ? selectPos.value : "TODOS";
     const tbody = document.getElementById('tabela-mercado');
     tbody.innerHTML = "";
 
@@ -73,8 +131,9 @@ function renderizarMercado(termoBusca = "") {
         let j = todosJogadores[i];
 
         if (filtroPos !== "TODOS") {
+            if (filtroPos === "PRO_PLAYERS" && !j.isPro) continue;
             if (filtroPos === "Atacante" && !["Atacante", "Ponta", "Centroavante"].includes(j.posicao)) continue;
-            if (filtroPos !== "Atacante" && j.posicao !== filtroPos) continue;
+            if (filtroPos !== "Atacante" && filtroPos !== "PRO_PLAYERS" && j.posicao !== filtroPos) continue;
         }
 
         if (termoBusca && !j.nome.toLowerCase().includes(termoBusca.toLowerCase())) continue;
@@ -82,8 +141,9 @@ function renderizarMercado(termoBusca = "") {
 
         let btnAcao = "";
 
-        // Se for "Sem Clube", ele só olha a vitrine (botão cinza bloqueado)
-        if (dadosUsuario.timeAtual === "Sem Clube") {
+        if (j.avaliando) {
+            btnAcao = `<button disabled style="background:#222; border:1px dashed #555; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px; cursor:not-allowed;">Na Base</button>`;
+        } else if (dadosUsuario.timeAtual === "Sem Clube") {
             btnAcao = `<button disabled style="background:#555; border:none; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px; cursor:not-allowed;">Requer Clube</button>`;
         } else {
             let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
@@ -94,11 +154,13 @@ function renderizarMercado(termoBusca = "") {
 
         tbody.innerHTML += `
             <tr style="border-bottom: 1px solid #333;">
-                <td style="text-align: left; padding: 12px; font-weight: bold; color: #fff;">${j.nome}</td>
+                <td style="text-align: left; padding: 12px; font-weight: bold; color: ${j.isPro ? 'var(--verde-campo)' : '#fff'};">
+                    ${j.isPro ? '🌟 ' : ''}${j.nome}
+                </td>
                 <td style="font-size: 13px;">${j.posicao}</td>
                 <td style="color: #ff8c00; font-weight: bold;">${j.forca}</td>
-                <td style="font-size: 13px; color: #aaa;">${j.clube}</td>
-                <td style="color: #ddd; font-size: 13px;">${formatarDinheiro(j.valor)}</td>
+                <td style="font-size: 13px; color: ${j.avaliando ? '#888' : '#aaa'};">${j.clube}</td>
+                <td style="color: #ddd; font-size: 13px;">${j.valor > 0 ? formatarDinheiro(j.valor) : '-'}</td>
                 <td>${btnAcao}</td>
             </tr>
         `;

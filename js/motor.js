@@ -205,8 +205,10 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                         };
 
                         let idUnico = "PRO_" + criador;
-                        updates[`banco_global_times/Agentes_Livres/divisao`] = "Livre";
-                        updates[`banco_global_times/Agentes_Livres/jogadores/${idUnico}`] = jogadorPronto;
+                        let timeAgentes = `Agentes_Livres_${liga}`; // Isolamento da Liga!
+
+                        updates[`banco_global_times/${timeAgentes}/divisao`] = "Livre";
+                        updates[`banco_global_times/${timeAgentes}/jogadores/${idUnico}`] = jogadorPronto;
 
                         let notaConvertida = (ovrFinal / 300) * 5;
                         updates[`ligas/${liga}/pro_players/${criador}/status`] = "mercado";
