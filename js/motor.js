@@ -186,15 +186,18 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                             }
                         }
 
-                        // Calcula a média exata (Criador + Comunidade)
-                        let finalAtq = Math.round(sA / qtdVotos);
-                        let finalDef = Math.round(sD / qtdVotos);
-                        let finalFor = Math.round(sF / qtdVotos);
-                        let finalVel = Math.round(sV / qtdVotos);
-                        let finalHab = Math.round(sH / qtdVotos);
+                        // Calcula a média exata e CONVERTE para a Escala 1-15 (Divide por 6)
+                        let finalAtq = Math.round((sA / qtdVotos) / 6);
+                        let finalDef = Math.round((sD / qtdVotos) / 6);
+                        let finalFor = Math.round((sF / qtdVotos) / 6);
+                        let finalVel = Math.round((sV / qtdVotos) / 6);
+                        let finalHab = Math.round((sH / qtdVotos) / 6);
 
-                        let ovrFinal = finalAtq + finalDef + finalFor + finalVel + finalHab;
-                        let valorMercado = ovrFinal * 150000;
+                        // OVR é a Média!
+                        let ovrFinal = Math.round((finalAtq + finalDef + finalFor + finalVel + finalHab) / 5);
+
+                        // Adequa o valor de mercado (Ex: OVR 10 = R$ 25.000.000)
+                        let valorMercado = ovrFinal * 2500000;
 
                         let jogadorPronto = {
                             nome: p.nome + " (PRO)",

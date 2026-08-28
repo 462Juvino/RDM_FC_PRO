@@ -39,7 +39,7 @@ function carregarMundo() {
 
         // 1. CARREGA O MUNDO REAL E OS PRO PLAYERS JÁ COMPRADOS
         for (let time in banco) {
-            // Se for um time de Agentes Livres, garante que seja APENAS o da SUA liga
+            // Isolamento de Liga: Só puxa Agentes Livres se for da SUA liga
             if (time.startsWith("Agentes_Livres") && time !== `Agentes_Livres_${ligaLogada}`) continue;
 
             let elenco = banco[time].jogadores;
@@ -47,10 +47,26 @@ function carregarMundo() {
 
             for (let idJog in elenco) {
                 let j = elenco[idJog];
-                let at = j.atributos || {ataque:50, defesa:50, forca:50, velocidade:50, habilidade:50};
+                let isPro = j.pro_player || j.nome.includes("(PRO)");
+                let at = j.atributos || {ataque:5, defesa:5, forca:5, velocidade:5, habilidade:5};
 
-                // CORREÇÃO DO OVR: Agora é a MÉDIA dos atributos para ficar igual a todos
-                let ovrAvg = Math.round(((at.ataque||0) + (at.defesa||0) + (at.forca||0) + (at.velocidade||0) + (at.habilidade||0)) / 5);
+                let atq = at.ataque || 0;
+                let def = at.defesa || 0;
+                let frc = at.forca || 0;
+                let vel = at.velocidade || 0;
+                let hab = at.habilidade || 0;
+
+                // NORMALIZADOR: Se o Pro Player está salvo com pontuação 0-100, converte para 1-15
+                if (isPro && (atq > 20 || def > 20 || frc > 20)) {
+                    atq = Math.round(atq / 6);
+                    def = Math.round(def / 6);
+                    frc = Math.round(frc / 6);
+                    vel = Math.round(vel / 6);
+                    hab = Math.round(hab / 6);
+                }
+
+                // O OVR agora é a MÉDIA EXATA dos 5 atributos para todos
+                let ovrAvg = Math.round((atq + def + frc + vel + hab) / 5);
 
                 let objJogador = {
                     id_banco: idJog,
@@ -59,9 +75,9 @@ function carregarMundo() {
                     clube: time.startsWith("Agentes_Livres") ? "Agentes Livres" : time.replace(/_/g, ' '),
                     posicao: j.posicoes ? j.posicoes.p : "N/A",
                     forca: ovrAvg,
-                    atributos: at,
+                    atributos: { ataque: atq, defesa: def, forca: frc, velocidade: vel, habilidade: hab },
                     valor: j.valor_mercado || 0,
-                    isPro: j.pro_player || j.nome.includes("(PRO)")
+                    isPro: isPro
                 };
 
                 todosJogadores.push(objJogador);
@@ -72,7 +88,7 @@ function carregarMundo() {
             }
         }
 
-        // 2. CARREGA A VITRINE (PRO PLAYERS EM AVALIAÇÃO)
+        // 2. CARREGA A VITRINE (PRO PLAYERS NA BASE / AVALIAÇÃO)
         for (let dono in pros) {
             let p = pros[dono];
             if (p.status === "avaliando" || !p.status) {
@@ -89,8 +105,12 @@ function carregarMundo() {
                     }
                 }
 
-                let mxA = Math.round(sA / qtdVotos); let mxD = Math.round(sD / qtdVotos);
-                let mxF = Math.round(sF / qtdVotos); let mxV = Math.round(sV / qtdVotos); let mxH = Math.round(sH / qtdVotos);
+                // Convertendo a média bruta (0-100) para a Escala do Jogo (1-15) dividindo por 6
+                let mxA = Math.round((sA / qtdVotos) / 6);
+                let mxD = Math.round((sD / qtdVotos) / 6);
+                let mxF = Math.round((sF / qtdVotos) / 6);
+                let mxV = Math.round((sV / qtdVotos) / 6);
+                let mxH = Math.round((sH / qtdVotos) / 6);
                 let ovrDinâmico = Math.round((mxA + mxD + mxF + mxV + mxH) / 5);
 
                 todosJogadores.push({
@@ -103,7 +123,7 @@ function carregarMundo() {
                     atributos: { ataque: mxA, defesa: mxD, forca: mxF, velocidade: mxV, habilidade: mxH },
                     valor: 0,
                     isPro: true,
-                    avaliando: true // Trava o botão de proposta
+                    avaliando: true
                 });
             }
         }
