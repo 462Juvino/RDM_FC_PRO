@@ -347,9 +347,8 @@ function deslogar() {
 // CENTRAL DE TRANSAÇÕES (VISUAL)
 // ========================================================
 function atualizarBotaoTransacoes() {
-    if (dadosUsuario.timeAtual === "Sem Clube") return; // Sem clube não tem transação
+    if (dadosUsuario.timeAtual === "Sem Clube") return;
 
-    // Remove o botão flutuante antigo se ele ainda estiver perdido no cache da tela
     let floatBtn = document.getElementById('btn-float-transacoes');
     if (floatBtn) floatBtn.remove();
 
@@ -358,17 +357,28 @@ function atualizarBotaoTransacoes() {
         btn = document.createElement('button');
         btn.id = 'btn-transacoes-inline';
         btn.onclick = abrirModalTransacoes;
-        // Visual delicado, compacto e escuro, combinando com o tema
-        btn.style.cssText = "background: #2a2a2a; color: #ccc; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 13px; font-weight: normal; cursor: pointer; margin-left: 15px; vertical-align: middle; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px;";
+        btn.style.cssText = "background: #2a2a2a; color: #ccc; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 13px; font-weight: normal; cursor: pointer; margin-left: 15px; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px;";
         btn.onmouseover = () => { btn.style.background = "#333"; btn.style.color = "#fff"; };
         btn.onmouseout = () => { btn.style.background = "#2a2a2a"; btn.style.color = "#ccc"; };
 
-        // Procura o título principal da página (Mercado da Bola) e cola o botão logo após o texto!
-        let titulo = document.querySelector('h1, h2, h3');
-        if (titulo) {
-            titulo.appendChild(btn);
+        // Radar Inteligente: Procura especificamente o texto "Mercado da Bola"
+        let titulos = document.querySelectorAll('h1, h2, h3, h4, h5');
+        let tituloCorreto = null;
+
+        for (let t of titulos) {
+            if (t.textContent.includes("Mercado da Bola")) {
+                tituloCorreto = t;
+                break;
+            }
+        }
+
+        if (tituloCorreto) {
+            // Usa Flexbox para alinhar perfeitamente o título e o botão lado a lado
+            tituloCorreto.style.display = "flex";
+            tituloCorreto.style.alignItems = "center";
+            tituloCorreto.appendChild(btn);
         } else {
-            document.body.appendChild(btn); // Segurança caso o título falhe
+            document.body.appendChild(btn);
         }
     }
 
