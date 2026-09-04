@@ -9,6 +9,9 @@ let dadosUsuario = {};
 let todosJogadores = [];
 let meuElenco = []; // Adicione esta linha!
 let saldoAtual = 0;
+let propostasEnviadasGlobais = [];
+let propostasRecebidasGlobais = [];
+let timesReaisGlobais = [];
 
 window.addEventListener('DOMContentLoaded', () => {
     db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value').then(snapshot => {
@@ -26,20 +29,27 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function carregarMundo() {
-    // Busca os times normais E a base de Pro Players da sua liga simultaneamente
     Promise.all([
         db.ref('banco_global_times').once('value'),
-        db.ref(`ligas/${ligaLogada}/pro_players`).once('value')
-    ]).then(([snapBanco, snapPro]) => {
+        db.ref(`ligas/${ligaLogada}/pro_players`).once('value'),
+        db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value'),
+        db.ref(`ligas/${ligaLogada}/usuarios`).once('value')
+    ]).then(([snapBanco, snapPro, snapProp, snapUsers]) => {
         const banco = snapBanco.val() || {};
         const pros = snapPro.val() || {};
+        const propostas = snapProp.val() || {};
+        const usuarios = snapUsers.val() || {};
 
         todosJogadores = [];
         meuElenco = [];
+        propostasEnviadasGlobais = [];
+        propostasRecebidasGlobais = [];
 
-        // 1. CARREGA O MUNDO REAL E OS PRO PLAYERS JÁ COMPRADOS
+        // Mapeia quem são os players reais (Humanos)
+        timesReaisGlobais = Object.values(usuarios).map(u => u.timeAtual).filter(t => t && t !== "Sem Clube");
+
+        // 1. CARREGA O MUNDO REAL
         for (let time in banco) {
-            // Isolamento de Liga: Só puxa Agentes Livres se for da SUA liga
             if (time.startsWith("Agentes_Livres") && time !== `Agentes_Livres_${ligaLogada}`) continue;
 
             let elenco = banco[time].jogadores;
@@ -50,22 +60,12 @@ function carregarMundo() {
                 let isPro = j.pro_player || j.nome.includes("(PRO)");
                 let at = j.atributos || {ataque:5, defesa:5, forca:5, velocidade:5, habilidade:5};
 
-                let atq = at.ataque || 0;
-                let def = at.defesa || 0;
-                let frc = at.forca || 0;
-                let vel = at.velocidade || 0;
-                let hab = at.habilidade || 0;
+                let atq = at.ataque || 0; let def = at.defesa || 0; let frc = at.forca || 0; let vel = at.velocidade || 0; let hab = at.habilidade || 0;
 
-                // NORMALIZADOR: Se o Pro Player está salvo com pontuação 0-100, converte para 1-15
                 if (isPro && (atq > 20 || def > 20 || frc > 20)) {
-                    atq = Math.round(atq / 6);
-                    def = Math.round(def / 6);
-                    frc = Math.round(frc / 6);
-                    vel = Math.round(vel / 6);
-                    hab = Math.round(hab / 6);
+                    atq = Math.round(atq / 6); def = Math.round(def / 6); frc = Math.round(frc / 6); vel = Math.round(vel / 6); hab = Math.round(hab / 6);
                 }
 
-                // O OVR agora é a MÉDIA EXATA dos 5 atributos para todos
                 let ovrAvg = Math.round((atq + def + frc + vel + hab) / 5);
 
                 let objJogador = {
@@ -81,14 +81,11 @@ function carregarMundo() {
                 };
 
                 todosJogadores.push(objJogador);
-
-                if (time === dadosUsuario.timeAtual) {
-                    meuElenco.push(objJogador);
-                }
+                if (time === dadosUsuario.timeAtual) meuElenco.push(objJogador);
             }
         }
 
-        // 2. CARREGA A VITRINE (PRO PLAYERS NA BASE / AVALIAÇÃO)
+        // 2. CARREGA A VITRINE (PRO PLAYERS NA BASE)
         for (let dono in pros) {
             let p = pros[dono];
             if (p.status === "avaliando" || !p.status) {
@@ -99,36 +96,49 @@ function carregarMundo() {
                 if (p.avaliacoes) {
                     for (let v in p.avaliacoes) {
                         let av = p.avaliacoes[v];
-                        sA += av.ataque || 60; sD += av.defesa || 60;
-                        sF += av.forca || 60; sV += av.velocidade || 60; sH += av.habilidade || 60;
+                        sA += av.ataque || 60; sD += av.defesa || 60; sF += av.forca || 60; sV += av.velocidade || 60; sH += av.habilidade || 60;
                         qtdVotos++;
                     }
                 }
 
-                // Convertendo a média bruta (0-100) para a Escala do Jogo (1-15) dividindo por 6
-                let mxA = Math.round((sA / qtdVotos) / 6);
-                let mxD = Math.round((sD / qtdVotos) / 6);
-                let mxF = Math.round((sF / qtdVotos) / 6);
-                let mxV = Math.round((sV / qtdVotos) / 6);
-                let mxH = Math.round((sH / qtdVotos) / 6);
+                let mxA = Math.round((sA / qtdVotos) / 6); let mxD = Math.round((sD / qtdVotos) / 6); let mxF = Math.round((sF / qtdVotos) / 6); let mxV = Math.round((sV / qtdVotos) / 6); let mxH = Math.round((sH / qtdVotos) / 6);
                 let ovrDinâmico = Math.round((mxA + mxD + mxF + mxV + mxH) / 5);
 
                 todosJogadores.push({
-                    id_banco: "PRO_" + dono,
-                    nome: p.nome + " (PRO)",
-                    idade: 17,
-                    clube: "Base (Em Avaliação)",
-                    posicao: p.posicao,
-                    forca: ovrDinâmico,
-                    atributos: { ataque: mxA, defesa: mxD, forca: mxF, velocidade: mxV, habilidade: mxH },
-                    valor: 0,
-                    isPro: true,
-                    avaliando: true
+                    id_banco: "PRO_" + dono, nome: p.nome + " (PRO)", idade: 17, clube: "Base (Em Avaliação)", posicao: p.posicao,
+                    forca: ovrDinâmico, atributos: { ataque: mxA, defesa: mxD, forca: mxF, velocidade: mxV, habilidade: mxH }, valor: 0, isPro: true, avaliando: true
                 });
             }
         }
 
         todosJogadores.sort((a, b) => b.forca - a.forca);
+
+        // 3. MAPEIA AS TRANSAÇÕES E PROPOSTAS
+        for (let idAlvo in propostas) {
+            let lances = propostas[idAlvo];
+            let alvoEncontrado = todosJogadores.find(j => j.id_banco === idAlvo);
+            let donoAlvo = alvoEncontrado ? alvoEncontrado.clube : "Desconhecido";
+            let nomeAlvo = alvoEncontrado ? alvoEncontrado.nome : "Jogador";
+
+            for (let login in lances) {
+                let lance = lances[login];
+                let comp = lance.time_comprador;
+
+                let isCompReal = timesReaisGlobais.includes(comp);
+                let isVendReal = timesReaisGlobais.includes(donoAlvo.replace(/ /g, '_'));
+
+                let objLance = {
+                    id_alvo: idAlvo, nome_alvo: nomeAlvo, comprador: comp, vendedor: donoAlvo,
+                    valor: lance.valor_oferecido, id_troca: lance.id_jogador_oferecido,
+                    is_comp_real: isCompReal, is_vend_real: isVendReal
+                };
+
+                if (comp === dadosUsuario.timeAtual) propostasEnviadasGlobais.push(objLance);
+                if (donoAlvo === dadosUsuario.timeAtual.replace(/_/g, ' ')) propostasRecebidasGlobais.push(objLance);
+            }
+        }
+
+        atualizarBotaoTransacoes();
         renderizarMercado();
     });
 }
@@ -332,3 +342,104 @@ function deslogar() {
     localStorage.removeItem('treinadorUsuario');
     window.location.href = "index.html";
 }
+
+// ========================================================
+// CENTRAL DE TRANSAÇÕES (VISUAL)
+// ========================================================
+function atualizarBotaoTransacoes() {
+    if (dadosUsuario.timeAtual === "Sem Clube") return; // Sem clube não tem transação
+
+    let btn = document.getElementById('btn-float-transacoes');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'btn-float-transacoes';
+        btn.onclick = abrirModalTransacoes;
+        btn.style.cssText = "position:fixed; bottom:20px; right:20px; background:var(--verde-campo); color:#fff; border:none; border-radius:50px; padding:15px 20px; font-size:14px; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.5); cursor:pointer; z-index:9999; transition:0.3s;";
+        btn.onmouseover = () => btn.style.transform = "scale(1.05)";
+        btn.onmouseout = () => btn.style.transform = "scale(1)";
+        document.body.appendChild(btn);
+    }
+    let total = propostasEnviadasGlobais.length + propostasRecebidasGlobais.length;
+    btn.innerHTML = `💼 Transações <span style="background:#fff; color:var(--verde-campo); padding:2px 8px; border-radius:10px; margin-left:5px;">${total}</span>`;
+}
+
+function abrirModalTransacoes() {
+    let modal = document.getElementById('modal-transacoes-ativas');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-transacoes-ativas';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:center;";
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:550px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; max-height:80vh;">
+            <div style="padding:15px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="color:#ff8c00; margin:0; font-size:18px;">💼 Central de Negociações</h2>
+                <button onclick="document.getElementById('modal-transacoes-ativas').style.display='none'" style="background:transparent; border:none; color:#aaa; font-size:22px; cursor:pointer;">&times;</button>
+            </div>
+            <div style="display:flex; border-bottom:1px solid #333;">
+                <button id="tab-env" onclick="renderListaTransacoes('env')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s;">📤 Ofertas Enviadas</button>
+                <button id="tab-rec" onclick="renderListaTransacoes('rec')" style="flex:1; padding:12px; background:#222; color:#888; border:none; cursor:pointer; font-weight:bold; transition:0.2s;">📥 Ofertas Recebidas</button>
+            </div>
+            <div id="lista-transacoes-conteudo" style="padding:15px; overflow-y:auto; flex:1; min-height: 250px;">
+            </div>
+        </div>
+    `;
+    modal.style.display = 'flex';
+    window.renderListaTransacoes('env');
+}
+
+window.renderListaTransacoes = function(aba) {
+    document.getElementById('tab-env').style.background = aba === 'env' ? '#2a2a2a' : '#111';
+    document.getElementById('tab-env').style.color = aba === 'env' ? '#fff' : '#888';
+    document.getElementById('tab-rec').style.background = aba === 'rec' ? '#2a2a2a' : '#111';
+    document.getElementById('tab-rec').style.color = aba === 'rec' ? '#fff' : '#888';
+
+    const div = document.getElementById('lista-transacoes-conteudo');
+    let html = "";
+    let lista = aba === 'env' ? propostasEnviadasGlobais : propostasRecebidasGlobais;
+
+    if (lista.length === 0) {
+        div.innerHTML = `<p style="text-align:center; color:#666; margin-top:50px;">Nenhuma transação ${aba==='env'?'enviada':'recebida'} no momento.</p>`;
+        return;
+    }
+
+    lista.forEach(t => {
+        let isRec = aba === 'rec';
+        let infoOponente = isRec
+            ? `<span style="color:#aaa;">Proposta de:</span> ${t.comprador.replace(/_/g, ' ')} <span style="font-size:10px;">${t.is_comp_real ? '👤 (Player)' : '🤖 (Máquina)'}</span>`
+            : `<span style="color:#aaa;">Proposta para:</span> ${t.vendedor} <span style="font-size:10px;">${t.is_vend_real ? '👤 (Player)' : '🤖 (Máquina)'}</span>`;
+
+        let txtTroca = t.id_troca ? `<div style="color:var(--verde-campo); font-size:12px; margin-top:4px;">🔄 Inclui troca de passe</div>` : '';
+
+        let acao = !isRec
+            ? `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold;">Cancelar Oferta</button>`
+            : `<div style="margin-top:10px; text-align:center; font-size:12px; color:#aaa; padding:6px; background:#222; border-radius:4px;">A diretoria fechará negócio às 20h! ⏳</div>`;
+
+        html += `
+            <div style="background:#111; border:1px solid #333; padding:12px; border-radius:6px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; padding-bottom:6px; margin-bottom:6px;">
+                    <strong style="color:#ff8c00; font-size:16px;">${t.nome_alvo}</strong>
+                    <strong style="color:#fff;">${formatarDinheiro(t.valor)}</strong>
+                </div>
+                <div style="font-size:13px; color:#ddd;">
+                    ${infoOponente}
+                    ${txtTroca}
+                </div>
+                ${acao}
+            </div>
+        `;
+    });
+    div.innerHTML = html;
+};
+
+window.cancelarPropostaAtiva = function(idAlvo) {
+    if(confirm("Deseja realmente retirar esta oferta da mesa?")) {
+        db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${userLogado}`).remove().then(() => {
+            alert("Proposta cancelada e verba liberada!");
+            document.getElementById('modal-transacoes-ativas').style.display = 'none';
+            carregarMundo(); // Recarrega os dados fresquinhos
+        });
+    }
+};
