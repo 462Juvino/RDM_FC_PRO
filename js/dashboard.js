@@ -629,18 +629,17 @@ const torcidaAmbiente = new Audio();
 function iniciarSomAmbiente(nomeDoTime) {
     if (somAmbienteIniciado || !nomeDoTime || nomeDoTime === "Sem Clube") return;
 
-    // Tenta puxar os sons do time, se falhar puxa um genérico
-    hinoAmbiente.src = `sounds/hino_${nomeDoTime}.mp3`;
+    // Caminhos corrigidos para refletir os nomes reais dos arquivos no seu GitHub!
+    hinoAmbiente.src = `sounds/${nomeDoTime}_Hino.mp3`;
     hinoAmbiente.onerror = () => { hinoAmbiente.src = 'sounds/hino_generico.mp3'; };
-    hinoAmbiente.volume = 0.2; // Hino em 20%
+    hinoAmbiente.volume = 0.2;
     hinoAmbiente.loop = true;
 
-    torcidaAmbiente.src = `sounds/torcida_${nomeDoTime}.mp3`;
+    torcidaAmbiente.src = `sounds/${nomeDoTime}_torcida.mp3`;
     torcidaAmbiente.onerror = () => { torcidaAmbiente.src = 'sounds/torcida_generica.mp3'; };
-    torcidaAmbiente.volume = 0.1; // Torcida em 10%
+    torcidaAmbiente.volume = 0.1;
     torcidaAmbiente.loop = true;
 
-    // Tenta tocar o áudio imediatamente
     let promise = hinoAmbiente.play();
     if (promise !== undefined) {
         promise.then(() => {
@@ -648,7 +647,6 @@ function iniciarSomAmbiente(nomeDoTime) {
             somAmbienteIniciado = true;
             criarBotaoSom();
         }).catch(() => {
-            // Se o navegador bloquear, aguarda o primeiro clique do usuário na tela
             document.body.addEventListener('click', iniciarForcado, { once: true });
         });
     }
@@ -667,20 +665,38 @@ function criarBotaoSom() {
 
     let btn = document.createElement('button');
     btn.id = 'btn-som-ambiente';
-    btn.innerHTML = '🔊 Som: ON';
-    btn.style.cssText = "position:fixed; bottom:20px; left:20px; background:#1a1a1a; color:var(--verde-campo); border:1px solid #444; border-radius:20px; padding:6px 12px; font-size:12px; font-weight:bold; cursor:pointer; z-index:9999; transition:0.3s;";
+    btn.innerHTML = '🔊';
+    btn.title = "Ligar/Desligar Som";
+
+    // Visual elegante e pequeno, feito para se encaixar no cabeçalho
+    btn.style.cssText = "background: transparent; color: var(--verde-campo); border: 1px solid #444; border-radius: 4px; padding: 4px 8px; font-size: 14px; cursor: pointer; transition: 0.2s; margin-left: 15px;";
 
     btn.onclick = (e) => {
-        e.stopPropagation(); // Evita que o clique feche outras coisas
+        e.stopPropagation();
         if (hinoAmbiente.paused) {
             hinoAmbiente.play(); torcidaAmbiente.play();
-            btn.innerHTML = '🔊 Som: ON';
+            btn.innerHTML = '🔊';
             btn.style.color = 'var(--verde-campo)';
+            btn.style.borderColor = '#444';
         } else {
             hinoAmbiente.pause(); torcidaAmbiente.pause();
-            btn.innerHTML = '🔇 Som: OFF';
+            btn.innerHTML = '🔇';
             btn.style.color = '#888';
+            btn.style.borderColor = '#333';
         }
     };
-    document.body.appendChild(btn);
+
+    // Procura o cabeçalho onde fica o "Treinador: Nome" para injetar o botão lá
+    let cabecalhoInfos = document.querySelector('.header-infos');
+    if (cabecalhoInfos) {
+        cabecalhoInfos.style.display = "flex";
+        cabecalhoInfos.style.alignItems = "center";
+        cabecalhoInfos.appendChild(btn);
+    } else {
+        // Fallback caso não ache o cabeçalho exato
+        btn.style.position = "absolute";
+        btn.style.top = "15px";
+        btn.style.right = "250px";
+        document.body.appendChild(btn);
+    }
 }
