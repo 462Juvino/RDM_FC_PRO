@@ -349,18 +349,34 @@ function deslogar() {
 function atualizarBotaoTransacoes() {
     if (dadosUsuario.timeAtual === "Sem Clube") return; // Sem clube não tem transação
 
-    let btn = document.getElementById('btn-float-transacoes');
+    // Remove o botão flutuante antigo se ele ainda estiver perdido no cache da tela
+    let floatBtn = document.getElementById('btn-float-transacoes');
+    if (floatBtn) floatBtn.remove();
+
+    let btn = document.getElementById('btn-transacoes-inline');
     if (!btn) {
         btn = document.createElement('button');
-        btn.id = 'btn-float-transacoes';
+        btn.id = 'btn-transacoes-inline';
         btn.onclick = abrirModalTransacoes;
-        btn.style.cssText = "position:fixed; bottom:20px; right:20px; background:var(--verde-campo); color:#fff; border:none; border-radius:50px; padding:15px 20px; font-size:14px; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.5); cursor:pointer; z-index:9999; transition:0.3s;";
-        btn.onmouseover = () => btn.style.transform = "scale(1.05)";
-        btn.onmouseout = () => btn.style.transform = "scale(1)";
-        document.body.appendChild(btn);
+        // Visual delicado, compacto e escuro, combinando com o tema
+        btn.style.cssText = "background: #2a2a2a; color: #ccc; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 13px; font-weight: normal; cursor: pointer; margin-left: 15px; vertical-align: middle; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px;";
+        btn.onmouseover = () => { btn.style.background = "#333"; btn.style.color = "#fff"; };
+        btn.onmouseout = () => { btn.style.background = "#2a2a2a"; btn.style.color = "#ccc"; };
+
+        // Procura o título principal da página (Mercado da Bola) e cola o botão logo após o texto!
+        let titulo = document.querySelector('h1, h2, h3');
+        if (titulo) {
+            titulo.appendChild(btn);
+        } else {
+            document.body.appendChild(btn); // Segurança caso o título falhe
+        }
     }
+
     let total = propostasEnviadasGlobais.length + propostasRecebidasGlobais.length;
-    btn.innerHTML = `💼 Transações <span style="background:#fff; color:var(--verde-campo); padding:2px 8px; border-radius:10px; margin-left:5px;">${total}</span>`;
+    let corBadge = total > 0 ? "var(--verde-campo)" : "#555";
+    let corTexto = total > 0 ? "#fff" : "#aaa";
+
+    btn.innerHTML = `💼 Transações <span style="background:${corBadge}; color:${corTexto}; padding:2px 6px; border-radius:10px; font-size:11px; font-weight:bold;">${total}</span>`;
 }
 
 function abrirModalTransacoes() {
