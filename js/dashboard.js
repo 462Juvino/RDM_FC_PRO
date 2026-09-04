@@ -102,6 +102,9 @@ async function sortearTimeParaNovoTreinador() {
 }
 
 function carregarVisaoGeralClube() {
+    iniciarSomAmbiente(dadosUsuario.timeAtual); // LIGA O SOM AMBIENTE! 🎵
+
+    // Código antigo que já estava aqui carregando o painel...
     const area = document.getElementById('area-trabalho');
     const timeIdBanco = dadosUsuario.timeAtual;
     const meuTime = timeIdBanco.replace(/_/g, ' ');
@@ -614,4 +617,70 @@ function deslogar() {
     localStorage.removeItem('treinadorLiga');
     localStorage.removeItem('treinadorUsuario');
     window.location.href = "index.html";
+}
+
+// ==========================================
+// SISTEMA DE SOM AMBIENTE DA VISÃO GERAL
+// ==========================================
+let somAmbienteIniciado = false;
+const hinoAmbiente = new Audio();
+const torcidaAmbiente = new Audio();
+
+function iniciarSomAmbiente(nomeDoTime) {
+    if (somAmbienteIniciado || !nomeDoTime || nomeDoTime === "Sem Clube") return;
+
+    // Tenta puxar os sons do time, se falhar puxa um genérico
+    hinoAmbiente.src = `sounds/hino_${nomeDoTime}.mp3`;
+    hinoAmbiente.onerror = () => { hinoAmbiente.src = 'sounds/hino_generico.mp3'; };
+    hinoAmbiente.volume = 0.2; // Hino em 20%
+    hinoAmbiente.loop = true;
+
+    torcidaAmbiente.src = `sounds/torcida_${nomeDoTime}.mp3`;
+    torcidaAmbiente.onerror = () => { torcidaAmbiente.src = 'sounds/torcida_generica.mp3'; };
+    torcidaAmbiente.volume = 0.1; // Torcida em 10%
+    torcidaAmbiente.loop = true;
+
+    // Tenta tocar o áudio imediatamente
+    let promise = hinoAmbiente.play();
+    if (promise !== undefined) {
+        promise.then(() => {
+            torcidaAmbiente.play().catch(()=>{});
+            somAmbienteIniciado = true;
+            criarBotaoSom();
+        }).catch(() => {
+            // Se o navegador bloquear, aguarda o primeiro clique do usuário na tela
+            document.body.addEventListener('click', iniciarForcado, { once: true });
+        });
+    }
+}
+
+function iniciarForcado() {
+    if (somAmbienteIniciado) return;
+    hinoAmbiente.play().catch(()=>{});
+    torcidaAmbiente.play().catch(()=>{});
+    somAmbienteIniciado = true;
+    criarBotaoSom();
+}
+
+function criarBotaoSom() {
+    if (document.getElementById('btn-som-ambiente')) return;
+
+    let btn = document.createElement('button');
+    btn.id = 'btn-som-ambiente';
+    btn.innerHTML = '🔊 Som: ON';
+    btn.style.cssText = "position:fixed; bottom:20px; left:20px; background:#1a1a1a; color:var(--verde-campo); border:1px solid #444; border-radius:20px; padding:6px 12px; font-size:12px; font-weight:bold; cursor:pointer; z-index:9999; transition:0.3s;";
+
+    btn.onclick = (e) => {
+        e.stopPropagation(); // Evita que o clique feche outras coisas
+        if (hinoAmbiente.paused) {
+            hinoAmbiente.play(); torcidaAmbiente.play();
+            btn.innerHTML = '🔊 Som: ON';
+            btn.style.color = 'var(--verde-campo)';
+        } else {
+            hinoAmbiente.pause(); torcidaAmbiente.pause();
+            btn.innerHTML = '🔇 Som: OFF';
+            btn.style.color = '#888';
+        }
+    };
+    document.body.appendChild(btn);
 }
