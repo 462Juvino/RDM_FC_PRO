@@ -130,7 +130,8 @@ function carregarMundo() {
                 let objLance = {
                     id_alvo: idAlvo, nome_alvo: nomeAlvo, comprador: comp, vendedor: donoAlvo,
                     valor: lance.valor_oferecido, id_troca: lance.id_jogador_oferecido,
-                    is_comp_real: isCompReal, is_vend_real: isVendReal
+                    is_comp_real: isCompReal, is_vend_real: isVendReal,
+                    data_proposta: lance.data_proposta // Puxa a data exata da oferta
                 };
 
                 if (comp === dadosUsuario.timeAtual) propostasEnviadasGlobais.push(objLance);
@@ -437,11 +438,20 @@ window.renderListaTransacoes = function(aba) {
             ? `<span style="color:#aaa;">Proposta de:</span> ${t.comprador.replace(/_/g, ' ')} <span style="font-size:10px;">${t.is_comp_real ? '👤 (Player)' : '🤖 (Máquina)'}</span>`
             : `<span style="color:#aaa;">Proposta para:</span> ${t.vendedor} <span style="font-size:10px;">${t.is_vend_real ? '👤 (Player)' : '🤖 (Máquina)'}</span>`;
 
-        let txtTroca = t.id_troca ? `<div style="color:var(--verde-campo); font-size:12px; margin-top:4px;">🔄 Inclui troca de passe</div>` : '';
+        let txtTroca = t.id_troca ? `<div style="color:var(--verde-campo); font-size:12px; margin-top:4px;">🔄 Inclui atleta na troca</div>` : '';
+
+        // Formata a data para o padrão Brasileiro
+        let dataFormatada = "Hoje";
+        if (t.data_proposta) {
+            let d = new Date(t.data_proposta);
+            dataFormatada = d.toLocaleDateString('pt-BR') + " às " + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+        }
+
+        let txtInfo = `<div style="color:#888; font-size:11px; margin-top:8px; border-top: 1px dashed #333; padding-top: 6px;">📅 Enviada em: ${dataFormatada}<br>⏳ Expira hoje, no fechamento do mercado (20h).</div>`;
 
         let acao = !isRec
-            ? `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold;">Cancelar Oferta</button>`
-            : `<div style="margin-top:10px; text-align:center; font-size:12px; color:#aaa; padding:6px; background:#222; border-radius:4px;">A diretoria fechará negócio às 20h! ⏳</div>`;
+            ? `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">Retirar Oferta</button>`
+            : `<div style="margin-top:10px; text-align:center; font-size:12px; color:#aaa; padding:6px; background:#222; border-radius:4px;">O Motor P2P aprovará a maior oferta às 20h! ⏳</div>`;
 
         html += `
             <div style="background:#111; border:1px solid #333; padding:12px; border-radius:6px; margin-bottom:12px;">
@@ -452,6 +462,7 @@ window.renderListaTransacoes = function(aba) {
                 <div style="font-size:13px; color:#ddd;">
                     ${infoOponente}
                     ${txtTroca}
+                    ${txtInfo}
                 </div>
                 ${acao}
             </div>
