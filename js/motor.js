@@ -503,6 +503,72 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
             updates[`ligas/${liga}/calendario`] = cal;
         }
 
+        // ========================================================
+        // 🏆 SISTEMA DE FASE (MOMENTO) - BÔNUS AO VIVO TOP 10
+        // ========================================================
+        let todosParaRanking = [];
+        for (let t in times) {
+            if (times[t].jogadores) {
+                for (let idJog in times[t].jogadores) {
+                    todosParaRanking.push({ time: t, id: idJog, dados: times[t].jogadores[idJog] });
+                }
+            }
+        }
+
+        // 1. Limpa o bônus da rodada anterior (Se cair de posição, perde a força)
+        todosParaRanking.forEach(jog => {
+            let j = jog.dados;
+            if (j.bonus_ranking_ativo) {
+                if(j.atributos) {
+                    j.atributos.ataque = Math.max(1, (j.atributos.ataque || 0) - (j.bonus_ranking_ativo.ataque || 0));
+                    j.atributos.habilidade = Math.max(1, (j.atributos.habilidade || 0) - (j.bonus_ranking_ativo.habilidade || 0));
+                }
+                j.bonus_ranking_ativo = null;
+            }
+        });
+
+        // 2. Lê a Tabela Atual e encontra os 10 melhores
+        let topGols = [...todosParaRanking].filter(j => j.dados.estatisticas && j.dados.estatisticas.gols > 0)
+            .sort((a,b) => b.dados.estatisticas.gols - a.dados.estatisticas.gols).slice(0, 10);
+
+        let topAsts = [...todosParaRanking].filter(j => j.dados.estatisticas && j.dados.estatisticas.assistencias > 0)
+            .sort((a,b) => b.dados.estatisticas.assistencias - a.dados.estatisticas.assistencias).slice(0, 10);
+
+        // 3. Injeta a Bonificação (1º ganha 5.0, caindo 0.5 até o 10º ganhar 0.5)
+        topGols.forEach((jog, i) => {
+            let bonus = 5.0 - (i * 0.5);
+            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0 };
+            jog.dados.bonus_ranking_ativo.ataque = bonus;
+            jog.dados.atributos.ataque = (jog.dados.atributos.ataque || 0) + bonus;
+        });
+
+        topAsts.forEach((jog, i) => {
+            let bonus = 5.0 - (i * 0.5);
+            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0 };
+            jog.dados.bonus_ranking_ativo.habilidade = bonus;
+            jog.dados.atributos.habilidade = (jog.dados.atributos.habilidade || 0) + bonus;
+        });
+
+        // 4. A Regra de Ouro: O Valor de Mercado obedece ao OVR Dinâmico
+        todosParaRanking.forEach(jog => {
+            let j = jog.dados;
+            let at = j.atributos || {};
+
+            let atq = at.ataque || 5; let def = at.defesa || 5; let frc = at.forca || 5; let vel = at.velocidade || 5; let hab = at.habilidade || 5;
+
+            // Simula a escala oficial para precificar corretamente
+            if ((j.pro_player || (j.nome && j.nome.includes("(PRO)"))) && (atq > 20 || def > 20)) {
+                atq /= 6; def /= 6; frc /= 6; vel /= 6; hab /= 6;
+            }
+
+            let ovrMercado = (atq + def + frc + vel + hab) / 5;
+
+            // Ex: Se o cara ganhou +5 e o OVR subiu para 12, ele agora vale R$ 30 milhões!
+            j.valor_mercado = Math.round(ovrMercado * 2500000);
+
+            updates[`banco_global_times/${jog.time}/jogadores/${jog.id}`] = j;
+        });
+
         // --- PASSO D: FINALIZAR E AVISAR ---
         if (horaDeRodar) {
             updates[`ligas/${liga}/sistema/ultima_simulacao`] = dataAtualStr;
