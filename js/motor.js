@@ -97,16 +97,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
 
         let transferenciasRealizadas = 0;
 
-        // Se o motor ligou (Ao vivo ou Trator atrasado), o mercado DEVE rodar!
         if (propostas) {
             for (let idAlvo in propostas) {
                 let lances = propostas[idAlvo];
-                let maiorScore = 0;
-                let lanceVencedor = null;
-                let loginVencedor = "";
-
                 let timeDoAlvo = null;
                 let dadosDoAlvo = null;
+
                 for (let t in times) {
                     if (times[t].jogadores && times[t].jogadores[idAlvo]) {
                         timeDoAlvo = t;
@@ -115,7 +111,29 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     }
                 }
 
-                if (!dadosDoAlvo) continue;
+                // Se o jogador foi apagado do banco, cancela a oferta
+                if (!dadosDoAlvo) {
+                    updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
+                    continue;
+                }
+
+                // 🛡️ PROTEÇÃO: O dono deste clube é um Player Humano?
+                let isDonoHumano = false;
+                for (let u in usuarios) {
+                    if (usuarios[u].timeAtual === timeDoAlvo) { isDonoHumano = true; break; }
+                }
+
+                if (isDonoHumano) {
+                    // A IA PULA JOGADORES HUMANOS. A proposta fica lá aguardando o clique de "Aceitar/Recusar" na tela do jogador!
+                    continue;
+                }
+
+                // ============================================
+                // A PARTIR DAQUI: SÓ CLUBES DA MÁQUINA (IA)
+                // ============================================
+                let maiorScore = 0;
+                let lanceVencedor = null;
+                let loginVencedor = "";
                 let valorMinimoIA = dadosDoAlvo.valor_mercado * 0.9;
 
                 for (let login in lances) {
@@ -125,9 +143,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     let dadosJogadorOferecido = null;
                     if (lance.id_jogador_oferecido) {
                         dadosJogadorOferecido = times[lance.time_comprador].jogadores[lance.id_jogador_oferecido];
-                        if (dadosJogadorOferecido) {
-                            scoreLance += dadosJogadorOferecido.valor_mercado;
-                        }
+                        if (dadosJogadorOferecido) scoreLance += dadosJogadorOferecido.valor_mercado;
                     }
 
                     if (scoreLance > maiorScore && scoreLance >= valorMinimoIA) {
@@ -153,8 +169,10 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                         updates[`banco_global_times/${timeDoAlvo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = lanceVencedor.dados_jogador_oferecido;
                     }
                 }
+
+                // Apaga APENAS o leilão desse jogador da IA (não limpa mais o mercado inteiro)
+                updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
             }
-            updates[`ligas/${liga}/mercado_propostas`] = null;
         }
 
         // --- PASSO B: FORMATURA DOS PRO PLAYERS (A PARTIR DA 5ª RODADA) ---

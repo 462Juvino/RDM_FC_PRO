@@ -131,7 +131,8 @@ function carregarMundo() {
                     id_alvo: idAlvo, nome_alvo: nomeAlvo, comprador: comp, vendedor: donoAlvo,
                     valor: lance.valor_oferecido, id_troca: lance.id_jogador_oferecido,
                     is_comp_real: isCompReal, is_vend_real: isVendReal,
-                    data_proposta: lance.data_proposta // Puxa a data exata da oferta
+                    data_proposta: lance.data_proposta,
+                    login_comprador: login // Importante para sabermos quem pagar!
                 };
 
                 if (comp === dadosUsuario.timeAtual) propostasEnviadasGlobais.push(objLance);
@@ -449,9 +450,18 @@ window.renderListaTransacoes = function(aba) {
 
         let txtInfo = `<div style="color:#888; font-size:11px; margin-top:8px; border-top: 1px dashed #333; padding-top: 6px;">📅 Enviada em: ${dataFormatada}<br>⏳ Expira hoje, no fechamento do mercado (20h).</div>`;
 
-        let acao = !isRec
-            ? `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">Retirar Oferta</button>`
-            : `<div style="margin-top:10px; text-align:center; font-size:12px; color:#aaa; padding:6px; background:#222; border-radius:4px;">O Motor P2P aprovará a maior oferta às 20h! ⏳</div>`;
+        let acao = "";
+
+        if (!isRec) {
+            acao = `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">Retirar Oferta</button>`;
+        } else {
+            acao = `
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button onclick="aceitarProposta('${t.id_alvo}', '${t.login_comprador}')" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">✅ Aceitar</button>
+                    <button onclick="recusarProposta('${t.id_alvo}', '${t.login_comprador}')" style="flex:1; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">❌ Recusar</button>
+                </div>
+            `;
+        }
 
         html += `
             <div style="background:#111; border:1px solid #333; padding:12px; border-radius:6px; margin-bottom:12px;">
@@ -476,7 +486,69 @@ window.cancelarPropostaAtiva = function(idAlvo) {
         db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${userLogado}`).remove().then(() => {
             alert("Proposta cancelada e verba liberada!");
             document.getElementById('modal-transacoes-ativas').style.display = 'none';
-            carregarMundo(); // Recarrega os dados fresquinhos
+            carregarMundo();
         });
+    }
+};
+
+window.recusarProposta = function(idAlvo, loginComprador) {
+    if(confirm("Deseja realmente RECUSAR e apagar esta oferta?")) {
+        db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).remove().then(() => {
+            alert("A oferta foi recusada com sucesso.");
+            document.getElementById('modal-transacoes-ativas').style.display = 'none';
+            carregarMundo();
+        });
+    }
+};
+
+window.aceitarProposta = async function(idAlvo, loginComprador) {
+    if(!confirm("Atenção! Ao aceitar, seu jogador será transferido na hora. Confirmar Venda?")) return;
+
+    try {
+        const snapBanco = await db.ref('banco_global_times').once('value');
+        const banco = snapBanco.val();
+        const snapUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        const usuarios = snapUsers.val();
+        const snapProposta = await db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).once('value');
+        const lance = snapProposta.val();
+
+        if(!lance) return alert("Esta proposta já não existe mais (pode ter sido cancelada pelo comprador).");
+
+        let comprador = usuarios[loginComprador];
+        let meuTime = dadosUsuario.timeAtual;
+        let timeComprador = lance.time_comprador;
+
+        if(comprador.caixaClube < lance.valor_oferecido) {
+            return alert("O clube comprador gastou dinheiro com outras coisas e não tem saldo para honrar esta proposta!");
+        }
+
+        let dadosDoAlvo = banco[meuTime].jogadores[idAlvo];
+        let dadosTroca = lance.id_jogador_oferecido ? banco[timeComprador].jogadores[lance.id_jogador_oferecido] : null;
+
+        let updates = {};
+
+        // 1. Move o Dinheiro
+        updates[`ligas/${ligaLogada}/usuarios/${loginComprador}/caixaClube`] = comprador.caixaClube - lance.valor_oferecido;
+        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + lance.valor_oferecido;
+
+        // 2. Transfere o Jogador Vendido
+        updates[`banco_global_times/${meuTime}/jogadores/${idAlvo}`] = null;
+        updates[`banco_global_times/${timeComprador}/jogadores/${idAlvo}`] = dadosDoAlvo;
+
+        // 3. Transfere o Jogador Oferecido na Troca (se houver)
+        if(dadosTroca && lance.id_jogador_oferecido) {
+            updates[`banco_global_times/${timeComprador}/jogadores/${lance.id_jogador_oferecido}`] = null;
+            updates[`banco_global_times/${meuTime}/jogadores/${lance.id_jogador_oferecido}`] = dadosTroca;
+        }
+
+        // 4. Apaga TODAS as outras propostas que esse jogador tinha (pois agora ele é de outro time)
+        updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}`] = null;
+
+        await db.ref().update(updates);
+        alert("💰 Negócio Fechado! O dinheiro está no seu caixa e os papéis foram assinados.");
+        location.reload();
+    } catch(e) {
+        console.error(e);
+        alert("Erro no servidor ao processar a venda.");
     }
 };
