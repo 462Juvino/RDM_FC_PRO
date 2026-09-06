@@ -451,14 +451,15 @@ window.renderListaTransacoes = function(aba) {
         let txtInfo = `<div style="color:#888; font-size:11px; margin-top:8px; border-top: 1px dashed #333; padding-top: 6px;">📅 Enviada em: ${dataFormatada}<br>⏳ Expira hoje, no fechamento do mercado (20h).</div>`;
 
         let acao = "";
+        let nomeEscapado = t.nome_alvo.replace(/'/g, "\\'"); // Evita erro se o nome tiver aspas
 
         if (!isRec) {
             acao = `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">Retirar Oferta</button>`;
         } else {
             acao = `
                 <div style="display:flex; gap:8px; margin-top:10px;">
-                    <button onclick="aceitarProposta('${t.id_alvo}', '${t.login_comprador}')" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">✅ Aceitar</button>
-                    <button onclick="recusarProposta('${t.id_alvo}', '${t.login_comprador}')" style="flex:1; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">❌ Recusar</button>
+                    <button onclick="aceitarProposta('${t.id_alvo}', '${t.login_comprador}', '${nomeEscapado}')" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">✅ Aceitar</button>
+                    <button onclick="recusarProposta('${t.id_alvo}', '${t.login_comprador}', '${nomeEscapado}')" style="flex:1; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">❌ Recusar</button>
                 </div>
             `;
         }
@@ -491,9 +492,19 @@ window.cancelarPropostaAtiva = function(idAlvo) {
     }
 };
 
-window.recusarProposta = function(idAlvo, loginComprador) {
+window.recusarProposta = function(idAlvo, loginComprador, nomeAlvo) {
     if(confirm("Deseja realmente RECUSAR e apagar esta oferta?")) {
-        db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).remove().then(() => {
+        let idMsg = "msg_" + Date.now();
+        let updates = {};
+        updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`] = null;
+        // ✉️ Envia a notificação de recusa
+        updates[`ligas/${ligaLogada}/caixa_mensagens/${loginComprador}/${idMsg}`] = {
+            tipo: 'recusa',
+            texto: `A sua oferta por ${nomeAlvo} foi RECUSADA pelo clube dono.`,
+            data: new Date().toISOString()
+        };
+
+        db.ref().update(updates).then(() => {
             alert("A oferta foi recusada com sucesso.");
             document.getElementById('modal-transacoes-ativas').style.display = 'none';
             carregarMundo();
@@ -501,7 +512,7 @@ window.recusarProposta = function(idAlvo, loginComprador) {
     }
 };
 
-window.aceitarProposta = async function(idAlvo, loginComprador) {
+window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
     if(!confirm("Atenção! Ao aceitar, seu jogador será transferido na hora. Confirmar Venda?")) return;
 
     try {
@@ -527,22 +538,26 @@ window.aceitarProposta = async function(idAlvo, loginComprador) {
 
         let updates = {};
 
-        // 1. Move o Dinheiro
         updates[`ligas/${ligaLogada}/usuarios/${loginComprador}/caixaClube`] = comprador.caixaClube - lance.valor_oferecido;
         updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + lance.valor_oferecido;
 
-        // 2. Transfere o Jogador Vendido
         updates[`banco_global_times/${meuTime}/jogadores/${idAlvo}`] = null;
         updates[`banco_global_times/${timeComprador}/jogadores/${idAlvo}`] = dadosDoAlvo;
 
-        // 3. Transfere o Jogador Oferecido na Troca (se houver)
         if(dadosTroca && lance.id_jogador_oferecido) {
             updates[`banco_global_times/${timeComprador}/jogadores/${lance.id_jogador_oferecido}`] = null;
             updates[`banco_global_times/${meuTime}/jogadores/${lance.id_jogador_oferecido}`] = dadosTroca;
         }
 
-        // 4. Apaga TODAS as outras propostas que esse jogador tinha (pois agora ele é de outro time)
         updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}`] = null;
+
+        // ✉️ Envia a notificação de Sucesso!
+        let idMsg = "msg_" + Date.now();
+        updates[`ligas/${ligaLogada}/caixa_mensagens/${loginComprador}/${idMsg}`] = {
+            tipo: 'sucesso',
+            texto: `A sua oferta por ${nomeAlvo} foi ACEITA! O jogador já está no seu elenco.`,
+            data: new Date().toISOString()
+        };
 
         await db.ref().update(updates);
         alert("💰 Negócio Fechado! O dinheiro está no seu caixa e os papéis foram assinados.");

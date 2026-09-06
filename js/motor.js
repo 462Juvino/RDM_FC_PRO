@@ -707,8 +707,37 @@ async function carregarNotificacoesGlobais() {
             }
         }
 
+        // CHECAGEM 3: CAIXA DE MENSAGENS (Alertas de Transferência)
+        if (ligaDados.caixa_mensagens && ligaDados.caixa_mensagens[userLogadoMotor]) {
+            let msgs = ligaDados.caixa_mensagens[userLogadoMotor];
+            for (let m in msgs) {
+                let msg = msgs[m];
+                countNotif++;
+                let cor = msg.tipo === 'sucesso' ? '#00b853' : '#dc3545';
+
+                htmlNotif += `<div onclick="marcarMensagemLida('${m}')" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid ${cor}; cursor: pointer; transition: 0.2s; margin-top: 5px;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                    <strong style="color:${cor}; font-size:12px;">Retorno do Mercado</strong><br>
+                    <span style="color:#ccc; font-size:11px;">${msg.texto}</span>
+                    <div style="text-align:right; margin-top:4px;"><small style="color:#666;">Clique para apagar aviso</small></div>
+                </div>`;
+            }
+        }
+
         if (countNotif > 0) {
             badge.style.display = 'block';
+            badge.innerText = countNotif;
+            lista.innerHTML = htmlNotif;
+        } else {
+            badge.style.display = 'none';
+            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
+        }
+    });
+}
+
+// Apaga a mensagem quando o usuário clica nela!
+window.marcarMensagemLida = function(idMsg) {
+    db.ref(`ligas/${ligaMotor}/caixa_mensagens/${userLogadoMotor}/${idMsg}`).remove();
+};
             badge.innerText = countNotif;
             lista.innerHTML = htmlNotif;
         } else {
