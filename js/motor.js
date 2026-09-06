@@ -97,8 +97,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
 
         let transferenciasRealizadas = 0;
 
-        // Roda o mercado apenas no horário oficial da noite
-        if (propostas && horaDeRodar) {
+        // Se o motor ligou (Ao vivo ou Trator atrasado), o mercado DEVE rodar!
+        if (propostas) {
             for (let idAlvo in propostas) {
                 let lances = propostas[idAlvo];
                 let maiorScore = 0;
@@ -160,7 +160,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
         // --- PASSO B: FORMATURA DOS PRO PLAYERS (A PARTIR DA 5ª RODADA) ---
         let rodadaAtual = cal ? (cal.rodadaAtual || 1) : 1;
 
-        if (rodadaAtual >= 5 && horaDeRodar) {
+        if (rodadaAtual >= 5) {
             const snapProPlayers = await db.ref(`ligas/${liga}/pro_players`).once('value');
             const proPlayers = snapProPlayers.val();
 
