@@ -583,7 +583,13 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
         if (transferenciasRealizadas > 0) {
             dispararNotificacao("Mercado Fechado! 🛒", "As negociações foram encerradas e jogadores foram transferidos.");
         }
-        dispararNotificacao("Fim do Aquecimento! ⚽", "As escalações foram bloqueadas e os times estão prontos no túnel do estádio!");
+
+        // Verifica se o motor rodou ao vivo (20h) ou se o Trator foi acionado para cobrir o atraso
+        if (horaDeRodar) {
+            dispararNotificacao("Fim do Aquecimento! ⚽", "As escalações foram bloqueadas e a bola vai rolar!");
+        } else {
+            dispararNotificacao("🚜 Trator Acionado!", "O sistema simulou todas as rodadas e transações que estavam atrasadas no calendário.");
+        }
 
     } catch (e) {
         console.error("Erro crítico no Motor P2P:", e);
