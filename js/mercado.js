@@ -563,14 +563,14 @@ window.renderListaTransacoes = function(aba) {
         let htmlBanco = `
             <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
                 <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
-                <p style="color:#888; font-size:12px;">Deposite seu dinheiro aqui. Em breve, renderá juros ou outros clubes poderão pedir emprestado!</p>
+                <p style="color:#888; font-size:12px;">Deposite seu dinheiro aqui. Renderá juros ou outros clubes poderão pedir emprestado!</p>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <span style="color:#ccc; font-size:14px;">Dinheiro Guardado:</span>
                     <strong style="color:#fff; font-size:18px;">${formatarDinheiro(meuSaldoCofre)}</strong>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button onclick="depositarCofre()" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📥 Depositar</button>
-                    <button onclick="sacarCofre(${meuSaldoCofre})" style="flex:1; padding:8px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📤 Sacar</button>
+                    <button onclick="abrirModalCaixaEletronico('depositar', ${meuSaldoCofre})" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📥 Depositar</button>
+                    <button onclick="abrirModalCaixaEletronico('sacar', ${meuSaldoCofre})" style="flex:1; padding:8px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📤 Sacar</button>
                 </div>
             </div>
 
@@ -591,7 +591,7 @@ window.renderListaTransacoes = function(aba) {
                     <strong style="color:#fff; font-size:14px;">${clube.replace(/_/g, ' ')} ${badgeIA}</strong><br>
                     <span style="color:#00b853; font-size:12px;">Disponível: ${formatarDinheiro(investidor.saldo)}</span>
                 </div>
-                <button onclick="alert('Na Etapa 3, abriremos o contrato para você pedir os ${formatarDinheiro(investidor.saldo)} emprestados!')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
+                <button onclick="abrirModalEmprestimoFinanceiro('${clube}', ${investidor.saldo}, ${investidor.is_ia})" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
             </div>`;
         }
 
@@ -826,59 +826,172 @@ window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
 })();
 
 // ==========================================
-// FUNÇÕES DO BANCO CENTRAL (DEPÓSITOS E SAQUES)
+// FUNÇÕES DO BANCO CENTRAL (UI MODERNA E CONTRATOS)
 // ==========================================
-window.depositarCofre = function() {
-    let valorStr = prompt(`Quanto deseja DEPOSITAR no cofre?\n\nSeu saldo atual: ${formatarDinheiro(saldoAtual)}\n(Digite apenas números, sem pontos)`);
-    if (!valorStr) return;
 
-    let valor = parseInt(valorStr);
-    if (isNaN(valor) || valor <= 0) return alert("Valor inválido.");
-    if (valor > saldoAtual) return alert("Você não tem esse saldo disponível no caixa do clube!");
+// 1. MODAL DE DEPÓSITO E SAQUE (Adeus Prompts feios!)
+window.abrirModalCaixaEletronico = function(acao, saldoCofre) {
+    let titulo = acao === 'depositar' ? '📥 Depositar no Cofre' : '📤 Sacar do Cofre';
+    let max = acao === 'depositar' ? saldoAtual : saldoCofre;
+    let desc = acao === 'depositar' ? 'Guarde seu dinheiro para render juros ou emprestar.' : 'Resgate seu fundo de investimento para o caixa do clube.';
 
-    let meuTime = dadosUsuario.timeAtual;
-    let saldoCofre = fundosInvestimentoGlobais[meuTime] ? fundosInvestimentoGlobais[meuTime].saldo : 0;
+    let modal = document.createElement('div');
+    modal.id = 'modal-caixa-eletronico';
+    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10001; display:flex; justify-content:center; align-items:center;";
 
-    let updates = {};
-    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual - valor;
-    updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = {
-        saldo: saldoCofre + valor,
-        dono_login: userLogado,
-        is_ia: false
-    };
-
-    db.ref().update(updates).then(() => {
-        alert(`Sucesso! ${formatarDinheiro(valor)} foram guardados no cofre.`);
-        document.getElementById('modal-transacoes-ativas').style.display = 'none';
-        carregarMundo();
-    });
+    modal.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:8px; border:1px solid #444; padding:20px;">
+            <h2 style="color:${acao === 'depositar' ? 'var(--verde-campo)' : '#ff8c00'}; margin-top:0;">${titulo}</h2>
+            <p style="color:#888; font-size:13px;">${desc}</p>
+            <div style="margin-bottom:15px;">
+                <label style="color:#aaa; font-size:12px;">Valor (Disponível: ${formatarDinheiro(max)})</label>
+                <input type="number" id="input-valor-caixa" placeholder="Ex: 5000000" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="confirmarCaixaEletronico('${acao}', ${max}, ${saldoCofre})" style="flex:1; padding:10px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Confirmar</button>
+                <button onclick="document.getElementById('modal-caixa-eletronico').remove()" style="flex:1; padding:10px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 };
 
-window.sacarCofre = function(saldoAtualCofre) {
-    if (saldoAtualCofre <= 0) return alert("Seu cofre está vazio!");
-
-    let valorStr = prompt(`Quanto deseja SACAR para o caixa do clube?\n\nDisponível no Cofre: ${formatarDinheiro(saldoAtualCofre)}\n(Digite apenas números, sem pontos)`);
-    if (!valorStr) return;
-
-    let valor = parseInt(valorStr);
-    if (isNaN(valor) || valor <= 0) return alert("Valor inválido.");
-    if (valor > saldoAtualCofre) return alert("Você não tem tudo isso guardado no cofre!");
+window.confirmarCaixaEletronico = function(acao, maxDisponivel, saldoAtualCofre) {
+    let valor = parseInt(document.getElementById('input-valor-caixa').value);
+    if (isNaN(valor) || valor <= 0) return alert("Por favor, insira um valor válido.");
+    if (valor > maxDisponivel) return alert("Você não tem saldo suficiente para esta operação!");
 
     let meuTime = dadosUsuario.timeAtual;
     let updates = {};
 
-    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual + valor;
-
-    let novoSaldoCofre = saldoAtualCofre - valor;
-    if (novoSaldoCofre > 0) {
-        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}/saldo`] = novoSaldoCofre;
+    if (acao === 'depositar') {
+        saldoAtual -= valor; // Atualiza variável global na hora
+        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual;
+        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = { saldo: saldoAtualCofre + valor, dono_login: userLogado, is_ia: false };
     } else {
-        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = null; // Zera e some da lista
+        saldoAtual += valor;
+        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual;
+        if (saldoAtualCofre - valor > 0) {
+            updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}/saldo`] = saldoAtualCofre - valor;
+        } else {
+            updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = null;
+        }
     }
 
     db.ref().update(updates).then(() => {
-        alert(`Sucesso! ${formatarDinheiro(valor)} foram transferidos de volta ao seu caixa.`);
-        document.getElementById('modal-transacoes-ativas').style.display = 'none';
+        document.getElementById('modal-caixa-eletronico').remove();
+        document.getElementById('saldo-treinador').innerText = formatarDinheiro(saldoAtual); // Atualiza a tela sem dar F5!
+
+        // Mensagem Customizada de Sucesso
+        let divSucesso = document.createElement('div');
+        divSucesso.style.cssText = "position:fixed; top:20px; right:20px; background:var(--verde-campo); color:#fff; padding:15px; border-radius:4px; z-index:10002; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);";
+        divSucesso.innerText = "Transação realizada com sucesso!";
+        document.body.appendChild(divSucesso);
+        setTimeout(() => divSucesso.remove(), 3000);
+
+        carregarMundo(); // Recarrega os dados do modal principal
+    });
+};
+
+// 2. MODAL DE EMPRÉSTIMO (O CONTRATO)
+window.abrirModalEmprestimoFinanceiro = function(nomeCredor, maxCredor, isBancoCentral) {
+    // Regras Duras do Banco Central vs Investidores Comuns
+    let limiteEmprestimo = isBancoCentral ? Math.min(20000000, maxCredor) : maxCredor; // Banco Central limita a 20 Milhões
+    let taxaBase = isBancoCentral ? 0.05 : 0.02; // Banco Central cobra 5% por rodada, players cobram 2%
+    let infoJuros = isBancoCentral ? "Juros Altos (5% por rodada)" : "Juros Amigáveis (2% por rodada)";
+
+    let modal = document.createElement('div');
+    modal.id = 'modal-emprestimo-fin';
+    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10001; display:flex; justify-content:center; align-items:center;";
+
+    modal.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:450px; border-radius:8px; border:1px solid #444; padding:20px;">
+            <h2 style="color:#dc3545; margin-top:0;">💸 Contrato de Crédito</h2>
+            <p style="color:#888; font-size:12px;">Credor: <strong style="color:#fff;">${nomeCredor.replace(/_/g, ' ')}</strong><br>Regra: ${infoJuros}</p>
+
+            <div style="margin-bottom:15px;">
+                <label style="color:#aaa; font-size:12px;">Valor Desejado (Limite: ${formatarDinheiro(limiteEmprestimo)})</label>
+                <input type="number" id="input-valor-emp" onkeyup="simularJurosFin(${taxaBase})" placeholder="Ex: 5000000" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="color:#aaa; font-size:12px;">Prazo de Pagamento (Rodadas)</label>
+                <select id="select-prazo-emp" onchange="simularJurosFin(${taxaBase})" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                    <option value="5">5 Rodadas</option>
+                    <option value="10">10 Rodadas</option>
+                    <option value="20">20 Rodadas</option>
+                </select>
+            </div>
+
+            <div style="background:#111; padding:12px; border-radius:6px; font-size:13px; color:#aaa; margin-bottom:15px; border-left:3px solid #dc3545;">
+                Valor a Devolver: <strong id="sim-devolver" style="color:#dc3545;">R$ 0,00</strong><br>
+                Desconto por Rodada: <strong id="sim-parcela" style="color:#fff;">R$ 0,00</strong><br>
+                <small style="color:#666; display:block; margin-top:5px;">⚠️ Em caso de falência, seus jogadores serão penhorados.</small>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button onclick="confirmarEmprestimoFin('${nomeCredor}', ${limiteEmprestimo}, ${taxaBase})" style="flex:1; padding:10px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Assinar e Receber</button>
+                <button onclick="document.getElementById('modal-emprestimo-fin').remove()" style="flex:1; padding:10px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+window.simularJurosFin = function(taxaBase) {
+    let valor = parseInt(document.getElementById('input-valor-emp').value) || 0;
+    let rodadas = parseInt(document.getElementById('select-prazo-emp').value) || 5;
+
+    let taxaTotal = taxaBase * rodadas;
+    let valorTotal = valor + (valor * taxaTotal);
+    let parcela = valorTotal / rodadas;
+
+    document.getElementById('sim-devolver').innerText = formatarDinheiro(valorTotal);
+    document.getElementById('sim-parcela').innerText = formatarDinheiro(parcela);
+};
+
+window.confirmarEmprestimoFin = function(nomeCredor, maxCredor, taxaBase) {
+    let valor = parseInt(document.getElementById('input-valor-emp').value);
+    let rodadas = parseInt(document.getElementById('select-prazo-emp').value);
+
+    if (isNaN(valor) || valor <= 0) return alert("Insira um valor válido.");
+    if (valor > maxCredor) return alert("Este credor não possui ou não libera este limite.");
+
+    let taxaTotal = taxaBase * rodadas;
+    let valorTotalDevido = valor + (valor * taxaTotal);
+    let parcela = Math.round(valorTotalDevido / rodadas);
+
+    let updates = {};
+    let idDivida = "divida_" + Date.now();
+    let meuTime = dadosUsuario.timeAtual;
+
+    // 1. Você recebe o dinheiro na hora
+    saldoAtual += valor;
+    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual;
+
+    // 2. Tira o dinheiro do cofre do credor
+    let saldoAntigoCredor = fundosInvestimentoGlobais[nomeCredor].saldo;
+    updates[`ligas/${ligaLogada}/banco_investidores/${nomeCredor}/saldo`] = saldoAntigoCredor - valor;
+
+    // 3. Registra o Contrato no Cartório (Para o Motor P2P cobrar)
+    updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`] = {
+        devedor: meuTime,
+        credor: nomeCredor,
+        valor_total: valorTotalDevido,
+        parcela_rodada: parcela,
+        rodadas_restantes: rodadas
+    };
+
+    db.ref().update(updates).then(() => {
+        document.getElementById('modal-emprestimo-fin').remove();
+        document.getElementById('saldo-treinador').innerText = formatarDinheiro(saldoAtual); // Atualiza na hora!
+
+        let divSucesso = document.createElement('div');
+        divSucesso.style.cssText = "position:fixed; top:20px; right:20px; background:var(--verde-campo); color:#fff; padding:15px; border-radius:4px; z-index:10002; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);";
+        divSucesso.innerText = "Empréstimo Aprovado! O dinheiro já está na conta.";
+        document.body.appendChild(divSucesso);
+        setTimeout(() => divSucesso.remove(), 4000);
+
         carregarMundo();
     });
 };
