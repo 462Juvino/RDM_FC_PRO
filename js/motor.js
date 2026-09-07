@@ -134,23 +134,46 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                 let maiorScore = 0;
                 let lanceVencedor = null;
                 let loginVencedor = "";
+
+                // 🧠 NOVA INTELIGÊNCIA: Verifica se o jogador alvo é "Titular" (Top 14 do elenco da IA)
+                let elencoIA = Object.values(times[timeDoAlvo].jogadores || {}).sort((a,b) => (b.valor_mercado || 0) - (a.valor_mercado || 0));
+                let isTitularIA = false;
+                if (elencoIA.length >= 14) {
+                    let indexTop = elencoIA.findIndex(jx => jx.nome === dadosDoAlvo.nome);
+                    if (indexTop !== -1 && indexTop < 14) isTitularIA = true;
+                }
+
                 let valorMinimoIA = dadosDoAlvo.valor_mercado * 0.9;
 
                 for (let login in lances) {
                     let lance = lances[login];
                     let scoreLance = lance.valor_oferecido || 0;
 
-                    let dadosJogadorOferecido = null;
-                    if (lance.id_jogador_oferecido) {
-                        dadosJogadorOferecido = times[lance.time_comprador].jogadores[lance.id_jogador_oferecido];
-                        if (dadosJogadorOferecido) scoreLance += dadosJogadorOferecido.valor_mercado;
-                    }
+                    if (lance.tipo_negocio === 'emprestimo') {
+                        // 1. A Máquina NUNCA empresta seus craques titulares!
+                        if (isTitularIA) continue;
 
-                    if (scoreLance > maiorScore && scoreLance >= valorMinimoIA) {
-                        maiorScore = scoreLance;
-                        lanceVencedor = lance;
-                        loginVencedor = login;
-                        lanceVencedor.dados_jogador_oferecido = dadosJogadorOferecido;
+                        // 2. A Máquina exige pelo menos 1.5% do passe por rodada alugada
+                        let taxaMinima = (dadosDoAlvo.valor_mercado * 0.015) * lance.duracao_rodadas;
+                        if (scoreLance >= taxaMinima && scoreLance > maiorScore) {
+                            maiorScore = scoreLance;
+                            lanceVencedor = lance;
+                            loginVencedor = login;
+                        }
+                    } else {
+                        // Lógica Original de Compra Definitiva
+                        let dadosJogadorOferecido = null;
+                        if (lance.id_jogador_oferecido) {
+                            dadosJogadorOferecido = times[lance.time_comprador].jogadores[lance.id_jogador_oferecido];
+                            if (dadosJogadorOferecido) scoreLance += dadosJogadorOferecido.valor_mercado;
+                        }
+
+                        if (scoreLance > maiorScore && scoreLance >= valorMinimoIA) {
+                            maiorScore = scoreLance;
+                            lanceVencedor = lance;
+                            loginVencedor = login;
+                            lanceVencedor.dados_jogador_oferecido = dadosJogadorOferecido;
+                        }
                     }
                 }
 
@@ -161,16 +184,30 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     usuarios[loginVencedor].caixaClube -= lanceVencedor.valor_oferecido;
                     updates[`ligas/${liga}/usuarios/${loginVencedor}/caixaClube`] = usuarios[loginVencedor].caixaClube;
 
-                    updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
-                    updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
+                    if (lanceVencedor.tipo_negocio === 'emprestimo') {
+                        // IA FECHA O EMPRÉSTIMO
+                        dadosDoAlvo.status_emprestimo = {
+                            time_origem: timeDoAlvo,
+                            rodadas_restantes: lanceVencedor.duracao_rodadas
+                        };
+                        updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
+                        updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
 
-                    if (lanceVencedor.id_jogador_oferecido && lanceVencedor.dados_jogador_oferecido) {
-                        updates[`banco_global_times/${timeNovo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = null;
-                        updates[`banco_global_times/${timeDoAlvo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = lanceVencedor.dados_jogador_oferecido;
+                        updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = {
+                            jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeNovo, rodadas_restantes: lanceVencedor.duracao_rodadas
+                        };
+                    } else {
+                        // IA FECHA A VENDA
+                        updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
+                        updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
+
+                        if (lanceVencedor.id_jogador_oferecido && lanceVencedor.dados_jogador_oferecido) {
+                            updates[`banco_global_times/${timeNovo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = null;
+                            updates[`banco_global_times/${timeDoAlvo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = lanceVencedor.dados_jogador_oferecido;
+                        }
                     }
                 }
 
-                // Apaga APENAS o leilão desse jogador da IA (não limpa mais o mercado inteiro)
                 updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
             }
         }
@@ -519,6 +556,58 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
             }
 
             updates[`ligas/${liga}/calendario`] = cal;
+        }
+
+        // --- PASSO C.2: FISCALIZAÇÃO DOS CONTRATOS DE EMPRÉSTIMO ---
+        // Calcula quantas rodadas avançaram hoje (1 rodada ao vivo, ou várias se o trator puxou atrasos)
+        let novaRodadaAtual = cal ? (cal.rodadaAtual || 1) : 1;
+        let rodadasAvancadas = novaRodadaAtual - rodadaAtual;
+
+        if (rodadasAvancadas > 0) {
+            const snapEmp = await db.ref(`ligas/${liga}/emprestimos_ativos`).once('value');
+            const emprestimos = snapEmp.val();
+
+            if (emprestimos) {
+                for (let idJog in emprestimos) {
+                    let emp = emprestimos[idJog];
+                    emp.rodadas_restantes -= rodadasAvancadas;
+
+                    if (emp.rodadas_restantes <= 0) {
+                        // 🚨 ACABOU O CONTRATO! O Trator confisca o jogador de volta para a casa.
+                        let tLocatario = emp.time_destino;
+                        let tDono = emp.time_origem;
+                        let dJog = null;
+
+                        // Pega o jogador do time que alugou
+                        if (times[tLocatario] && times[tLocatario].jogadores && times[tLocatario].jogadores[idJog]) {
+                            dJog = times[tLocatario].jogadores[idJog];
+                        }
+
+                        if (dJog) {
+                            delete dJog.status_emprestimo; // Arranca a etiqueta de locação
+                            updates[`banco_global_times/${tLocatario}/jogadores/${idJog}`] = null;
+                            updates[`banco_global_times/${tDono}/jogadores/${idJog}`] = dJog;
+
+                            // Avisa os Técnicos (Caso sejam humanos) na Caixa de Entrada
+                            let idMsgE = "msg_emp_" + Date.now() + Math.floor(Math.random()*1000);
+                            for (let u in usuarios) {
+                                if (usuarios[u].timeAtual === tLocatario) {
+                                    updates[`ligas/${liga}/caixa_mensagens/${u}/${idMsgE}_1`] = { tipo: 'recusa', texto: `O contrato de empréstimo de ${dJog.nome} encerrou. Ele arrumou as malas e voltou ao ${tDono.replace(/_/g,' ')}.`, data: new Date().toISOString() };
+                                }
+                                if (usuarios[u].timeAtual === tDono) {
+                                    updates[`ligas/${liga}/caixa_mensagens/${u}/${idMsgE}_2`] = { tipo: 'sucesso', texto: `O empréstimo acabou! ${dJog.nome} está de volta e já se apresentou no seu CT.`, data: new Date().toISOString() };
+                                }
+                            }
+                        }
+                        // Apaga o registro do cartório
+                        updates[`ligas/${liga}/emprestimos_ativos/${idJog}`] = null;
+                    } else {
+                        // Contrato segue ativo: Atualiza os dias restantes no Cartório e no Perfil do Atleta!
+                        updates[`ligas/${liga}/emprestimos_ativos/${idJog}/rodadas_restantes`] = emp.rodadas_restantes;
+                        updates[`banco_global_times/${emp.time_destino}/jogadores/${idJog}/status_emprestimo/rodadas_restantes`] = emp.rodadas_restantes;
+                    }
+                }
+            }
         }
 
         // ========================================================
