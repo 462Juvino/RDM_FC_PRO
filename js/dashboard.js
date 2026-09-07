@@ -676,8 +676,8 @@ function criarBotaoSom() {
     btn.innerHTML = '🔊';
     btn.title = "Ligar/Desligar Som";
 
-    // Visual elegante e pequeno, feito para se encaixar no cabeçalho
-    btn.style.cssText = "background: transparent; color: var(--verde-campo); border: 1px solid #444; border-radius: 4px; padding: 4px 8px; font-size: 14px; cursor: pointer; transition: 0.2s; margin-left: 15px;";
+    // Trava a largura e altura exata do botão para que o clique não "vaze" pelos lados ou para cima
+    btn.style.cssText = "background: transparent; color: var(--verde-campo); border: none; padding: 0; margin: 0 5px 0 0; font-size: 14px; cursor: pointer; transition: 0.2s; opacity: 0.8; display: inline-flex; justify-content: center; align-items: center; width: 20px; height: 20px; flex-shrink: 0;";
 
     btn.onclick = (e) => {
         e.stopPropagation();
@@ -685,26 +685,26 @@ function criarBotaoSom() {
             hinoAmbiente.play(); torcidaAmbiente.play();
             btn.innerHTML = '🔊';
             btn.style.color = 'var(--verde-campo)';
-            btn.style.borderColor = '#444';
+            btn.style.opacity = '0.8';
         } else {
             hinoAmbiente.pause(); torcidaAmbiente.pause();
             btn.innerHTML = '🔇';
             btn.style.color = '#888';
-            btn.style.borderColor = '#333';
+            btn.style.opacity = '0.5';
         }
     };
 
-    // Procura o cabeçalho onde fica o "Treinador: Nome" para injetar o botão lá
-    let cabecalhoInfos = document.querySelector('.header-infos');
-    if (cabecalhoInfos) {
-        cabecalhoInfos.style.display = "flex";
-        cabecalhoInfos.style.alignItems = "center";
-        cabecalhoInfos.appendChild(btn);
+    // Procura o elemento do saldo para grudar o botão à ESQUERDA dele!
+    let saldoElement = document.getElementById('saldo-treinador');
+    if (saldoElement) {
+        // Usa beforebegin para colocar antes do saldo, sem mudar o CSS do pai e evitar empurrar a tela!
+        saldoElement.insertAdjacentElement('beforebegin', btn);
+        saldoElement.style.verticalAlign = "middle";
     } else {
-        // Fallback caso não ache o cabeçalho exato
+        // Fallback
         btn.style.position = "absolute";
         btn.style.top = "15px";
-        btn.style.right = "250px";
+        btn.style.right = "15px";
         document.body.appendChild(btn);
     }
 }
