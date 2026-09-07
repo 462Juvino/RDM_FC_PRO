@@ -506,6 +506,8 @@ function atualizarBotaoTransacoes() {
     btn.innerHTML = `💼 Transações <span style="background:${corBadge}; color:${corTexto}; padding:2px 6px; border-radius:10px; font-size:11px; font-weight:bold;">${total}</span>`;
 }
 
+
+
 function abrirModalTransacoes() {
     let modal = document.getElementById('modal-transacoes-ativas');
     if (!modal) {
@@ -521,26 +523,76 @@ function abrirModalTransacoes() {
                 <h2 style="color:#ff8c00; margin:0; font-size:18px;">💼 Central de Negociações</h2>
                 <button onclick="document.getElementById('modal-transacoes-ativas').style.display='none'" style="background:transparent; border:none; color:#aaa; font-size:22px; cursor:pointer;">&times;</button>
             </div>
-            <div style="display:flex; border-bottom:1px solid #333;">
-                <button id="tab-env" onclick="renderListaTransacoes('env')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s;">📤 Ofertas Enviadas</button>
-                <button id="tab-rec" onclick="renderListaTransacoes('rec')" style="flex:1; padding:12px; background:#222; color:#888; border:none; cursor:pointer; font-weight:bold; transition:0.2s;">📥 Ofertas Recebidas</button>
+            <div style="display:flex; border-bottom:1px solid #333; overflow-x: auto; white-space: nowrap;">
+                <button id="tab-env" onclick="renderListaTransacoes('env')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s; min-width: 120px;">📤 Enviadas</button>
+                <button id="tab-rec" onclick="renderListaTransacoes('rec')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s; min-width: 120px;">📥 Recebidas</button>
+                <button id="tab-banco" onclick="renderListaTransacoes('banco')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; transition:0.2s; min-width: 120px;">🏦 Cofre</button>
             </div>
             <div id="lista-transacoes-conteudo" style="padding:15px; overflow-y:auto; flex:1; min-height: 250px;">
             </div>
         </div>
     `;
     modal.style.display = 'flex';
-    window.renderListaTransacoes('env');
+    window.renderListaTransacoes('env'); // Começa na aba de Enviadas
 }
 
 window.renderListaTransacoes = function(aba) {
+    // Controle visual das abas
     document.getElementById('tab-env').style.background = aba === 'env' ? '#2a2a2a' : '#111';
     document.getElementById('tab-env').style.color = aba === 'env' ? '#fff' : '#888';
     document.getElementById('tab-rec').style.background = aba === 'rec' ? '#2a2a2a' : '#111';
     document.getElementById('tab-rec').style.color = aba === 'rec' ? '#fff' : '#888';
+    document.getElementById('tab-banco').style.background = aba === 'banco' ? '#2a2a2a' : '#111';
+    document.getElementById('tab-banco').style.color = aba === 'banco' ? '#fff' : '#888';
 
     const div = document.getElementById('lista-transacoes-conteudo');
     let html = "";
+
+    // ==========================================
+    // NOVA LÓGICA DA ABA DE BANCO/COFRE P2P
+    // ==========================================
+    if (aba === 'banco') {
+        div.innerHTML = `
+            <!-- SESSÃO 1: O MEU COFRINHO -->
+            <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
+                <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
+                <p style="color:#888; font-size:12px;">Deposite seu dinheiro aqui. Outros clubes (ou a IA) poderão pegar emprestado e pagar juros direto para você!</p>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <span style="color:#ccc; font-size:14px;">Dinheiro Guardado:</span>
+                    <strong style="color:#fff; font-size:18px;">R$ 0,00</strong> <!-- Fixo na Etapa 1 -->
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="alert('Na Etapa 2 ativaremos a janela para você Depositar seu saldo no cofre!')" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📥 Depositar</button>
+                    <button onclick="alert('Na Etapa 2 ativaremos a janela para você Sacar de volta pro seu caixa!')" style="flex:1; padding:8px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📤 Sacar</button>
+                </div>
+            </div>
+
+            <!-- SESSÃO 2: O MERCADO DE CRÉDITO DA LIGA -->
+            <h3 style="color:#ff8c00; font-size:14px; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">🤝 Investidores da Liga</h3>
+            <p style="color:#666; font-size:11px;">Clubes que possuem dinheiro no cofre disponível para empréstimo.</p>
+
+            <!-- Lista Estática (Mockup) para a Etapa 1. Na etapa 2 o JS vai varrer o Firebase! -->
+            <div style="background:#1a1a1a; border:1px solid #333; padding:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div>
+                    <strong style="color:#fff; font-size:14px;">Flamengo <span style="font-size:10px; color:#aaa;">(Máquina)</span></strong><br>
+                    <span style="color:#00b853; font-size:12px;">Disponível: R$ 15.000.000</span>
+                </div>
+                <button onclick="alert('Na Etapa 2, abrirá uma tela para você escolher quantas rodadas quer pagar e pedir a grana!')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
+            </div>
+            <div style="background:#1a1a1a; border:1px solid #333; padding:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div>
+                    <strong style="color:#fff; font-size:14px;">Palmeiras <span style="font-size:10px; color:#aaa;">(Player)</span></strong><br>
+                    <span style="color:#00b853; font-size:12px;">Disponível: R$ 8.500.000</span>
+                </div>
+                <button onclick="alert('Na Etapa 2, abrirá uma tela para você escolher quantas rodadas quer pagar e pedir a grana!')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
+            </div>
+        `;
+        return; // Encerra a função aqui para não rodar o código de propostas normais
+    }
+
+    // ==========================================
+    // LÓGICA ANTIGA (OFERTAS ENVIADAS E RECEBIDAS)
+    // ==========================================
     let lista = aba === 'env' ? propostasEnviadasGlobais : propostasRecebidasGlobais;
 
     if (lista.length === 0) {
@@ -556,14 +608,12 @@ window.renderListaTransacoes = function(aba) {
 
         let txtTroca = t.id_troca ? `<div style="color:var(--verde-campo); font-size:12px; margin-top:4px;">🔄 Inclui atleta na troca</div>` : '';
 
-        // Formata a data para o padrão Brasileiro
         let dataFormatada = "Hoje";
         if (t.data_proposta) {
             let d = new Date(t.data_proposta);
             dataFormatada = d.toLocaleDateString('pt-BR') + " às " + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
         }
 
-        // Badge elegante para destacar Empréstimo vs Compra
         let badgeTipo = t.tipo_negocio === 'emprestimo'
             ? `<span style="background:#0056b3; color:#fff; padding:2px 6px; border-radius:4px; font-size:10px;">🤝 Aluguel (${t.duracao_rodadas} Rodadas)</span>`
             : `<span style="background:var(--verde-campo); color:#fff; padding:2px 6px; border-radius:4px; font-size:10px;">💰 Compra Definitiva</span>`;
@@ -575,7 +625,7 @@ window.renderListaTransacoes = function(aba) {
             </div>`;
 
         let acao = "";
-        let nomeEscapado = t.nome_alvo.replace(/'/g, "\\'"); // Evita erro se o nome tiver aspas
+        let nomeEscapado = t.nome_alvo.replace(/'/g, "\\'");
 
         if (!isRec) {
             acao = `<button onclick="cancelarPropostaAtiva('${t.id_alvo}')" style="margin-top:10px; width:100%; padding:8px; background:rgba(220,53,69,0.1); color:#dc3545; border:1px solid #dc3545; border-radius:4px; cursor:pointer; font-weight:bold; transition:0.2s;" onmouseover="this.style.background='#dc3545'; this.style.color='#fff';" onmouseout="this.style.background='rgba(220,53,69,0.1)'; this.style.color='#dc3545';">Retirar Oferta</button>`;
