@@ -940,8 +940,11 @@ window.enviarDesafioX1 = async function() {
         // ========================================================
         let modal = document.getElementById('modal-arena-x1');
 
-        // Puxa a imagem do estádio via midia.js
-        modal.style.background = `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('${getEstadio(meuTime)}') center/cover`;
+        // Separação de atributos CSS garante que qualquer navegador carregue a imagem do Estádio!
+        modal.style.background = "transparent";
+        modal.style.backgroundImage = `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('${getEstadio(meuTime)}')`;
+        modal.style.backgroundPosition = "center";
+        modal.style.backgroundSize = "cover";
 
         modal.innerHTML = `
             <div style="width:90%; max-width:600px; border-radius:12px; border:2px solid rgba(255,140,0,0.5); padding:20px; text-align:center; box-shadow: 0 0 40px rgba(0,0,0,0.8); background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);">
@@ -973,7 +976,7 @@ window.enviarDesafioX1 = async function() {
         let somHinoM = new Audio(getHino(meuTime));
         let somHinoV = new Audio(getHino(oponente));
         let somFim = new Audio('sounds/final_do_jogo.mp3');
-        let somApito = new Audio('sounds/apito_arbitro.mp3'); // Opcional, se não tiver ele ignora
+        let somApito = new Audio('sounds/apito_arbitro.mp3');
 
         somTorcida.volume = 0.3;
         somTorcida.loop = true;
@@ -1005,25 +1008,25 @@ window.enviarDesafioX1 = async function() {
             lancesAgora.forEach(lance => {
                 let cor = '#ccc';
                 if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
-                if (lance.tipo.includes('ataque_v')) cor = '#ffc107'; // Amarelo perigo
+                if (lance.tipo.includes('ataque_v')) cor = '#ffc107';
                 if (lance.tipo.includes('gol_m')) cor = 'var(--verde-campo)';
                 if (lance.tipo.includes('gol_v')) cor = '#dc3545';
                 if (lance.tipo === 'penaltis') cor = '#ff8c00';
-                if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff'; // Azul informacional
+                if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff';
 
                 divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
-                divLances.scrollTop = divLances.scrollHeight; // Rola pro fim automático
+                divLances.scrollTop = divLances.scrollHeight;
 
                 // EFEITOS SONOROS DINÂMICOS
                 if (lance.tipo === 'inicio') {
                     somApito.play().catch(()=>{});
                 }
                 if (lance.tipo === 'ataque_m') {
-                    somTorcida.volume = 0.8; // Torcida inflama!
+                    somTorcida.volume = 0.8;
                     setTimeout(() => somTorcida.volume = 0.3, 4000);
                 }
                 if (lance.tipo === 'ataque_v') {
-                    somTorcida.volume = 0.1; // Torcida apreensiva
+                    somTorcida.volume = 0.1;
                     setTimeout(() => somTorcida.volume = 0.3, 4000);
                 }
                 if (lance.tipo === 'gol_m') {
@@ -1037,7 +1040,7 @@ window.enviarDesafioX1 = async function() {
                 if (lance.tipo === 'gol_v') {
                     placarV_tela++;
                     document.getElementById('x1-placar-v').innerText = placarV_tela;
-                    somTorcida.volume = 0.1; // Silêncio mortal no estádio
+                    somTorcida.volume = 0.1;
                     somGol.play().catch(()=>{});
                     setTimeout(() => { somHinoV.volume = 0.2; somHinoV.play().catch(()=>{}); }, 1500);
                     setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
@@ -1050,12 +1053,23 @@ window.enviarDesafioX1 = async function() {
                 somTorcida.pause();
                 somHinoM.pause();
                 somHinoV.pause();
+
                 somFim.play().catch(()=>{});
 
                 if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
 
                 // EXECUTA O BANCO DE DADOS (PAGAMENTOS/TRANSFERÊNCIAS)
                 let venci = golsM_temp > golsV_temp;
+
+                // 🎵 TOCA O HINO DO VENCEDOR EM LOOP! (Volume 20%)
+                setTimeout(() => {
+                    let somCampeao = venci ? somHinoM : somHinoV;
+                    somCampeao.currentTime = 0;
+                    somCampeao.volume = 0.2;
+                    somCampeao.loop = true;
+                    somCampeao.play().catch(()=>{});
+                }, 1500); // Aguarda 1.5s para o som do apito final (somFim) se destacar
+
                 let updates = {};
                 let txtFim = "";
 
