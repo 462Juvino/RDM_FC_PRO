@@ -67,13 +67,15 @@ async function checarRotinas(liga) {
         }, (error, committed) => {
             if (committed) {
                 console.log("🔥 MOTOR P2P: Iniciando varredura Oficial!");
-                async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados) {
+                // Aqui nós CHAMAMOS a função corretamente!
+                processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados);
             }
         });
     } catch (e) { console.error("Falha no Motor P2P:", e); }
 }
-// ATENÇÃO: Mudamos a primeira linha (assinatura) da função!
-async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar) {
+
+// A função que faz a mágica acontecer!
+async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados) {
     try {
         const snapTimesGlobais = await db.ref('banco_global_times').once('value');
         const times = snapTimesGlobais.val() || {};
