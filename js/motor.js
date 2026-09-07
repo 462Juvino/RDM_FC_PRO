@@ -3,9 +3,9 @@
 const ligaMotor = localStorage.getItem('treinadorLiga');
 const userLogadoMotor = localStorage.getItem('treinadorUsuario');
 
-// Configuração de Horários (Partida às 20:00, Lock às 19:30)
-const HORA_PARTIDA = 20;
-const MINUTOS_PRE_JOGO = 30; // Minutos antes da HORA_PARTIDA para travar tudo e simular
+// Configuração de Horários Oficiais
+const HORA_CAMP = 19;
+const HORA_COPA = 20;
 
 if (ligaMotor && userLogadoMotor) {
     solicitarPermissaoNotificacao();
@@ -29,38 +29,36 @@ function dispararNotificacao(titulo, mensagem) {
 // ========================================================
 function iniciarMotorDescentralizado(liga) {
     checarRotinas(liga);
-    // Checa silenciosamente a cada 3 minutos se a aba ficar aberta
-    setInterval(() => checarRotinas(liga), 180000);
+    setInterval(() => checarRotinas(liga), 180000); // Checa a cada 3 minutos
 }
 
 async function checarRotinas(liga) {
     const agora = new Date();
     const hora = agora.getHours();
-    const minuto = agora.getMinutes();
 
     const ano = agora.getFullYear();
     const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
     const dia = agora.getDate().toString().padStart(2, '0');
     const dataAtualStr = `${ano}-${mes}-${dia}`;
 
-    let horaDeRodar = false;
-    if (hora === (HORA_PARTIDA - 1) && minuto >= (60 - MINUTOS_PRE_JOGO)) horaDeRodar = true;
-    if (hora >= HORA_PARTIDA) horaDeRodar = true;
+    const ontem = new Date(agora);
+    ontem.setDate(ontem.getDate() - 1);
+    const ontemStr = `${ontem.getFullYear()}-${(ontem.getMonth() + 1).toString().padStart(2, '0')}-${ontem.getDate().toString().padStart(2, '0')}`;
 
     try {
-        const snapData = await db.ref(`ligas/${liga}/sistema/ultima_simulacao`).once('value');
-        const ultimaData = snapData.val();
+        const snapSist = await db.ref(`ligas/${liga}/sistema`).once('value');
+        const sis = snapSist.val() || {};
 
-        // Descobre a data de "Ontem"
-        const ontem = new Date(agora);
-        ontem.setDate(ontem.getDate() - 1);
-        const ontemStr = `${ontem.getFullYear()}-${(ontem.getMonth() + 1).toString().padStart(2, '0')}-${ontem.getDate().toString().padStart(2, '0')}`;
+        // Separa as checagens: A liga tem que rodar as 19h e a Copa às 20h!
+        let ultCamp = sis.ultima_simulacao_camp;
+        let ultCopa = sis.ultima_simulacao_copa;
 
-        // DECISÃO DE RODAR O MOTOR:
-        let rodarHoje = (horaDeRodar && ultimaData !== dataAtualStr); // Dá a hora e faz as coisas de hoje
-        let rodarAtrasados = (!ultimaData || ultimaData < ontemStr);  // Abriu o site e tá devendo jogo
+        let rodarCampHoje = (hora >= HORA_CAMP && ultCamp !== dataAtualStr);
+        let rodarCopaHoje = (hora >= HORA_COPA && ultCopa !== dataAtualStr);
+        let rodarAtrasados = (!ultCamp || ultCamp < ontemStr);
 
-        if (!rodarHoje && !rodarAtrasados) return; // Se tá tudo em dia, descansa.
+        // Se já rodou tudo na hora certa, ele descansa.
+        if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados) return;
 
         const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
         lockRef.transaction((currentLock) => {
@@ -68,14 +66,11 @@ async function checarRotinas(liga) {
             return true;
         }, (error, committed) => {
             if (committed) {
-                console.log("🔥 MOTOR P2P: Iniciando varredura (Atrasados ou Rotina de Hoje)...");
-                // Manda as variáveis novas para a função que faz a mágica
-                processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar);
+                console.log("🔥 MOTOR P2P: Iniciando varredura Oficial!");
+                async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados) {
             }
         });
-    } catch (e) {
-        console.error("Falha no Motor P2P:", e);
-    }
+    } catch (e) { console.error("Falha no Motor P2P:", e); }
 }
 // ATENÇÃO: Mudamos a primeira linha (assinatura) da função!
 async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar) {
@@ -373,6 +368,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
         // --- PASSO C: MOTOR DE CALENDÁRIO INTELIGENTE ---
         if (cal) {
             const agoraDT = new Date();
+            const horaMotor = agoraDT.getHours(); // O Relógio interno do Motor
             let teveJogoLiga = false;
 
             const processarPartidaAoVivo = (jogo, isMataMata = false) => {
@@ -402,91 +398,63 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                 let golsM = 0; let golsV = 0;
                 let linhaTempo = [];
 
-                if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.mandante.replace(/_/g,' ')}: Fôlego novo vindo do banco!`, cor: "#aaa" });
-                if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração para dar gás na equipe!`, cor: "#aaa" });
+                linhaTempo.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Rola a bola para a partida oficial!` });
+
+                if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.mandante.replace(/_/g,' ')}: Fôlego novo!`, cor: "#aaa" });
+                if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração tática!`, cor: "#aaa" });
+
+                // INJEÇÃO DO MOTOR NARRATIVO PARA TRANSMISSÃO AO VIVO
+                const narracoesM = ["🔥 UUUHH! O atacante chuta forte e a bola raspa a trave!", "🛡️ Bela roubada de bola da zaga, desarmando com classe.", "👟 Troca de passes envolvente. O time procura espaço.", "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima!"];
+                const narracoesV = ["⚠️ PERIGO! O visitante ataca com velocidade, mas o chute vai fora.", "🧤 MILAGRE! O goleiro se estica todo e salva um gol certo!", "👟 O visitante domina a posse de bola no meio campo.", "🥅 Chute de muito longe, a bola passa assustando!"];
+
+                for(let i=0; i<16; i++) {
+                    let minAleatorio = Math.floor(Math.random()*89)+1;
+                    if (minAleatorio === 45) minAleatorio = 46;
+                    if (Math.random() > 0.5) linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_mandante', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
+                    else linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_visitante', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
+                }
 
                 const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
 
-                // NOVO: Identifica os goleiros da partida para registrar a estatística
                 let gkM_id = Object.keys(times[jogo.mandante]?.jogadores || {}).find(k => times[jogo.mandante].jogadores[k].posicoes?.p === "Goleiro");
                 let gkV_id = Object.keys(times[jogo.visitante]?.jogadores || {}).find(k => times[jogo.visitante].jogadores[k].posicoes?.p === "Goleiro");
 
-                if (gkM_id) {
-                    let gkM = times[jogo.mandante].jogadores[gkM_id];
-                    gkM.estatisticas = gkM.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0};
-                    gkM.estatisticas.jogos = (gkM.estatisticas.jogos || 0) + 1;
-                    updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM;
-                }
-                if (gkV_id) {
-                    let gkV = times[jogo.visitante].jogadores[gkV_id];
-                    gkV.estatisticas = gkV.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0};
-                    gkV.estatisticas.jogos = (gkV.estatisticas.jogos || 0) + 1;
-                    updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV;
-                }
+                if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas = gkM.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0}; gkM.estatisticas.jogos = (gkM.estatisticas.jogos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
+                if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas = gkV.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0}; gkV.estatisticas.jogos = (gkV.estatisticas.jogos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
 
                 for(let i=0; i<5; i++) {
                     if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
                         golsM++;
-
-                        // Punição pro Goleiro Visitante
-                        if (gkV_id) {
-                            let gkV = times[jogo.visitante].jogadores[gkV_id];
-                            gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1;
-                            updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV;
-                        }
-
-                        let idA = sortearAtleta(jogo.mandante);
-                        let nA = idA ? times[jogo.mandante].jogadores[idA].nome : "Jogador";
+                        if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
+                        let idA = sortearAtleta(jogo.mandante); let nA = idA ? times[jogo.mandante].jogadores[idA].nome : "Jogador";
                         if(idA) {
-                            let jg = times[jogo.mandante].jogadores[idA];
-                            jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-
-                            // Assistência Mandante
-                            if (Math.random() > 0.4) {
-                                let idAst = sortearAtleta(jogo.mandante);
-                                if (idAst && idAst !== idA) {
-                                    let jgAst = times[jogo.mandante].jogadores[idAst];
-                                    jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++;
-                                    updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst;
-                                }
-                            }
+                            let jg = times[jogo.mandante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+                            if (Math.random() > 0.4) { let idAst = sortearAtleta(jogo.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
                             updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
                         }
-                        linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
+                        linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})` });
                     }
                     if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
                         golsV++;
-                        let idA = sortearAtleta(jogo.visitante);
-                        let nA = idA ? times[jogo.visitante].jogadores[idA].nome : "Jogador";
+                        let idA = sortearAtleta(jogo.visitante); let nA = idA ? times[jogo.visitante].jogadores[idA].nome : "Jogador";
                         if(idA) {
-                            let jg = times[jogo.visitante].jogadores[idA];
-                            jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-
-                            // Assistência Visitante
-                            if (Math.random() > 0.4) {
-                                let idAst = sortearAtleta(jogo.visitante);
-                                if (idAst && idAst !== idA) {
-                                    let jgAst = times[jogo.visitante].jogadores[idAst];
-                                    jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++;
-                                    updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst;
-                                }
-                            }
+                            let jg = times[jogo.visitante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+                            if (Math.random() > 0.4) { let idAst = sortearAtleta(jogo.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
                             updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                         }
-                        linhaTempo.push({ minuto: Math.floor(Math.random()*90)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})`, cor: "#ff8c00" });
+                        linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})` });
                     }
+                    if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
+                }
 
-                    if (gkM_id) {
-                        let gkM = times[jogo.mandante].jogadores[gkM_id];
-                        gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1;
-                        updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM;
-                    }
+                if (!linhaTempo.some(l => l.minuto === 45 && l.tipo.includes('gol'))) {
+                    linhaTempo.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo! Os jogadores vão para o vestiário.` });
                 }
 
                 if (isMataMata && golsM === golsV) {
-                    linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!`, cor: "#dc3545" });
-                    if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: "penaltis_vence", texto: `🏆 O ${jogo.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!`, cor: "var(--verde-campo)" }); }
-                    else { golsV++; linhaTempo.push({ minuto: 99, tipo: "penaltis_vence", texto: `🏆 O ${jogo.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!`, cor: "var(--verde-campo)" }); }
+                    linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!` });
+                    if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: "gol_mandante", texto: `🏆 O ${jogo.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
+                    else { golsV++; linhaTempo.push({ minuto: 99, tipo: "gol_visitante", texto: `🏆 O ${jogo.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
                 }
 
                 linhaTempo.sort((a,b) => a.minuto - b.minuto);
@@ -494,22 +462,22 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                 if (donoM) {
                     let pub = 15000 + ((usuarios[donoM].moral||50) * 400); let ren = pub * 60;
                     usuarios[donoM].caixaClube += ren; updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
-                    linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes)`, cor: "#888" });
+                    linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes)` });
                 }
 
                 if (golsM > golsV) { if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.min(100, (usuarios[donoM].moral||50)+10); if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.max(0, (usuarios[donoV].moral||50)-10); }
                 else if (golsV > golsM) { if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10); if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10); }
 
-                let dataInicio = new Date(); dataInicio.setHours(HORA_PARTIDA, 0, 0, 0);
+                let dataInicio = new Date(); dataInicio.setHours(isMataMata ? HORA_COPA : HORA_CAMP, 0, 0, 0);
                 jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime();
                 jogo.placarMandante = golsM; jogo.placarVisitante = golsV;
-                jogo.jogado = true; // JOGO OFICIALIZADO E ENCERRADO!
+                jogo.jogado = true;
             };
 
             let proximaRodada = cal.rodadaAtual || 1;
             const hojeDT = new Date(); hojeDT.setHours(0,0,0,0);
 
-            // 1. VARRE A LIGA (Inteligência: Atrados rodam agora. O de hoje respeita a hora)
+            // 1. VARRE O CAMPEONATO (Atrados ou hoje após 19h)
             for (let r = 1; r <= 38; r++) {
                 let rodadaKey = `rodada_${r}`;
 
@@ -518,7 +486,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     for (let j in divisaoObj[rodadaKey]) {
                         let jogo = divisaoObj[rodadaKey][j];
 
-                        // Ajuste para não deixar jogo órfão do "limbo"
                         if (jogo.linhaDoTempo && jogo.jogado === false) jogo.jogado = true;
 
                         if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo) {
@@ -527,8 +494,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                             let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                             jogoDT.setHours(0,0,0,0);
 
-                            // O TRATOR: Se for de ONTEM pra trás (Atrasado), RODA NA HORA. Se for de HOJE, só se 'horaDeRodar' for true.
-                            if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && horaDeRodar)) {
+                            // O TRATOR: Atrasados rodam na hora. Os de hoje rodam se já passou das 19h.
+                            if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && rodarCampHoje)) {
                                 processarPartidaAoVivo(jogo, false);
                                 teveJogoLiga = true;
                                 if (r >= proximaRodada) proximaRodada = r + 1;
@@ -544,7 +511,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                 cal.rodadaAtual = proximaRodada;
             }
 
-            // 2. VARRE A COPA
+            // 2. VARRE A COPA (Atrasados ou hoje após 20h)
             if (cal.copa) {
                 let fasesMata = ["oitavas", "quartas", "semis", "final", "mundial"];
                 for (let f of fasesMata) {
@@ -558,7 +525,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                                 let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                                 jogoDT.setHours(0,0,0,0);
 
-                                if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && horaDeRodar)) {
+                                if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && rodarCopaHoje)) {
                                     processarPartidaAoVivo(jogo, true); // True = Pênaltis
 
                                     let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
@@ -581,7 +548,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                 let mundial = cal.copa.mundial["jogo_mundial"];
 
                 if (mundial.mandante === "Campeão Nacional") {
-                    // Calcula o Campeão da Liga baseada em pontos da rodada 38
                     let pts={};
                     for(let r=1; r<=38; r++) {
                         for(let k in cal.serieA[`rodada_${r}`]) {
@@ -612,7 +578,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                     cal.temporada_encerrada = true;
                 }
 
-                // 🏆 SISTEMA DE RECOMPENSAS (BÔNUS DE +5 PONTOS)
                 if (cal.temporada_encerrada) {
                     let todosJgs = [];
                     for (let t in times) {
@@ -625,21 +590,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
                         }
                     }
 
-                    // 1. Top 3 Artilheiros (+5 Ataque)
                     let arts = [...todosJgs].filter(j => j.estatisticas && j.estatisticas.gols > 0).sort((a,b) => b.estatisticas.gols - a.estatisticas.gols).slice(0, 3);
-                    arts.forEach(j => {
-                        let novoValor = Math.min(99, (j.atributos.ataque || 60) + 5);
-                        updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/ataque`] = novoValor;
-                    });
+                    arts.forEach(j => { let novoValor = Math.min(99, (j.atributos.ataque || 60) + 5); updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/ataque`] = novoValor; });
 
-                    // 2. Top 3 Assistências (+5 Habilidade)
                     let asts = [...todosJgs].filter(j => j.estatisticas && j.estatisticas.assistencias > 0).sort((a,b) => b.estatisticas.assistencias - a.estatisticas.assistencias).slice(0, 3);
-                    asts.forEach(j => {
-                        let novoValor = Math.min(99, (j.atributos.habilidade || 60) + 5);
-                        updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/habilidade`] = novoValor;
-                    });
+                    asts.forEach(j => { let novoValor = Math.min(99, (j.atributos.habilidade || 60) + 5); updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/habilidade`] = novoValor; });
 
-                    // 3. Top 3 Goleiros Menos Vazados (+5 Defesa) -> Precisa ter jogado pelo menos 5 partidas
                     let gks = [...todosJgs].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos >= 5);
                     gks.sort((a,b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)).slice(0, 3).forEach(j => {
                         let novoValor = Math.min(99, (j.atributos.defesa || 60) + 5);
@@ -861,10 +817,11 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
         }
 
         // --- PASSO D: FINALIZAR E AVISAR ---
-        if (horaDeRodar) {
-            updates[`ligas/${liga}/sistema/ultima_simulacao`] = dataAtualStr;
-        } else {
-            updates[`ligas/${liga}/sistema/ultima_simulacao`] = ontemStr;
+        if (rodarCampHoje) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = dataAtualStr;
+        if (rodarCopaHoje) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = dataAtualStr;
+        if (rodarAtrasados) {
+            if (!updates[`ligas/${liga}/sistema/ultima_simulacao_camp`]) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = ontemStr;
+            if (!updates[`ligas/${liga}/sistema/ultima_simulacao_copa`]) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = ontemStr;
         }
         await db.ref().update(updates);
         await lockRef.set(false);
