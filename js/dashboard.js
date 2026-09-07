@@ -737,31 +737,35 @@ window.abrirModalX1 = async function() {
         modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
 
         modal.innerHTML = `
-            <div style="background:#1a1a1a; width:90%; max-width:500px; border-radius:12px; border:2px solid #dc3545; padding:20px; box-shadow: 0 0 30px rgba(220,53,69,0.3);">
-                <h2 style="color:#dc3545; margin-top:0; text-align:center; font-size:24px; text-transform:uppercase; letter-spacing:2px;">⚔️ Arena X1</h2>
+            <div style="width:90%; max-width:600px; border-radius:12px; border:2px solid rgba(255,140,0,0.5); padding:20px; text-align:center; box-shadow: 0 0 40px rgba(0,0,0,0.8); background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);">
+                <h2 style="color:#ff8c00; margin-top:0; text-shadow: 2px 2px 4px #000;">🔴 TRANSMISSÃO AO VIVO</h2>
 
-                <div style="margin-bottom:15px;">
-                    <label style="color:#aaa; font-size:12px; font-weight:bold;">1. Escolha seu Oponente:</label>
-                    <select id="x1-oponente" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
-                        ${optionsAdversarios}
-                    </select>
+                <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg, #111, #000); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:15px; box-shadow: inset 0 2px 10px rgba(255,255,255,0.05);">
+
+                    <div style="flex:1; text-align:right; font-weight:bold; color:var(--verde-campo); font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
+                        <div style="display:flex; justify-content:flex-end; align-items:center; gap:6px;">
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${meuTime.replace(/_/g, ' ')}</span>
+                            <img src="${getEscudo(meuTime)}" onerror="this.src='esculdos/default.png'" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">
+                        </div>
+                        <div id="x1-placar-m" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
+                    </div>
+
+                    <div style="width:60px; font-size:22px; color:#aaa; font-weight:bold; background:#222; padding:5px; border-radius:6px; border:1px solid #444; margin: 0 10px; flex-shrink:0;">
+                        <span id="x1-relogio">0'</span>
+                    </div>
+
+                    <div style="flex:1; text-align:left; font-weight:bold; color:#dc3545; font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
+                        <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px;">
+                            <img src="${getEscudo(oponente)}" onerror="this.src='esculdos/default.png'" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${oponente.replace(/_/g, ' ')}</span>
+                        </div>
+                        <div id="x1-placar-v" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
+                    </div>
+
                 </div>
 
-                <div style="margin-bottom:15px;">
-                    <label style="color:#aaa; font-size:12px; font-weight:bold;">2. Tipo de Aposta:</label>
-                    <select id="x1-tipo-aposta" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
-                        <option value="dinheiro">Dinheiro (Caixa do Clube)</option>
-                        <option value="jogador">Passe de Jogador (Pink Slip)</option>
-                    </select>
-                </div>
-
-                <div id="x1-area-aposta" style="background:#111; padding:15px; border-radius:8px; border:1px dashed #444; margin-bottom:20px;">
-                    <!-- Preenchido via JS -->
-                </div>
-
-                <div style="display:flex; gap:10px;">
-                    <button onclick="enviarDesafioX1()" style="flex:1; padding:12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px; text-transform:uppercase;">Iniciar Duelo</button>
-                    <button onclick="document.getElementById('modal-arena-x1').remove()" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px;">Fugir</button>
+                <div id="x1-lances" style="background:rgba(0,0,0,0.7); border:1px solid #333; border-radius:8px; padding:15px; height:180px; overflow-y:auto; font-size:14px; text-align:left; color:#ccc; scroll-behavior: smooth;">
+                    <div style="color:#888;">📡 Conectando satélite ao estádio...</div>
                 </div>
             </div>
         `;
@@ -1096,14 +1100,15 @@ window.enviarDesafioX1 = async function() {
 
                 await db.ref().update(updates);
 
-                // REVELA O BOTÃO DE CONCLUIR
-                modal.innerHTML += `
-                    <div style="margin-top:20px; padding:15px; background:${venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)'}; border:2px solid ${venci ? 'var(--verde-campo)' : '#dc3545'}; border-radius:8px; box-shadow: 0 0 20px ${venci ? 'rgba(0,184,83,0.5)' : 'rgba(220,53,69,0.5)'}; backdrop-filter: blur(10px);">
-                        <h3 style="color:${venci ? '#fff' : '#fff'}; margin:0; text-shadow: 1px 1px 3px #000;">${venci ? '🏆 VITÓRIA!' : '💀 DERROTA!'}</h3>
+                // REVELA O BOTÃO DE CONCLUIR (Alinhado em Coluna para Mobile)
+                modal.style.flexDirection = "column";
+                modal.insertAdjacentHTML('beforeend', `
+                    <div style="width:90%; max-width:600px; margin-top:15px; padding:15px; background:${venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)'}; border:2px solid ${venci ? 'var(--verde-campo)' : '#dc3545'}; border-radius:8px; box-shadow: 0 0 20px ${venci ? 'rgba(0,184,83,0.5)' : 'rgba(220,53,69,0.5)'}; backdrop-filter: blur(10px); text-align:center;">
+                        <h3 style="color:#fff; margin:0; text-shadow: 1px 1px 3px #000;">${venci ? '🏆 VITÓRIA!' : '💀 DERROTA!'}</h3>
                         <p style="color:#ddd; font-size:15px; font-weight:bold;">${txtFim}</p>
-                        <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:10px; font-size:16px;">Retornar ao Dashboard</button>
+                        <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; font-size:16px;">Retornar ao Dashboard</button>
                     </div>
-                `;
+                `);
             }
         }, 1333); // 1333ms * 90 min = exatos ~120 Segundos Reais de Jogo!
 
