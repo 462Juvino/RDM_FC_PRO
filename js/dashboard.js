@@ -196,7 +196,15 @@ function carregarVisaoGeralClube() {
                 <div id="lista-radar-mercado" style="background: #1a1a1a; border-radius: 6px; border: 1px solid #333; padding: 10px; min-height: 100px; max-height: 150px; overflow-y: auto; margin-bottom: 15px;">
                     <p style="color:#666; font-size:12px; text-align:center; margin-top: 30px;">Acessando fax da diretoria...</p>
                 </div>
-                <button class="widget-btn" onclick="window.location.href='mercado.html'">Ir ao Mercado de Transferências</button>
+                <button class="widget-btn" onclick="window.location.href='mercado.html'">Ir ao Mercado</button>
+            </div>
+
+            <!-- WIDGET 5: ARENA X1 -->
+            <div class="widget-card" style="border: 1px solid #dc3545; box-shadow: 0 0 15px rgba(220,53,69,0.2);">
+                <h3 style="color: #dc3545; margin-bottom: 5px;">Arena X1 ⚔️</h3>
+                <p style="color: #aaa; font-size: 12px; margin-top:0; margin-bottom: 15px;">Desafie a Máquina ou outros Players. Aposte dinheiro do caixa ou passes de jogadores em um duelo instantâneo!</p>
+                <div style="flex: 1;"></div> <!-- Empurra o botão pro fundo -->
+                <button class="widget-btn" onclick="abrirModalX1()" style="background: #dc3545; color: white; border: none; font-weight: bold; width: 100%;">Entrar na Arena</button>
             </div>
 
         </div>
@@ -700,3 +708,394 @@ function criarBotaoSom() {
         document.body.appendChild(btn);
     }
 }
+
+// ==========================================
+// ⚔️ SISTEMA DE AMISTOSOS X1 (Apostas e Desafios)
+// ==========================================
+let arenaDadosGlobais = { times: {}, usuarios: {} };
+
+window.abrirModalX1 = async function() {
+    try {
+        const snapB = await db.ref('banco_global_times').once('value');
+        const snapU = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        arenaDadosGlobais.times = snapB.val() || {};
+        arenaDadosGlobais.usuarios = snapU.val() || {};
+
+        let meuTime = dadosUsuario.timeAtual;
+        let optionsAdversarios = `<option value="">Selecione um oponente...</option>`;
+
+        let timesHumanos = Object.values(arenaDadosGlobais.usuarios).map(u => u.timeAtual);
+
+        for (let t in arenaDadosGlobais.times) {
+            if (t === meuTime || t.startsWith("Agentes_Livres") || t === "Fantasma") continue;
+            let tipo = timesHumanos.includes(t) ? "👤 Player" : "🤖 IA";
+            optionsAdversarios += `<option value="${t}">${t.replace(/_/g, ' ')} (${tipo})</option>`;
+        }
+
+        let modal = document.createElement('div');
+        modal.id = 'modal-arena-x1';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
+
+        modal.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:500px; border-radius:12px; border:2px solid #dc3545; padding:20px; box-shadow: 0 0 30px rgba(220,53,69,0.3);">
+                <h2 style="color:#dc3545; margin-top:0; text-align:center; font-size:24px; text-transform:uppercase; letter-spacing:2px;">⚔️ Arena X1</h2>
+
+                <div style="margin-bottom:15px;">
+                    <label style="color:#aaa; font-size:12px; font-weight:bold;">1. Escolha seu Oponente:</label>
+                    <select id="x1-oponente" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                        ${optionsAdversarios}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:15px;">
+                    <label style="color:#aaa; font-size:12px; font-weight:bold;">2. Tipo de Aposta:</label>
+                    <select id="x1-tipo-aposta" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                        <option value="dinheiro">Dinheiro (Caixa do Clube)</option>
+                        <option value="jogador">Passe de Jogador (Pink Slip)</option>
+                    </select>
+                </div>
+
+                <div id="x1-area-aposta" style="background:#111; padding:15px; border-radius:8px; border:1px dashed #444; margin-bottom:20px;">
+                    <!-- Preenchido via JS -->
+                </div>
+
+                <div style="display:flex; gap:10px;">
+                    <button onclick="enviarDesafioX1()" style="flex:1; padding:12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px; text-transform:uppercase;">Iniciar Duelo</button>
+                    <button onclick="document.getElementById('modal-arena-x1').remove()" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px;">Fugir</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        atualizarOpcoesApostaX1();
+
+    } catch(e) { console.error("Erro na Arena X1", e); }
+};
+
+window.atualizarOpcoesApostaX1 = function() {
+    let tipo = document.getElementById('x1-tipo-aposta').value;
+    let oponente = document.getElementById('x1-oponente').value;
+    let area = document.getElementById('x1-area-aposta');
+
+    if (!oponente) {
+        area.innerHTML = `<p style="color:#666; text-align:center; margin:0;">Selecione um oponente primeiro.</p>`;
+        return;
+    }
+
+    if (tipo === 'dinheiro') {
+        area.innerHTML = `
+            <label style="color:#aaa; font-size:12px;">Valor da Aposta (R$):</label>
+            <input type="number" id="x1-valor-aposta" placeholder="Ex: 5000000" style="width:100%; padding:10px; background:#000; border:1px solid #333; color:var(--verde-campo); font-weight:bold; border-radius:4px; margin-top:5px;">
+            <small style="color:#666; display:block; margin-top:5px;">O vencedor leva tudo. Se for contra a IA, o resultado sai na hora!</small>
+        `;
+    } else {
+        // Modo Jogador
+        let meuTime = dadosUsuario.timeAtual;
+        let meusJ = arenaDadosGlobais.times[meuTime].jogadores || {};
+        let advJ = arenaDadosGlobais.times[oponente].jogadores || {};
+
+        let optMeus = `<option value="">Selecione o SEU jogador que será apostado...</option>`;
+        for(let id in meusJ) optMeus += `<option value="${id}">${meusJ[id].nome} (Valor: ${formatarDinheiro(meusJ[id].valor_mercado)})</option>`;
+
+        let optAdv = `<option value="">Selecione o jogador DELE que você quer ganhar...</option>`;
+        for(let id in advJ) optAdv += `<option value="${id}">${advJ[id].nome} (Valor: ${formatarDinheiro(advJ[id].valor_mercado)})</option>`;
+
+        area.innerHTML = `
+            <label style="color:#aaa; font-size:12px;">O que você coloca na mesa?</label>
+            <select id="x1-meu-jogador" style="width:100%; padding:10px; background:#000; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px; margin-bottom:10px;">${optMeus}</select>
+
+            <label style="color:#aaa; font-size:12px;">O que você quer do oponente?</label>
+            <select id="x1-adv-jogador" style="width:100%; padding:10px; background:#000; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">${optAdv}</select>
+
+            <small style="color:#dc3545; display:block; margin-top:8px; font-weight:bold;">⚠️ REGRA: A diferença de valor entre os atletas não pode passar de 5%.</small>
+        `;
+    }
+};
+
+window.enviarDesafioX1 = async function() {
+    let oponente = document.getElementById('x1-oponente').value;
+    let tipo = document.getElementById('x1-tipo-aposta').value;
+    let meuTime = dadosUsuario.timeAtual;
+
+    if (!oponente) return alert("Selecione um oponente!");
+
+    let forcaM = arenaDadosGlobais.times[meuTime].forca_base || 500;
+    let forcaV = arenaDadosGlobais.times[oponente].forca_base || 500;
+    let isOponenteIA = !Object.values(arenaDadosGlobais.usuarios).some(u => u.timeAtual === oponente);
+
+    // 🤖 IA MEDROSA: Não aceita X1 contra times mais fortes que ela
+    if (isOponenteIA && forcaM > forcaV) {
+        return alert(`A Diretoria do ${oponente.replace(/_/g, ' ')} RECUSOU o desafio! A inteligência artificial identificou que seu time é superior e não quer arriscar perder os ativos do clube.`);
+    }
+
+    let apostaValidada = {};
+
+    if (tipo === 'dinheiro') {
+        let valor = parseInt(document.getElementById('x1-valor-aposta').value);
+        if (isNaN(valor) || valor <= 0) return alert("Valor de aposta inválido.");
+
+        let caixaM = dadosUsuario.caixaClube || 0;
+        let caixaV = isOponenteIA ? 50000000 : 0;
+
+        if (!isOponenteIA) {
+            let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente);
+            if (userAdv) caixaV = userAdv.caixaClube || 0;
+        }
+
+        if (caixaM < valor) return alert("Você não tem esse dinheiro em caixa para apostar.");
+        if (caixaV < valor) return alert(`O oponente não tem ${formatarDinheiro(valor)} em caixa para cobrir a aposta.`);
+
+        apostaValidada = { tipo: 'dinheiro', valor: valor };
+    }
+    else {
+        let meuId = document.getElementById('x1-meu-jogador').value;
+        let advId = document.getElementById('x1-adv-jogador').value;
+        if (!meuId || !advId) return alert("Selecione os dois jogadores da aposta.");
+
+        let meuJog = arenaDadosGlobais.times[meuTime].jogadores[meuId];
+        let advJog = arenaDadosGlobais.times[oponente].jogadores[advId];
+
+        let valorM = meuJog.valor_mercado || 1000000;
+        let valorV = advJog.valor_mercado || 1000000;
+        let diff = Math.abs(valorM - valorV);
+        let maxDiff = Math.max(valorM, valorV) * 0.05;
+
+        if (diff > maxDiff) {
+            return alert(`Aposta Rejeitada! A diferença de valor ultrapassa 5%.\nSeu Jogador: ${formatarDinheiro(valorM)}\nAdversário: ${formatarDinheiro(valorV)}`);
+        }
+
+        apostaValidada = { tipo: 'jogador', id_meu: meuId, id_adv: advId, dados_meu: meuJog, dados_adv: advJog };
+    }
+
+    if (isOponenteIA) {
+        // ========================================================
+        // 🎙️ MOTOR DE NARRAÇÃO ROBUSTO (ARENA X1)
+        // ========================================================
+        let linhaTempo = [];
+        let golsM_temp = 0; let golsV_temp = 0;
+
+        // 1. SORTEIO DOS GOLS
+        for(let i=0; i<5; i++) {
+            if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
+                linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Um golaço espetacular do seu time! A Arena vai à loucura!` });
+                golsM_temp++;
+            }
+            if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
+                linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO ADVERSÁRIO! Uma falha na zaga e a bola morre no fundo da rede!` });
+                golsV_temp++;
+            }
+        }
+
+        // 2. BANCO DE LANCES (Inteligência Artificial do Narrador)
+        const narracoesM = [
+            "🔥 UUUHH! Seu atacante chuta forte de fora da área e a bola raspa a trave!",
+            "🛡️ Bela roubada de bola da sua zaga, desarmando o ataque adversário com classe.",
+            "👟 Troca de passes envolvente do seu meio de campo. O time procura espaço.",
+            "🧤 DEFESAAA! O goleiro adversário voa no ângulo para evitar o seu gol!",
+            "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima do travessão!",
+            "⚡ Belo drible do seu ponta, levantando a torcida na arquibancada!",
+            "🟨 Cartão amarelo para o zagueiro adversário após parar seu contra-ataque."
+        ];
+        const narracoesV = [
+            "⚠️ PERIGO! O adversário ataca com velocidade, mas o chute vai para fora.",
+            "🧱 A sua defesa afasta o perigo de cabeça após cobrança de escanteio.",
+            "🏃‍♂️ O ponta adversário dispara livre, mas seu lateral se recupera e corta a bola.",
+            "🧤 MILAGRE! O seu goleiro se estica todo e salva um gol que parecia certo!",
+            "👟 O adversário domina a posse de bola no campo de defesa, cozinhando o jogo.",
+            "🟨 Falta dura do seu volante no meio de campo. O juiz mostra o cartão amarelo.",
+            "🥅 Chute de muito longe do adversário, a bola passa assustando o seu goleiro."
+        ];
+
+        // Adiciona de 15 a 20 lances aleatórios para preencher os 120 segundos
+        for(let i=0; i<18; i++) {
+            let minAleatorio = Math.floor(Math.random()*89)+1;
+            // Evita sobrepor no mesmo minuto do Intervalo
+            if (minAleatorio === 45) minAleatorio = 46;
+
+            if (Math.random() > 0.5) {
+                linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_m', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
+            } else {
+                linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_v', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
+            }
+        }
+
+        // 3. EVENTOS FIXOS (Apito Inicial e Intervalo)
+        linhaTempo.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Começa o duelo na Arena X1!` });
+        if (!linhaTempo.some(l => l.minuto === 45 && l.tipo === 'gol_m' || l.tipo === 'gol_v')) {
+            linhaTempo.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo! Os jogadores vão para o vestiário respirar.` });
+        }
+
+        // 4. PÊNALTIS (Caso empate)
+        if (golsM_temp === golsV_temp) {
+            linhaTempo.push({ minuto: 95, tipo: 'penaltis', texto: `⚖️ Fim do tempo normal! O duelo está empatado e vai ser decidido nos PÊNALTIS!` });
+            if (Math.random() > 0.5) {
+                golsM_temp++; linhaTempo.push({ minuto: 99, tipo: 'gol_m', texto: `🏆 GOOOOL DO TÍTULO! O SEU TIME VENCE A DISPUTA DE PÊNALTIS!` });
+            } else {
+                golsV_temp++; linhaTempo.push({ minuto: 99, tipo: 'gol_v', texto: `💀 FIM DE JOGO! A máquina defende o último pênalti e leva a aposta!` });
+            }
+        }
+        linhaTempo.sort((a,b) => a.minuto - b.minuto);
+
+        // ========================================================
+        // 📺 INTERFACE DA TRANSMISSÃO (Com Estádio no Fundo)
+        // ========================================================
+        let modal = document.getElementById('modal-arena-x1');
+
+        // Puxa a imagem do estádio via midia.js
+        modal.style.background = `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('${getEstadio(meuTime)}') center/cover`;
+
+        modal.innerHTML = `
+            <div style="width:90%; max-width:600px; border-radius:12px; border:2px solid rgba(255,140,0,0.5); padding:20px; text-align:center; box-shadow: 0 0 40px rgba(0,0,0,0.8); background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);">
+                <h2 style="color:#ff8c00; margin-top:0; text-shadow: 2px 2px 4px #000;">🔴 TRANSMISSÃO AO VIVO</h2>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg, #111, #000); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:15px; box-shadow: inset 0 2px 10px rgba(255,255,255,0.05);">
+                    <div style="flex:1; text-align:right; font-weight:bold; color:var(--verde-campo); font-size:18px; text-shadow: 1px 1px 2px #000;">
+                        ${meuTime.replace(/_/g, ' ')} <br> <span id="x1-placar-m" style="font-size:36px;">0</span>
+                    </div>
+                    <div style="width:70px; font-size:22px; color:#aaa; font-weight:bold; background:#222; padding:5px; border-radius:6px; border:1px solid #444; margin: 0 15px;">
+                        <span id="x1-relogio">0'</span>
+                    </div>
+                    <div style="flex:1; text-align:left; font-weight:bold; color:#dc3545; font-size:18px; text-shadow: 1px 1px 2px #000;">
+                        <span id="x1-placar-v" style="font-size:36px;">0</span> <br> ${oponente.replace(/_/g, ' ')}
+                    </div>
+                </div>
+
+                <div id="x1-lances" style="background:rgba(0,0,0,0.7); border:1px solid #333; border-radius:8px; padding:15px; height:180px; overflow-y:auto; font-size:14px; text-align:left; color:#ccc; scroll-behavior: smooth;">
+                    <div style="color:#888;">📡 Conectando satélite ao estádio...</div>
+                </div>
+            </div>
+        `;
+
+        // ========================================================
+        // 🔊 MOTORES DE ÁUDIO REAIS (midia.js)
+        // ========================================================
+        let somTorcida = new Audio(getTorcida(meuTime));
+        let somGol = new Audio('sounds/gol_generico.mp3');
+        let somHinoM = new Audio(getHino(meuTime));
+        let somHinoV = new Audio(getHino(oponente));
+        let somFim = new Audio('sounds/final_do_jogo.mp3');
+        let somApito = new Audio('sounds/apito_arbitro.mp3'); // Opcional, se não tiver ele ignora
+
+        somTorcida.volume = 0.3;
+        somTorcida.loop = true;
+        somTorcida.play().catch(()=>{});
+
+        let minutoAtual = 0;
+        let placarM_tela = 0; let placarV_tela = 0;
+        let divLances = document.getElementById('x1-lances');
+        let relogio = document.getElementById('x1-relogio');
+
+        // LOOP DE TRANSMISSÃO (1333ms por minuto = ~120 Segundos Reais de Jogo!)
+        let transmissaoLoop = setInterval(async () => {
+            minutoAtual++;
+
+            // Pausa no intervalo
+            if (minutoAtual === 46) {
+                somTorcida.volume = 0.1; // Torcida descansa no intervalo
+            } else if (minutoAtual === 47) {
+                somTorcida.volume = 0.3; // Torcida volta pro 2º tempo
+                divLances.innerHTML += `<div style="margin-top:8px; border-bottom:1px solid #222; padding-bottom:5px; color:#aaa;">🟢 Rola a bola para o segundo tempo!</div>`;
+            }
+
+            if (minutoAtual <= 90 || minutoAtual === 95 || minutoAtual === 99) {
+                if (relogio) relogio.innerText = minutoAtual + "'";
+            }
+
+            // Puxa lances deste minuto
+            let lancesAgora = linhaTempo.filter(l => l.minuto === minutoAtual);
+            lancesAgora.forEach(lance => {
+                let cor = '#ccc';
+                if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
+                if (lance.tipo.includes('ataque_v')) cor = '#ffc107'; // Amarelo perigo
+                if (lance.tipo.includes('gol_m')) cor = 'var(--verde-campo)';
+                if (lance.tipo.includes('gol_v')) cor = '#dc3545';
+                if (lance.tipo === 'penaltis') cor = '#ff8c00';
+                if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff'; // Azul informacional
+
+                divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
+                divLances.scrollTop = divLances.scrollHeight; // Rola pro fim automático
+
+                // EFEITOS SONOROS DINÂMICOS
+                if (lance.tipo === 'inicio') {
+                    somApito.play().catch(()=>{});
+                }
+                if (lance.tipo === 'ataque_m') {
+                    somTorcida.volume = 0.8; // Torcida inflama!
+                    setTimeout(() => somTorcida.volume = 0.3, 4000);
+                }
+                if (lance.tipo === 'ataque_v') {
+                    somTorcida.volume = 0.1; // Torcida apreensiva
+                    setTimeout(() => somTorcida.volume = 0.3, 4000);
+                }
+                if (lance.tipo === 'gol_m') {
+                    placarM_tela++;
+                    document.getElementById('x1-placar-m').innerText = placarM_tela;
+                    somTorcida.volume = 1.0;
+                    somGol.play().catch(()=>{});
+                    setTimeout(() => { somHinoM.volume = 0.4; somHinoM.play().catch(()=>{}); }, 1500);
+                    setTimeout(() => { somHinoM.pause(); somHinoM.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
+                }
+                if (lance.tipo === 'gol_v') {
+                    placarV_tela++;
+                    document.getElementById('x1-placar-v').innerText = placarV_tela;
+                    somTorcida.volume = 0.1; // Silêncio mortal no estádio
+                    somGol.play().catch(()=>{});
+                    setTimeout(() => { somHinoV.volume = 0.2; somHinoV.play().catch(()=>{}); }, 1500);
+                    setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
+                }
+            });
+
+            // FINAL DO JOGO! (Após o minuto 99 ou 90 sem pênaltis)
+            if (minutoAtual > 99 || (minutoAtual >= 90 && golsM_temp !== golsV_temp && !linhaTempo.some(l => l.minuto > minutoAtual))) {
+                clearInterval(transmissaoLoop);
+                somTorcida.pause();
+                somHinoM.pause();
+                somHinoV.pause();
+                somFim.play().catch(()=>{});
+
+                if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
+
+                // EXECUTA O BANCO DE DADOS (PAGAMENTOS/TRANSFERÊNCIAS)
+                let venci = golsM_temp > golsV_temp;
+                let updates = {};
+                let txtFim = "";
+
+                if (apostaValidada.tipo === 'dinheiro') {
+                    let v = apostaValidada.valor;
+                    if (venci) {
+                        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v;
+                        txtFim = `Você faturou ${formatarDinheiro(v)} em cima da máquina!`;
+                    } else {
+                        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v;
+                        txtFim = `A máquina limpou ${formatarDinheiro(v)} do seu caixa.`;
+                    }
+                } else {
+                    if (venci) {
+                        updates[`banco_global_times/${oponente}/jogadores/${apostaValidada.id_adv}`] = null;
+                        updates[`banco_global_times/${meuTime}/jogadores/${apostaValidada.id_adv}`] = apostaValidada.dados_adv;
+                        txtFim = `O passe de ${apostaValidada.dados_adv.nome} agora é oficialmente seu!`;
+                    } else {
+                        updates[`banco_global_times/${meuTime}/jogadores/${apostaValidada.id_meu}`] = null;
+                        updates[`banco_global_times/${oponente}/jogadores/${apostaValidada.id_meu}`] = apostaValidada.dados_meu;
+                        txtFim = `Adeus! O seu jogador ${apostaValidada.dados_meu.nome} fez as malas.`;
+                    }
+                }
+
+                await db.ref().update(updates);
+
+                // REVELA O BOTÃO DE CONCLUIR
+                modal.innerHTML += `
+                    <div style="margin-top:20px; padding:15px; background:${venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)'}; border:2px solid ${venci ? 'var(--verde-campo)' : '#dc3545'}; border-radius:8px; box-shadow: 0 0 20px ${venci ? 'rgba(0,184,83,0.5)' : 'rgba(220,53,69,0.5)'}; backdrop-filter: blur(10px);">
+                        <h3 style="color:${venci ? '#fff' : '#fff'}; margin:0; text-shadow: 1px 1px 3px #000;">${venci ? '🏆 VITÓRIA!' : '💀 DERROTA!'}</h3>
+                        <p style="color:#ddd; font-size:15px; font-weight:bold;">${txtFim}</p>
+                        <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:10px; font-size:16px;">Retornar ao Dashboard</button>
+                    </div>
+                `;
+            }
+        }, 1333); // 1333ms * 90 min = exatos ~120 Segundos Reais de Jogo!
+
+    } else {
+        // Lógica contra Player Real
+        alert(`DESAFIO ENVIADO! 📜\n\nComo o oponente é um Player Humano, o desafio foi enviado ao painel dele. O duelo será simulado assim que ele aceitar os termos!`);
+        document.getElementById('modal-arena-x1').remove();
+    }
+};
