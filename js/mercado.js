@@ -865,31 +865,40 @@ window.confirmarCaixaEletronico = function(acao, maxDisponivel, saldoAtualCofre)
     let updates = {};
 
     if (acao === 'depositar') {
-        saldoAtual -= valor; // Atualiza variável global na hora
+        saldoAtual -= valor;
+        let novoSaldo = saldoAtualCofre + valor;
         updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual;
-        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = { saldo: saldoAtualCofre + valor, dono_login: userLogado, is_ia: false };
+        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = { saldo: novoSaldo, dono_login: userLogado, is_ia: false };
+
+        // ⚡ ATUALIZAÇÃO INSTANTÂNEA LOCAL:
+        fundosInvestimentoGlobais[meuTime] = { saldo: novoSaldo, dono_login: userLogado, is_ia: false };
     } else {
         saldoAtual += valor;
+        let novoSaldo = saldoAtualCofre - valor;
         updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual;
-        if (saldoAtualCofre - valor > 0) {
-            updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}/saldo`] = saldoAtualCofre - valor;
+        if (novoSaldo > 0) {
+            updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}/saldo`] = novoSaldo;
+            fundosInvestimentoGlobais[meuTime].saldo = novoSaldo; // ⚡ ATUALIZAÇÃO INSTANTÂNEA LOCAL
         } else {
             updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = null;
+            delete fundosInvestimentoGlobais[meuTime]; // ⚡ Remove da lista na hora
         }
     }
 
     db.ref().update(updates).then(() => {
         document.getElementById('modal-caixa-eletronico').remove();
-        document.getElementById('saldo-treinador').innerText = formatarDinheiro(saldoAtual); // Atualiza a tela sem dar F5!
+        document.getElementById('saldo-treinador').innerText = formatarDinheiro(saldoAtual);
 
-        // Mensagem Customizada de Sucesso
+        // ⚡ Manda a aba "Cofre" se redesenhar instantaneamente com os novos valores!
+        window.renderListaTransacoes('banco');
+
         let divSucesso = document.createElement('div');
         divSucesso.style.cssText = "position:fixed; top:20px; right:20px; background:var(--verde-campo); color:#fff; padding:15px; border-radius:4px; z-index:10002; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);";
         divSucesso.innerText = "Transação realizada com sucesso!";
         document.body.appendChild(divSucesso);
         setTimeout(() => divSucesso.remove(), 3000);
 
-        carregarMundo(); // Recarrega os dados do modal principal
+        carregarMundo();
     });
 };
 
@@ -971,7 +980,11 @@ window.confirmarEmprestimoFin = function(nomeCredor, maxCredor, taxaBase) {
 
     // 2. Tira o dinheiro do cofre do credor
     let saldoAntigoCredor = fundosInvestimentoGlobais[nomeCredor].saldo;
-    updates[`ligas/${ligaLogada}/banco_investidores/${nomeCredor}/saldo`] = saldoAntigoCredor - valor;
+    let novoSaldoCredor = saldoAntigoCredor - valor;
+    updates[`ligas/${ligaLogada}/banco_investidores/${nomeCredor}/saldo`] = novoSaldoCredor;
+
+    // ⚡ ATUALIZAÇÃO INSTANTÂNEA LOCAL
+    fundosInvestimentoGlobais[nomeCredor].saldo = novoSaldoCredor;
 
     // 3. Registra o Contrato no Cartório (Para o Motor P2P cobrar)
     updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`] = {
@@ -984,7 +997,10 @@ window.confirmarEmprestimoFin = function(nomeCredor, maxCredor, taxaBase) {
 
     db.ref().update(updates).then(() => {
         document.getElementById('modal-emprestimo-fin').remove();
-        document.getElementById('saldo-treinador').innerText = formatarDinheiro(saldoAtual); // Atualiza na hora!
+        document.getElementById('saldo-treinador').innerText = formatarDinheiro(saldoAtual);
+
+        // ⚡ Manda a aba "Cofre" se redesenhar e atualizar o limite do credor na hora!
+        window.renderListaTransacoes('banco');
 
         let divSucesso = document.createElement('div');
         divSucesso.style.cssText = "position:fixed; top:20px; right:20px; background:var(--verde-campo); color:#fff; padding:15px; border-radius:4px; z-index:10002; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);";
