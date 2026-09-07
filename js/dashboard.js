@@ -632,12 +632,12 @@ function iniciarSomAmbiente(nomeDoTime) {
     // Caminhos corrigidos para refletir os nomes reais dos arquivos no seu GitHub!
     hinoAmbiente.src = `sounds/${nomeDoTime}_Hino.mp3`;
     hinoAmbiente.onerror = () => { hinoAmbiente.src = 'sounds/hino_generico.mp3'; };
-    hinoAmbiente.volume = 0.2;
+    hinoAmbiente.volume = 0.05;
     hinoAmbiente.loop = true;
 
     torcidaAmbiente.src = `sounds/${nomeDoTime}_torcida.mp3`;
     torcidaAmbiente.onerror = () => { torcidaAmbiente.src = 'sounds/torcida_generica.mp3'; };
-    torcidaAmbiente.volume = 0.1;
+    torcidaAmbiente.volume = 0.02;
     torcidaAmbiente.loop = true;
 
     let promise = hinoAmbiente.play();
