@@ -12,6 +12,7 @@ let saldoAtual = 0;
 let propostasEnviadasGlobais = [];
 let propostasRecebidasGlobais = [];
 let timesReaisGlobais = [];
+let fundosInvestimentoGlobais = {}; // 🏦 Guarda o dinheiro de quem investiu!
 
 window.addEventListener('DOMContentLoaded', () => {
     db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value').then(snapshot => {
@@ -33,12 +34,19 @@ function carregarMundo() {
         db.ref('banco_global_times').once('value'),
         db.ref(`ligas/${ligaLogada}/pro_players`).once('value'),
         db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value'),
-        db.ref(`ligas/${ligaLogada}/usuarios`).once('value')
-    ]).then(([snapBanco, snapPro, snapProp, snapUsers]) => {
+        db.ref(`ligas/${ligaLogada}/usuarios`).once('value'),
+        db.ref(`ligas/${ligaLogada}/banco_investidores`).once('value') // 🏦 NOVA BUSCA
+    ]).then(([snapBanco, snapPro, snapProp, snapUsers, snapBancoInv]) => {
         const banco = snapBanco.val() || {};
         const pros = snapPro.val() || {};
         const propostas = snapProp.val() || {};
         const usuarios = snapUsers.val() || {};
+
+        fundosInvestimentoGlobais = snapBancoInv.val() || {};
+        // Garante que a IA do Banco Central sempre tenha dinheiro infinito para emprestar caso ninguém invista
+        if (!fundosInvestimentoGlobais['Banco Central da Liga']) {
+            fundosInvestimentoGlobais['Banco Central da Liga'] = { saldo: 500000000, is_ia: true };
+        }
 
         todosJogadores = [];
         meuElenco = [];
@@ -548,46 +556,47 @@ window.renderListaTransacoes = function(aba) {
     const div = document.getElementById('lista-transacoes-conteudo');
     let html = "";
 
-    // ==========================================
-    // NOVA LÓGICA DA ABA DE BANCO/COFRE P2P
-    // ==========================================
     if (aba === 'banco') {
-        div.innerHTML = `
-            <!-- SESSÃO 1: O MEU COFRINHO -->
+        let meuTime = dadosUsuario.timeAtual;
+        let meuSaldoCofre = fundosInvestimentoGlobais[meuTime] ? fundosInvestimentoGlobais[meuTime].saldo : 0;
+
+        let htmlBanco = `
             <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
                 <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
-                <p style="color:#888; font-size:12px;">Deposite seu dinheiro aqui. Outros clubes (ou a IA) poderão pegar emprestado e pagar juros direto para você!</p>
+                <p style="color:#888; font-size:12px;">Deposite seu dinheiro aqui. Em breve, renderá juros ou outros clubes poderão pedir emprestado!</p>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <span style="color:#ccc; font-size:14px;">Dinheiro Guardado:</span>
-                    <strong style="color:#fff; font-size:18px;">R$ 0,00</strong> <!-- Fixo na Etapa 1 -->
+                    <strong style="color:#fff; font-size:18px;">${formatarDinheiro(meuSaldoCofre)}</strong>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button onclick="alert('Na Etapa 2 ativaremos a janela para você Depositar seu saldo no cofre!')" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📥 Depositar</button>
-                    <button onclick="alert('Na Etapa 2 ativaremos a janela para você Sacar de volta pro seu caixa!')" style="flex:1; padding:8px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📤 Sacar</button>
+                    <button onclick="depositarCofre()" style="flex:1; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📥 Depositar</button>
+                    <button onclick="sacarCofre(${meuSaldoCofre})" style="flex:1; padding:8px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📤 Sacar</button>
                 </div>
             </div>
 
-            <!-- SESSÃO 2: O MERCADO DE CRÉDITO DA LIGA -->
             <h3 style="color:#ff8c00; font-size:14px; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">🤝 Investidores da Liga</h3>
             <p style="color:#666; font-size:11px;">Clubes que possuem dinheiro no cofre disponível para empréstimo.</p>
-
-            <!-- Lista Estática (Mockup) para a Etapa 1. Na etapa 2 o JS vai varrer o Firebase! -->
-            <div style="background:#1a1a1a; border:1px solid #333; padding:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <div>
-                    <strong style="color:#fff; font-size:14px;">Flamengo <span style="font-size:10px; color:#aaa;">(Máquina)</span></strong><br>
-                    <span style="color:#00b853; font-size:12px;">Disponível: R$ 15.000.000</span>
-                </div>
-                <button onclick="alert('Na Etapa 2, abrirá uma tela para você escolher quantas rodadas quer pagar e pedir a grana!')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
-            </div>
-            <div style="background:#1a1a1a; border:1px solid #333; padding:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <div>
-                    <strong style="color:#fff; font-size:14px;">Palmeiras <span style="font-size:10px; color:#aaa;">(Player)</span></strong><br>
-                    <span style="color:#00b853; font-size:12px;">Disponível: R$ 8.500.000</span>
-                </div>
-                <button onclick="alert('Na Etapa 2, abrirá uma tela para você escolher quantas rodadas quer pagar e pedir a grana!')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
-            </div>
         `;
-        return; // Encerra a função aqui para não rodar o código de propostas normais
+
+        // Varre todos que investiram dinheiro (menos o seu próprio time)
+        for (let clube in fundosInvestimentoGlobais) {
+            if (clube === meuTime) continue;
+
+            let investidor = fundosInvestimentoGlobais[clube];
+            let badgeIA = investidor.is_ia ? `<span style="font-size:10px; color:#aaa;">(Máquina)</span>` : `<span style="font-size:10px; color:#00b853;">(Player)</span>`;
+
+            htmlBanco += `
+            <div style="background:#1a1a1a; border:1px solid #333; padding:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div>
+                    <strong style="color:#fff; font-size:14px;">${clube.replace(/_/g, ' ')} ${badgeIA}</strong><br>
+                    <span style="color:#00b853; font-size:12px;">Disponível: ${formatarDinheiro(investidor.saldo)}</span>
+                </div>
+                <button onclick="alert('Na Etapa 3, abriremos o contrato para você pedir os ${formatarDinheiro(investidor.saldo)} emprestados!')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pedir Empréstimo</button>
+            </div>`;
+        }
+
+        div.innerHTML = htmlBanco;
+        return;
     }
 
     // ==========================================
@@ -815,3 +824,61 @@ window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
         };
     }
 })();
+
+// ==========================================
+// FUNÇÕES DO BANCO CENTRAL (DEPÓSITOS E SAQUES)
+// ==========================================
+window.depositarCofre = function() {
+    let valorStr = prompt(`Quanto deseja DEPOSITAR no cofre?\n\nSeu saldo atual: ${formatarDinheiro(saldoAtual)}\n(Digite apenas números, sem pontos)`);
+    if (!valorStr) return;
+
+    let valor = parseInt(valorStr);
+    if (isNaN(valor) || valor <= 0) return alert("Valor inválido.");
+    if (valor > saldoAtual) return alert("Você não tem esse saldo disponível no caixa do clube!");
+
+    let meuTime = dadosUsuario.timeAtual;
+    let saldoCofre = fundosInvestimentoGlobais[meuTime] ? fundosInvestimentoGlobais[meuTime].saldo : 0;
+
+    let updates = {};
+    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual - valor;
+    updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = {
+        saldo: saldoCofre + valor,
+        dono_login: userLogado,
+        is_ia: false
+    };
+
+    db.ref().update(updates).then(() => {
+        alert(`Sucesso! ${formatarDinheiro(valor)} foram guardados no cofre.`);
+        document.getElementById('modal-transacoes-ativas').style.display = 'none';
+        carregarMundo();
+    });
+};
+
+window.sacarCofre = function(saldoAtualCofre) {
+    if (saldoAtualCofre <= 0) return alert("Seu cofre está vazio!");
+
+    let valorStr = prompt(`Quanto deseja SACAR para o caixa do clube?\n\nDisponível no Cofre: ${formatarDinheiro(saldoAtualCofre)}\n(Digite apenas números, sem pontos)`);
+    if (!valorStr) return;
+
+    let valor = parseInt(valorStr);
+    if (isNaN(valor) || valor <= 0) return alert("Valor inválido.");
+    if (valor > saldoAtualCofre) return alert("Você não tem tudo isso guardado no cofre!");
+
+    let meuTime = dadosUsuario.timeAtual;
+    let updates = {};
+
+    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual + valor;
+
+    let novoSaldoCofre = saldoAtualCofre - valor;
+    if (novoSaldoCofre > 0) {
+        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}/saldo`] = novoSaldoCofre;
+    } else {
+        updates[`ligas/${ligaLogada}/banco_investidores/${meuTime}`] = null; // Zera e some da lista
+    }
+
+    db.ref().update(updates).then(() => {
+        alert(`Sucesso! ${formatarDinheiro(valor)} foram transferidos de volta ao seu caixa.`);
+        document.getElementById('modal-transacoes-ativas').style.display = 'none';
+        carregarMundo();
+    });
+};
