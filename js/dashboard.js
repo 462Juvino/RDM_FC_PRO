@@ -713,6 +713,8 @@ function criarBotaoSom() {
 // ⚔️ SISTEMA DE AMISTOSOS X1 (Apostas e Desafios)
 // ==========================================
 let arenaDadosGlobais = { times: {}, usuarios: {} };
+let desafiosX1Globais = {};
+let listenerX1Ativo = false;
 
 window.abrirModalX1 = async function() {
     try {
@@ -721,9 +723,73 @@ window.abrirModalX1 = async function() {
         arenaDadosGlobais.times = snapB.val() || {};
         arenaDadosGlobais.usuarios = snapU.val() || {};
 
-        let meuTime = dadosUsuario.timeAtual;
-        let optionsAdversarios = `<option value="">Selecione um oponente...</option>`;
+        let modal = document.getElementById('modal-arena-x1');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'modal-arena-x1';
+            modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
+            document.body.appendChild(modal);
+        }
 
+        modal.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:600px; border-radius:12px; border:2px solid #dc3545; padding:20px; box-shadow: 0 0 30px rgba(220,53,69,0.3); display:flex; flex-direction:column; max-height:85vh;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-shrink:0;">
+                    <h2 style="color:#dc3545; margin:0; text-transform:uppercase; letter-spacing:2px;">⚔️ Arena X1</h2>
+                    <button onclick="fecharModalX1()" style="background:transparent; border:none; color:#aaa; font-size:24px; cursor:pointer;">&times;</button>
+                </div>
+
+                <div style="display:flex; border-bottom:1px solid #333; margin-bottom:15px; flex-shrink:0;">
+                    <button id="tab-x1-novo" onclick="renderAbaX1('novo')" style="flex:1; padding:10px; background:#dc3545; color:#fff; border:none; cursor:pointer; font-weight:bold; font-size:12px;">⚔️ Novo</button>
+                    <button id="tab-x1-env" onclick="renderAbaX1('env')" style="flex:1; padding:10px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; border-left:1px solid #333; border-right:1px solid #333; font-size:12px;">📤 Enviados</button>
+                    <button id="tab-x1-rec" onclick="renderAbaX1('rec')" style="flex:1; padding:10px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; font-size:12px;">📥 Recebidos</button>
+                </div>
+
+                <div id="conteudo-x1" style="overflow-y:auto; flex:1; padding-right:5px;">
+                    <p style="color:#888; text-align:center;">Carregando...</p>
+                </div>
+            </div>
+        `;
+
+        // Ativa o Radar do Firebase para os Desafios em tempo real
+        if (!listenerX1Ativo) {
+            db.ref(`ligas/${ligaLogada}/x1_desafios`).on('value', snap => {
+                desafiosX1Globais = snap.val() || {};
+                if (document.getElementById('modal-arena-x1') && !document.getElementById('x1-lances')) {
+                    let abaAtiva = 'novo';
+                    if (document.getElementById('tab-x1-env') && document.getElementById('tab-x1-env').style.background.includes('220')) abaAtiva = 'env';
+                    if (document.getElementById('tab-x1-rec') && document.getElementById('tab-x1-rec').style.background.includes('220')) abaAtiva = 'rec';
+                    renderAbaX1(abaAtiva);
+                }
+            });
+            listenerX1Ativo = true;
+        } else {
+            renderAbaX1('novo');
+        }
+
+    } catch(e) { console.error("Erro na Arena X1", e); }
+};
+
+window.fecharModalX1 = function() {
+    let m = document.getElementById('modal-arena-x1');
+    if(m) m.remove();
+};
+
+window.renderAbaX1 = function(aba) {
+    let btnNovo = document.getElementById('tab-x1-novo');
+    let btnEnv = document.getElementById('tab-x1-env');
+    let btnRec = document.getElementById('tab-x1-rec');
+
+    if(btnNovo) { btnNovo.style.background = (aba === 'novo') ? '#dc3545' : '#111'; btnNovo.style.color = (aba === 'novo') ? '#fff' : '#888'; }
+    if(btnEnv) { btnEnv.style.background = (aba === 'env') ? '#dc3545' : '#111'; btnEnv.style.color = (aba === 'env') ? '#fff' : '#888'; }
+    if(btnRec) { btnRec.style.background = (aba === 'rec') ? '#dc3545' : '#111'; btnRec.style.color = (aba === 'rec') ? '#fff' : '#888'; }
+
+    const div = document.getElementById('conteudo-x1');
+    if (!div) return;
+
+    let meuTime = dadosUsuario.timeAtual;
+
+    if (aba === 'novo') {
+        let optionsAdversarios = `<option value="">Selecione um oponente...</option>`;
         let timesHumanos = Object.values(arenaDadosGlobais.usuarios).map(u => u.timeAtual);
 
         for (let t in arenaDadosGlobais.times) {
@@ -732,43 +798,68 @@ window.abrirModalX1 = async function() {
             optionsAdversarios += `<option value="${t}">${t.replace(/_/g, ' ')} (${tipo})</option>`;
         }
 
-        let modal = document.createElement('div');
-        modal.id = 'modal-arena-x1';
-        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
-
-        modal.innerHTML = `
-            <div style="background:#1a1a1a; width:90%; max-width:500px; border-radius:12px; border:2px solid #dc3545; padding:20px; box-shadow: 0 0 30px rgba(220,53,69,0.3);">
-                <h2 style="color:#dc3545; margin-top:0; text-align:center; font-size:24px; text-transform:uppercase; letter-spacing:2px;">⚔️ Arena X1</h2>
-
-                <div style="margin-bottom:15px;">
-                    <label style="color:#aaa; font-size:12px; font-weight:bold;">1. Escolha seu Oponente:</label>
-                    <select id="x1-oponente" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
-                        ${optionsAdversarios}
-                    </select>
-                </div>
-
-                <div style="margin-bottom:15px;">
-                    <label style="color:#aaa; font-size:12px; font-weight:bold;">2. Tipo de Aposta:</label>
-                    <select id="x1-tipo-aposta" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
-                        <option value="dinheiro">Dinheiro (Caixa do Clube)</option>
-                        <option value="jogador">Passe de Jogador (Pink Slip)</option>
-                    </select>
-                </div>
-
-                <div id="x1-area-aposta" style="background:#111; padding:15px; border-radius:8px; border:1px dashed #444; margin-bottom:20px;">
-                    <!-- Preenchido via JS -->
-                </div>
-
-                <div style="display:flex; gap:10px;">
-                    <button onclick="enviarDesafioX1()" style="flex:1; padding:12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px; text-transform:uppercase;">Iniciar Duelo</button>
-                    <button onclick="document.getElementById('modal-arena-x1').remove()" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px;">Fugir</button>
-                </div>
+        div.innerHTML = `
+            <div style="margin-bottom:15px;">
+                <label style="color:#aaa; font-size:12px; font-weight:bold;">1. Escolha seu Oponente:</label>
+                <select id="x1-oponente" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                    ${optionsAdversarios}
+                </select>
             </div>
+            <div style="margin-bottom:15px;">
+                <label style="color:#aaa; font-size:12px; font-weight:bold;">2. Tipo de Aposta:</label>
+                <select id="x1-tipo-aposta" onchange="atualizarOpcoesApostaX1()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                    <option value="dinheiro">Dinheiro (Caixa do Clube)</option>
+                    <option value="jogador">Passe de Jogador (Pink Slip)</option>
+                </select>
+            </div>
+            <div id="x1-area-aposta" style="background:#111; padding:15px; border-radius:8px; border:1px dashed #444; margin-bottom:20px;"></div>
+            <button onclick="enviarDesafioX1()" style="width:100%; padding:12px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px; text-transform:uppercase;">Lançar Desafio</button>
         `;
-        document.body.appendChild(modal);
         atualizarOpcoesApostaX1();
+    }
+    else {
+        let html = "";
+        let cont = 0;
+        for (let id in desafiosX1Globais) {
+            let d = desafiosX1Globais[id];
+            let isEnv = (aba === 'env' && d.desafiante === meuTime);
+            let isRec = (aba === 'rec' && d.desafiado === meuTime);
 
-    } catch(e) { console.error("Erro na Arena X1", e); }
+            if (isEnv || isRec) {
+                cont++;
+                let adv = isEnv ? d.desafiado : d.desafiante;
+                let txtAposta = d.tipo === 'dinheiro' ? `Aposta: ${formatarDinheiro(d.valor)}` : `Aposta de Jogadores (Pink Slip)`;
+
+                let corStatus = d.status === 'pendente' ? '#ffc107' : (d.status === 'aceito' ? 'var(--verde-campo)' : '#aaa');
+                let lblStatus = d.status.toUpperCase();
+
+                let botoes = "";
+                if (d.status === 'pendente') {
+                    if (isEnv) botoes = `<button onclick="cancelarDesafioX1('${id}')" style="padding:6px 12px; background:#333; color:#fff; border:1px solid #555; border-radius:4px; cursor:pointer; font-size:11px;">Cancelar Desafio</button>`;
+                    if (isRec) botoes = `
+                        <button onclick="aceitarDesafioX1('${id}')" style="padding:6px 12px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:11px; margin-right:5px;">Aceitar</button>
+                        <button onclick="cancelarDesafioX1('${id}')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:11px;">Recusar</button>
+                    `;
+                } else if (d.status === 'aceito') {
+                    botoes = `<button onclick="iniciarTransmissaoX1('${id}')" style="padding:8px 15px; background:#ff8c00; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; width:100%; box-shadow:0 0 10px rgba(255,140,0,0.5);">▶️ INICIAR TRANSMISSÃO</button>`;
+                } else if (d.status === 'finalizado') {
+                    botoes = `<button onclick="iniciarTransmissaoX1('${id}')" style="padding:6px 12px; background:#333; color:#aaa; border:1px solid #555; border-radius:4px; cursor:pointer; font-size:11px; width:100%;">Ver Reprise da Partida</button>`;
+                }
+
+                html += `
+                    <div style="background:#111; border:1px solid #333; padding:12px; border-radius:8px; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <strong style="color:#fff; font-size:14px;">${adv.replace(/_/g, ' ')}</strong>
+                            <span style="background:rgba(0,0,0,0.5); padding:3px 8px; border-radius:10px; font-size:10px; color:${corStatus}; border:1px solid ${corStatus}; font-weight:bold;">${lblStatus}</span>
+                        </div>
+                        <div style="font-size:12px; color:#aaa; margin-bottom:12px;">${txtAposta}</div>
+                        <div style="text-align:right;">${botoes}</div>
+                    </div>
+                `;
+            }
+        }
+        div.innerHTML = html || `<p style="text-align:center; color:#666; margin-top:30px;">Nenhum desafio nesta aba.</p>`;
+    }
 };
 
 window.atualizarOpcoesApostaX1 = function() {
@@ -785,10 +876,9 @@ window.atualizarOpcoesApostaX1 = function() {
         area.innerHTML = `
             <label style="color:#aaa; font-size:12px;">Valor da Aposta (R$):</label>
             <input type="number" id="x1-valor-aposta" placeholder="Ex: 5000000" style="width:100%; padding:10px; background:#000; border:1px solid #333; color:var(--verde-campo); font-weight:bold; border-radius:4px; margin-top:5px;">
-            <small style="color:#666; display:block; margin-top:5px;">O vencedor leva tudo. Se for contra a IA, o resultado sai na hora!</small>
+            <small style="color:#666; display:block; margin-top:5px;">O vencedor leva tudo.</small>
         `;
     } else {
-        // Modo Jogador
         let meuTime = dadosUsuario.timeAtual;
         let meusJ = arenaDadosGlobais.times[meuTime].jogadores || {};
         let advJ = arenaDadosGlobais.times[oponente].jogadores || {};
@@ -822,31 +912,27 @@ window.enviarDesafioX1 = async function() {
     let forcaV = arenaDadosGlobais.times[oponente].forca_base || 500;
     let isOponenteIA = !Object.values(arenaDadosGlobais.usuarios).some(u => u.timeAtual === oponente);
 
-    // 🤖 IA MEDROSA: Não aceita X1 contra times mais fortes que ela
     if (isOponenteIA && forcaM > forcaV) {
         return alert(`A Diretoria do ${oponente.replace(/_/g, ' ')} RECUSOU o desafio! A inteligência artificial identificou que seu time é superior e não quer arriscar perder os ativos do clube.`);
     }
 
     let apostaValidada = {};
-
     if (tipo === 'dinheiro') {
         let valor = parseInt(document.getElementById('x1-valor-aposta').value);
         if (isNaN(valor) || valor <= 0) return alert("Valor de aposta inválido.");
 
         let caixaM = dadosUsuario.caixaClube || 0;
         let caixaV = isOponenteIA ? 50000000 : 0;
-
         if (!isOponenteIA) {
             let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente);
             if (userAdv) caixaV = userAdv.caixaClube || 0;
         }
 
-        if (caixaM < valor) return alert("Você não tem esse dinheiro em caixa para apostar.");
-        if (caixaV < valor) return alert(`O oponente não tem ${formatarDinheiro(valor)} em caixa para cobrir a aposta.`);
+        if (caixaM < valor) return alert("Você não tem esse dinheiro em caixa.");
+        if (caixaV < valor) return alert(`O oponente não tem ${formatarDinheiro(valor)} em caixa.`);
 
         apostaValidada = { tipo: 'dinheiro', valor: valor };
-    }
-    else {
+    } else {
         let meuId = document.getElementById('x1-meu-jogador').value;
         let advId = document.getElementById('x1-adv-jogador').value;
         if (!meuId || !advId) return alert("Selecione os dois jogadores da aposta.");
@@ -859,258 +945,306 @@ window.enviarDesafioX1 = async function() {
         let diff = Math.abs(valorM - valorV);
         let maxDiff = Math.max(valorM, valorV) * 0.05;
 
-        if (diff > maxDiff) {
-            return alert(`Aposta Rejeitada! A diferença de valor ultrapassa 5%.\nSeu Jogador: ${formatarDinheiro(valorM)}\nAdversário: ${formatarDinheiro(valorV)}`);
-        }
+        if (diff > maxDiff) return alert(`Aposta Rejeitada! A diferença de valor ultrapassa 5%.\nSeu Jogador: ${formatarDinheiro(valorM)}\nAdversário: ${formatarDinheiro(valorV)}`);
 
         apostaValidada = { tipo: 'jogador', id_meu: meuId, id_adv: advId, dados_meu: meuJog, dados_adv: advJog };
     }
 
     if (isOponenteIA) {
-        // ========================================================
-        // 🎙️ MOTOR DE NARRAÇÃO ROBUSTO (ARENA X1)
-        // ========================================================
-        let linhaTempo = [];
-        let golsM_temp = 0; let golsV_temp = 0;
+        // IA SIMULATION INSTANT (Fica pronto na hora)
+        let linhaTempoObj = gerarLinhaTempoX1(forcaM, forcaV);
+        let venci = linhaTempoObj.golsM > linhaTempoObj.golsV;
 
-        // 1. SORTEIO DOS GOLS
-        for(let i=0; i<5; i++) {
-            if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
-                linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Um golaço espetacular do seu time! A Arena vai à loucura!` });
-                golsM_temp++;
-            }
-            if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
-                linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO ADVERSÁRIO! Uma falha na zaga e a bola morre no fundo da rede!` });
-                golsV_temp++;
-            }
-        }
+        let txtFim = (tipo === 'dinheiro')
+            ? (venci ? `Você faturou ${formatarDinheiro(apostaValidada.valor)} em cima da máquina!` : `A máquina limpou ${formatarDinheiro(apostaValidada.valor)} do seu caixa.`)
+            : (venci ? `O passe de ${apostaValidada.dados_adv.nome} agora é seu!` : `Adeus! O seu jogador ${apostaValidada.dados_meu.nome} fez as malas.`);
 
-        // 2. BANCO DE LANCES (Inteligência Artificial do Narrador)
-        const narracoesM = [
-            "🔥 UUUHH! Seu atacante chuta forte de fora da área e a bola raspa a trave!",
-            "🛡️ Bela roubada de bola da sua zaga, desarmando o ataque adversário com classe.",
-            "👟 Troca de passes envolvente do seu meio de campo. O time procura espaço.",
-            "🧤 DEFESAAA! O goleiro adversário voa no ângulo para evitar o seu gol!",
-            "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima do travessão!",
-            "⚡ Belo drible do seu ponta, levantando a torcida na arquibancada!",
-            "🟨 Cartão amarelo para o zagueiro adversário após parar seu contra-ataque."
-        ];
-        const narracoesV = [
-            "⚠️ PERIGO! O adversário ataca com velocidade, mas o chute vai para fora.",
-            "🧱 A sua defesa afasta o perigo de cabeça após cobrança de escanteio.",
-            "🏃‍♂️ O ponta adversário dispara livre, mas seu lateral se recupera e corta a bola.",
-            "🧤 MILAGRE! O seu goleiro se estica todo e salva um gol que parecia certo!",
-            "👟 O adversário domina a posse de bola no campo de defesa, cozinhando o jogo.",
-            "🟨 Falta dura do seu volante no meio de campo. O juiz mostra o cartão amarelo.",
-            "🥅 Chute de muito longe do adversário, a bola passa assustando o seu goleiro."
-        ];
-
-        // Adiciona de 15 a 20 lances aleatórios para preencher os 120 segundos
-        for(let i=0; i<18; i++) {
-            let minAleatorio = Math.floor(Math.random()*89)+1;
-            // Evita sobrepor no mesmo minuto do Intervalo
-            if (minAleatorio === 45) minAleatorio = 46;
-
-            if (Math.random() > 0.5) {
-                linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_m', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
-            } else {
-                linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_v', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
-            }
-        }
-
-        // 3. EVENTOS FIXOS (Apito Inicial e Intervalo)
-        linhaTempo.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Começa o duelo na Arena X1!` });
-        if (!linhaTempo.some(l => l.minuto === 45 && l.tipo === 'gol_m' || l.tipo === 'gol_v')) {
-            linhaTempo.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo! Os jogadores vão para o vestiário respirar.` });
-        }
-
-        // 4. PÊNALTIS (Caso empate)
-        if (golsM_temp === golsV_temp) {
-            linhaTempo.push({ minuto: 95, tipo: 'penaltis', texto: `⚖️ Fim do tempo normal! O duelo está empatado e vai ser decidido nos PÊNALTIS!` });
-            if (Math.random() > 0.5) {
-                golsM_temp++; linhaTempo.push({ minuto: 99, tipo: 'gol_m', texto: `🏆 GOOOOL DO TÍTULO! O SEU TIME VENCE A DISPUTA DE PÊNALTIS!` });
-            } else {
-                golsV_temp++; linhaTempo.push({ minuto: 99, tipo: 'gol_v', texto: `💀 FIM DE JOGO! A máquina defende o último pênalti e leva a aposta!` });
-            }
-        }
-        linhaTempo.sort((a,b) => a.minuto - b.minuto);
-
-        // ========================================================
-        // 📺 INTERFACE DA TRANSMISSÃO (Com Estádio no Fundo)
-        // ========================================================
-        let modal = document.getElementById('modal-arena-x1');
-
-        // Separação de atributos CSS garante que qualquer navegador carregue a imagem do Estádio!
-        modal.style.background = "transparent";
-        modal.style.backgroundImage = `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('${getEstadio(meuTime)}')`;
-        modal.style.backgroundPosition = "center";
-        modal.style.backgroundSize = "cover";
-
-        modal.innerHTML = `
-            <div style="width:90%; max-width:600px; border-radius:12px; border:2px solid rgba(255,140,0,0.5); padding:20px; text-align:center; box-shadow: 0 0 40px rgba(0,0,0,0.8); background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);">
-                <h2 style="color:#ff8c00; margin-top:0; text-shadow: 2px 2px 4px #000;">🔴 TRANSMISSÃO AO VIVO</h2>
-
-                <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg, #111, #000); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:15px; box-shadow: inset 0 2px 10px rgba(255,255,255,0.05);">
-                    <div style="flex:1; text-align:right; font-weight:bold; color:var(--verde-campo); font-size:18px; text-shadow: 1px 1px 2px #000;">
-                        ${meuTime.replace(/_/g, ' ')} <br> <span id="x1-placar-m" style="font-size:36px;">0</span>
-                    </div>
-                    <div style="width:70px; font-size:22px; color:#aaa; font-weight:bold; background:#222; padding:5px; border-radius:6px; border:1px solid #444; margin: 0 15px;">
-                        <span id="x1-relogio">0'</span>
-                    </div>
-                    <div style="flex:1; text-align:left; font-weight:bold; color:#dc3545; font-size:18px; text-shadow: 1px 1px 2px #000;">
-                        <span id="x1-placar-v" style="font-size:36px;">0</span> <br> ${oponente.replace(/_/g, ' ')}
-                    </div>
-                </div>
-
-                <div id="x1-lances" style="background:rgba(0,0,0,0.7); border:1px solid #333; border-radius:8px; padding:15px; height:180px; overflow-y:auto; font-size:14px; text-align:left; color:#ccc; scroll-behavior: smooth;">
-                    <div style="color:#888;">📡 Conectando satélite ao estádio...</div>
-                </div>
-            </div>
-        `;
-
-        // ========================================================
-        // 🔊 MOTORES DE ÁUDIO REAIS (midia.js)
-        // ========================================================
-        let somTorcida = new Audio(getTorcida(meuTime));
-        let somGol = new Audio('sounds/gol_generico.mp3');
-        let somHinoM = new Audio(getHino(meuTime));
-        let somHinoV = new Audio(getHino(oponente));
-        let somFim = new Audio('sounds/final_do_jogo.mp3');
-        let somApito = new Audio('sounds/apito_arbitro.mp3');
-
-        somTorcida.volume = 0.3;
-        somTorcida.loop = true;
-        somTorcida.play().catch(()=>{});
-
-        let minutoAtual = 0;
-        let placarM_tela = 0; let placarV_tela = 0;
-        let divLances = document.getElementById('x1-lances');
-        let relogio = document.getElementById('x1-relogio');
-
-        // LOOP DE TRANSMISSÃO (1333ms por minuto = ~120 Segundos Reais de Jogo!)
-        let transmissaoLoop = setInterval(async () => {
-            minutoAtual++;
-
-            // Pausa no intervalo
-            if (minutoAtual === 46) {
-                somTorcida.volume = 0.1; // Torcida descansa no intervalo
-            } else if (minutoAtual === 47) {
-                somTorcida.volume = 0.3; // Torcida volta pro 2º tempo
-                divLances.innerHTML += `<div style="margin-top:8px; border-bottom:1px solid #222; padding-bottom:5px; color:#aaa;">🟢 Rola a bola para o segundo tempo!</div>`;
-            }
-
-            if (minutoAtual <= 90 || minutoAtual === 95 || minutoAtual === 99) {
-                if (relogio) relogio.innerText = minutoAtual + "'";
-            }
-
-            // Puxa lances deste minuto
-            let lancesAgora = linhaTempo.filter(l => l.minuto === minutoAtual);
-            lancesAgora.forEach(lance => {
-                let cor = '#ccc';
-                if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
-                if (lance.tipo.includes('ataque_v')) cor = '#ffc107';
-                if (lance.tipo.includes('gol_m')) cor = 'var(--verde-campo)';
-                if (lance.tipo.includes('gol_v')) cor = '#dc3545';
-                if (lance.tipo === 'penaltis') cor = '#ff8c00';
-                if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff';
-
-                divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
-                divLances.scrollTop = divLances.scrollHeight;
-
-                // EFEITOS SONOROS DINÂMICOS
-                if (lance.tipo === 'inicio') {
-                    somApito.play().catch(()=>{});
-                }
-                if (lance.tipo === 'ataque_m') {
-                    somTorcida.volume = 0.8;
-                    setTimeout(() => somTorcida.volume = 0.3, 4000);
-                }
-                if (lance.tipo === 'ataque_v') {
-                    somTorcida.volume = 0.1;
-                    setTimeout(() => somTorcida.volume = 0.3, 4000);
-                }
-                if (lance.tipo === 'gol_m') {
-                    placarM_tela++;
-                    document.getElementById('x1-placar-m').innerText = placarM_tela;
-                    somTorcida.volume = 1.0;
-                    somGol.play().catch(()=>{});
-                    setTimeout(() => { somHinoM.volume = 0.4; somHinoM.play().catch(()=>{}); }, 1500);
-                    setTimeout(() => { somHinoM.pause(); somHinoM.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
-                }
-                if (lance.tipo === 'gol_v') {
-                    placarV_tela++;
-                    document.getElementById('x1-placar-v').innerText = placarV_tela;
-                    somTorcida.volume = 0.1;
-                    somGol.play().catch(()=>{});
-                    setTimeout(() => { somHinoV.volume = 0.2; somHinoV.play().catch(()=>{}); }, 1500);
-                    setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
-                }
-            });
-
-            // FINAL DO JOGO! (Após o minuto 99 ou 90 sem pênaltis)
-            if (minutoAtual > 99 || (minutoAtual >= 90 && golsM_temp !== golsV_temp && !linhaTempo.some(l => l.minuto > minutoAtual))) {
-                clearInterval(transmissaoLoop);
-                somTorcida.pause();
-                somHinoM.pause();
-                somHinoV.pause();
-
-                somFim.play().catch(()=>{});
-
-                if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
-
-                // EXECUTA O BANCO DE DADOS (PAGAMENTOS/TRANSFERÊNCIAS)
-                let venci = golsM_temp > golsV_temp;
-
-                // 🎵 TOCA O HINO DO VENCEDOR EM LOOP! (Volume 20%)
-                setTimeout(() => {
-                    let somCampeao = venci ? somHinoM : somHinoV;
-                    somCampeao.currentTime = 0;
-                    somCampeao.volume = 0.2;
-                    somCampeao.loop = true;
-                    somCampeao.play().catch(()=>{});
-                }, 1500); // Aguarda 1.5s para o som do apito final (somFim) se destacar
-
-                let updates = {};
-                let txtFim = "";
-
-                if (apostaValidada.tipo === 'dinheiro') {
-                    let v = apostaValidada.valor;
-                    if (venci) {
-                        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v;
-                        txtFim = `Você faturou ${formatarDinheiro(v)} em cima da máquina!`;
-                    } else {
-                        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v;
-                        txtFim = `A máquina limpou ${formatarDinheiro(v)} do seu caixa.`;
-                    }
-                } else {
-                    if (venci) {
-                        updates[`banco_global_times/${oponente}/jogadores/${apostaValidada.id_adv}`] = null;
-                        updates[`banco_global_times/${meuTime}/jogadores/${apostaValidada.id_adv}`] = apostaValidada.dados_adv;
-                        txtFim = `O passe de ${apostaValidada.dados_adv.nome} agora é oficialmente seu!`;
-                    } else {
-                        updates[`banco_global_times/${meuTime}/jogadores/${apostaValidada.id_meu}`] = null;
-                        updates[`banco_global_times/${oponente}/jogadores/${apostaValidada.id_meu}`] = apostaValidada.dados_meu;
-                        txtFim = `Adeus! O seu jogador ${apostaValidada.dados_meu.nome} fez as malas.`;
-                    }
-                }
-
-                await db.ref().update(updates);
-
-                // REVELA O BOTÃO DE CONCLUIR (Alinhado em Coluna para Mobile)
-                modal.style.flexDirection = "column";
-                modal.insertAdjacentHTML('beforeend', `
-                    <div style="width:90%; max-width:600px; margin-top:15px; padding:15px; background:${venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)'}; border:2px solid ${venci ? 'var(--verde-campo)' : '#dc3545'}; border-radius:8px; box-shadow: 0 0 20px ${venci ? 'rgba(0,184,83,0.5)' : 'rgba(220,53,69,0.5)'}; backdrop-filter: blur(10px); text-align:center;">
-                        <h3 style="color:#fff; margin:0; text-shadow: 1px 1px 3px #000;">${venci ? '🏆 VITÓRIA!' : '💀 DERROTA!'}</h3>
-                        <p style="color:#ddd; font-size:15px; font-weight:bold;">${txtFim}</p>
-                        <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; font-size:16px;">Retornar ao Dashboard</button>
-                    </div>
-                `);
-            }
-        }, 1333); // 1333ms * 90 min = exatos ~120 Segundos Reais de Jogo!
-
+        reproduzirTransmissaoX1(meuTime, oponente, linhaTempoObj.eventos, linhaTempoObj.golsM, linhaTempoObj.golsV, venci, txtFim, true, apostaValidada);
     } else {
-        // Lógica contra Player Real
-        alert(`DESAFIO ENVIADO! 📜\n\nComo o oponente é um Player Humano, o desafio foi enviado ao painel dele. O duelo será simulado assim que ele aceitar os termos!`);
-        document.getElementById('modal-arena-x1').remove();
+        // P2P HUMAN - Salva a solicitação na Nuvem
+        let idDesafio = `x1_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        let d = {
+            desafiante: meuTime,
+            desafiado: oponente,
+            status: 'pendente',
+            tipo: tipo,
+            data: new Date().toISOString()
+        };
+        if(tipo === 'dinheiro') {
+            d.valor = apostaValidada.valor;
+        } else {
+            d.id_meu = apostaValidada.id_meu; d.id_adv = apostaValidada.id_adv;
+            d.dados_meu = apostaValidada.dados_meu; d.dados_adv = apostaValidada.dados_adv;
+        }
+        await db.ref(`ligas/${ligaLogada}/x1_desafios/${idDesafio}`).set(d);
+        alert("Desafio enviado com sucesso! Aguarde o oponente aceitar na aba 'Enviados'.");
+        renderAbaX1('env');
     }
 };
+
+window.cancelarDesafioX1 = async function(id) {
+    if(confirm("Deseja cancelar/recusar este desafio?")) {
+        await db.ref(`ligas/${ligaLogada}/x1_desafios/${id}`).remove();
+    }
+};
+
+window.aceitarDesafioX1 = async function(id) {
+    if(confirm("Deseja ACEITAR o desafio e liberar a transmissão na Arena X1?")) {
+        await db.ref(`ligas/${ligaLogada}/x1_desafios/${id}/status`).set('aceito');
+        alert("Desafio Aceito! O botão de Iniciar Transmissão está disponível.");
+    }
+};
+
+// ========================================================
+// 🧠 MOTOR GERADOR DA PARTIDA (Nuvem / Local)
+// ========================================================
+function gerarLinhaTempoX1(forcaM, forcaV) {
+    let linhaTempo = [];
+    let golsM = 0; let golsV = 0;
+
+    for(let i=0; i<5; i++) {
+        if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
+            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Um golaço espetacular do mandante! A Arena vai à loucura!` });
+            golsM++;
+        }
+        if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
+            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! Uma falha na zaga e a bola morre no fundo da rede!` });
+            golsV++;
+        }
+    }
+    const narracoesM = ["🔥 UUUHH! O atacante chuta forte e a bola raspa a trave!", "🛡️ Bela roubada de bola da zaga, desarmando com classe.", "👟 Troca de passes envolvente. O time procura espaço.", "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima!"];
+    const narracoesV = ["⚠️ PERIGO! O visitante ataca com velocidade, mas o chute vai fora.", "🧤 MILAGRE! O goleiro se estica todo e salva um gol certo!", "👟 O visitante domina a posse de bola.", "🥅 Chute de muito longe, a bola passa assustando!"];
+
+    for(let i=0; i<16; i++) {
+        let minAleatorio = Math.floor(Math.random()*89)+1;
+        if (minAleatorio === 45) minAleatorio = 46;
+        if (Math.random() > 0.5) linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_m', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
+        else linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_v', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
+    }
+
+    linhaTempo.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Começa o duelo na Arena X1!` });
+    if (!linhaTempo.some(l => l.minuto === 45 && (l.tipo === 'gol_m' || l.tipo === 'gol_v'))) {
+        linhaTempo.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo!` });
+    }
+
+    if (golsM === golsV) {
+        linhaTempo.push({ minuto: 95, tipo: 'penaltis', texto: `⚖️ Fim do tempo normal! O duelo vai para os PÊNALTIS!` });
+        if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: 'gol_m', texto: `🏆 O MANDANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
+        else { golsV++; linhaTempo.push({ minuto: 99, tipo: 'gol_v', texto: `💀 O VISITANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
+    }
+    linhaTempo.sort((a,b) => a.minuto - b.minuto);
+    return { eventos: linhaTempo, golsM: golsM, golsV: golsV };
+}
+
+window.iniciarTransmissaoX1 = async function(id) {
+    let snap = await db.ref(`ligas/${ligaLogada}/x1_desafios/${id}`).once('value');
+    let d = snap.val();
+    if(!d) return alert("Desafio não existe mais.");
+
+    let meuTime = dadosUsuario.timeAtual;
+    let isDesafiante = (d.desafiante === meuTime);
+    let mandante = d.desafiante;
+    let visitante = d.desafiado;
+
+    // QUEM CLICAR PRIMEIRO NO BOTÃO "INICIAR" GERA O JOGO E SALVA NA NUVEM!
+    if (d.status === 'aceito') {
+        document.getElementById('modal-arena-x1').innerHTML = `<h2 style="color:white; text-align:center; margin-top:50px;">Conectando satélite e calculando variáveis P2P...</h2>`;
+
+        let forcaM = arenaDadosGlobais.times[mandante]?.forca_base || 500;
+        let forcaV = arenaDadosGlobais.times[visitante]?.forca_base || 500;
+
+        let linhaObj = gerarLinhaTempoX1(forcaM, forcaV);
+
+        d.linhaDoTempo = linhaObj.eventos;
+        d.golsM = linhaObj.golsM;
+        d.golsV = linhaObj.golsV;
+        d.status = 'finalizado';
+
+        let updates = {};
+        updates[`ligas/${ligaLogada}/x1_desafios/${id}`] = d; // Salva o jogo finalizado para o outro player ver a reprise
+
+        let vitoriaMandante = d.golsM > d.golsV;
+        let loginM = Object.keys(arenaDadosGlobais.usuarios).find(k => arenaDadosGlobais.usuarios[k].timeAtual === mandante);
+        let loginV = Object.keys(arenaDadosGlobais.usuarios).find(k => arenaDadosGlobais.usuarios[k].timeAtual === visitante);
+
+        let cxM = arenaDadosGlobais.usuarios[loginM]?.caixaClube || 0;
+        let cxV = arenaDadosGlobais.usuarios[loginV]?.caixaClube || 0;
+
+        // Executa o pagamento e as transferências na nuvem apenas 1 vez (Quem gerar o jogo processa)
+        if (d.tipo === 'dinheiro') {
+            if (vitoriaMandante) {
+                if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM + d.valor;
+                if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV - d.valor;
+            } else {
+                if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM - d.valor;
+                if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV + d.valor;
+            }
+        } else {
+            if (vitoriaMandante) {
+                updates[`banco_global_times/${visitante}/jogadores/${d.id_adv}`] = null;
+                updates[`banco_global_times/${mandante}/jogadores/${d.id_adv}`] = d.dados_adv;
+            } else {
+                updates[`banco_global_times/${mandante}/jogadores/${d.id_meu}`] = null;
+                updates[`banco_global_times/${visitante}/jogadores/${d.id_meu}`] = d.dados_meu;
+            }
+        }
+        await db.ref().update(updates);
+    }
+
+    let isVitoriaMinha = isDesafiante ? (d.golsM > d.golsV) : (d.golsV > d.golsM);
+    let txtFim = "";
+    if (d.tipo === 'dinheiro') {
+        txtFim = isVitoriaMinha ? `Você faturou ${formatarDinheiro(d.valor)} do oponente!` : `Você perdeu ${formatarDinheiro(d.valor)} do caixa.`;
+    } else {
+        let nomeGanho = isDesafiante ? d.dados_adv.nome : d.dados_meu.nome;
+        let nomePerdido = isDesafiante ? d.dados_meu.nome : d.dados_adv.nome;
+        txtFim = isVitoriaMinha ? `O passe de ${nomeGanho} agora é seu!` : `Adeus! Seu jogador ${nomePerdido} fez as malas.`;
+    }
+
+    // Toca a transmissão! (O isIADuel aqui vai como false, pois a DB já foi atualizada acima).
+    reproduzirTransmissaoX1(mandante, visitante, d.linhaDoTempo, d.golsM, d.golsV, isVitoriaMinha, txtFim, false, null);
+};
+
+function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, golsV_final, venci, txtFim, isIADuel, apostaValidadaIA) {
+    let modal = document.getElementById('modal-arena-x1');
+
+    modal.style.background = "transparent";
+    modal.style.backgroundImage = `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('${getEstadio(mandante)}')`;
+    modal.style.backgroundPosition = "center";
+    modal.style.backgroundSize = "cover";
+
+    modal.innerHTML = `
+        <div style="width:90%; max-width:600px; border-radius:12px; border:2px solid rgba(255,140,0,0.5); padding:20px; text-align:center; box-shadow: 0 0 40px rgba(0,0,0,0.8); background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);">
+            <h2 style="color:#ff8c00; margin-top:0; text-shadow: 2px 2px 4px #000;">🔴 TRANSMISSÃO AO VIVO</h2>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg, #111, #000); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:15px; box-shadow: inset 0 2px 10px rgba(255,255,255,0.05);">
+                <div style="flex:1; text-align:right; font-weight:bold; color:var(--verde-campo); font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
+                    <div style="display:flex; justify-content:flex-end; align-items:center; gap:6px;">
+                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${mandante.replace(/_/g, ' ')}</span>
+                        <img src="${getEscudo(mandante)}" onerror="this.src='esculdos/default.png'" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">
+                    </div>
+                    <div id="x1-placar-m" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
+                </div>
+
+                <div style="width:60px; font-size:22px; color:#aaa; font-weight:bold; background:#222; padding:5px; border-radius:6px; border:1px solid #444; margin: 0 10px; flex-shrink:0;">
+                    <span id="x1-relogio">0'</span>
+                </div>
+
+                <div style="flex:1; text-align:left; font-weight:bold; color:#dc3545; font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
+                    <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px;">
+                        <img src="${getEscudo(visitante)}" onerror="this.src='esculdos/default.png'" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">
+                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${visitante.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div id="x1-placar-v" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
+                </div>
+            </div>
+
+            <div id="x1-lances" style="background:rgba(0,0,0,0.7); border:1px solid #333; border-radius:8px; padding:15px; height:180px; overflow-y:auto; font-size:14px; text-align:left; color:#ccc; scroll-behavior: smooth;">
+                <div style="color:#888;">📡 Conectando satélite ao estádio...</div>
+            </div>
+        </div>
+    `;
+
+    let somTorcida = new Audio(getTorcida(mandante));
+    let somGol = new Audio('sounds/gol_generico.mp3');
+    let somHinoM = new Audio(getHino(mandante));
+    let somHinoV = new Audio(getHino(visitante));
+    let somFim = new Audio('sounds/final_do_jogo.mp3');
+    let somApito = new Audio('sounds/apito_arbitro.mp3');
+
+    somTorcida.volume = 0.3;
+    somTorcida.loop = true;
+    somTorcida.play().catch(()=>{});
+
+    let minutoAtual = 0;
+    let placarM_tela = 0; let placarV_tela = 0;
+    let divLances = document.getElementById('x1-lances');
+    let relogio = document.getElementById('x1-relogio');
+
+    let transmissaoLoop = setInterval(async () => {
+        minutoAtual++;
+
+        if (minutoAtual === 46) somTorcida.volume = 0.1;
+        else if (minutoAtual === 47) {
+            somTorcida.volume = 0.3;
+            divLances.innerHTML += `<div style="margin-top:8px; border-bottom:1px solid #222; padding-bottom:5px; color:#aaa;">🟢 Rola a bola para o segundo tempo!</div>`;
+        }
+
+        if (minutoAtual <= 90 || minutoAtual === 95 || minutoAtual === 99) {
+            if (relogio) relogio.innerText = minutoAtual + "'";
+        }
+
+        let lancesAgora = linhaTempo.filter(l => l.minuto === minutoAtual);
+        lancesAgora.forEach(lance => {
+            let cor = '#ccc';
+            if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
+            if (lance.tipo.includes('ataque_v')) cor = '#ffc107';
+            if (lance.tipo.includes('gol_m')) cor = 'var(--verde-campo)';
+            if (lance.tipo.includes('gol_v')) cor = '#dc3545';
+            if (lance.tipo === 'penaltis') cor = '#ff8c00';
+            if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff';
+
+            divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
+            divLances.scrollTop = divLances.scrollHeight;
+
+            if (lance.tipo === 'inicio') somApito.play().catch(()=>{});
+            if (lance.tipo === 'ataque_m') { somTorcida.volume = 0.8; setTimeout(() => somTorcida.volume = 0.3, 4000); }
+            if (lance.tipo === 'ataque_v') { somTorcida.volume = 0.1; setTimeout(() => somTorcida.volume = 0.3, 4000); }
+
+            if (lance.tipo === 'gol_m') {
+                placarM_tela++; document.getElementById('x1-placar-m').innerText = placarM_tela;
+                somTorcida.volume = 1.0; somGol.play().catch(()=>{});
+                setTimeout(() => { somHinoM.volume = 0.4; somHinoM.play().catch(()=>{}); }, 1500);
+                setTimeout(() => { somHinoM.pause(); somHinoM.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
+            }
+            if (lance.tipo === 'gol_v') {
+                placarV_tela++; document.getElementById('x1-placar-v').innerText = placarV_tela;
+                somTorcida.volume = 0.1; somGol.play().catch(()=>{});
+                setTimeout(() => { somHinoV.volume = 0.2; somHinoV.play().catch(()=>{}); }, 1500);
+                setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
+            }
+        });
+
+        if (minutoAtual > 99 || (minutoAtual >= 90 && golsM_final !== golsV_final && !linhaTempo.some(l => l.minuto > minutoAtual))) {
+            clearInterval(transmissaoLoop);
+            somTorcida.pause(); somHinoM.pause(); somHinoV.pause();
+            somFim.play().catch(()=>{});
+
+            if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
+
+            setTimeout(() => {
+                let somCampeao = (golsM_final > golsV_final) ? somHinoM : somHinoV;
+                somCampeao.currentTime = 0; somCampeao.volume = 0.2; somCampeao.loop = true;
+                somCampeao.play().catch(()=>{});
+            }, 1500);
+
+            // SE for IA, a gente não gravou os dados antes de gerar a partida, então gravamos agora no final.
+            if (isIADuel && apostaValidadaIA) {
+                let updates = {};
+                let v = apostaValidadaIA.valor;
+                if (apostaValidadaIA.tipo === 'dinheiro') {
+                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v;
+                    else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v;
+                } else {
+                    if (venci) {
+                        updates[`banco_global_times/${visitante}/jogadores/${apostaValidadaIA.id_adv}`] = null;
+                        updates[`banco_global_times/${mandante}/jogadores/${apostaValidadaIA.id_adv}`] = apostaValidadaIA.dados_adv;
+                    } else {
+                        updates[`banco_global_times/${mandante}/jogadores/${apostaValidadaIA.id_meu}`] = null;
+                        updates[`banco_global_times/${visitante}/jogadores/${apostaValidadaIA.id_meu}`] = apostaValidadaIA.dados_meu;
+                    }
+                }
+                await db.ref().update(updates);
+            }
+
+            modal.style.flexDirection = "column";
+            modal.insertAdjacentHTML('beforeend', `
+                <div style="width:90%; max-width:600px; margin-top:15px; padding:15px; background:${venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)'}; border:2px solid ${venci ? 'var(--verde-campo)' : '#dc3545'}; border-radius:8px; box-shadow: 0 0 20px ${venci ? 'rgba(0,184,83,0.5)' : 'rgba(220,53,69,0.5)'}; backdrop-filter: blur(10px); text-align:center;">
+                    <h3 style="color:#fff; margin:0; text-shadow: 1px 1px 3px #000;">${venci ? '🏆 VITÓRIA!' : '💀 DERROTA!'}</h3>
+                    <p style="color:#ddd; font-size:15px; font-weight:bold;">${txtFim}</p>
+                    <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; font-size:16px;">Retornar ao Dashboard</button>
+                </div>
+            `);
+        }
+    }, 1333);
+}
