@@ -470,6 +470,13 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFi
             document.getElementById('gols-mandante').innerText = placarMFinal;
             document.getElementById('gols-visitante').innerText = placarVFinal;
 
+            // Desliga a tag "Ao Vivo" quando o cronômetro chega ao fim!
+            let statusTransmissao = document.getElementById('status-transmissao');
+            if(statusTransmissao) {
+                statusTransmissao.innerText = "Partida Encerrada 🏁";
+                statusTransmissao.style.animation = "none";
+            }
+
             if(!eventosJaTocados.has("fim") && audioLiberado) {
                 canalEfeitos.src = 'sounds/final_do_jogo.mp3'; canalEfeitos.play().catch(()=>{});
                 canalTorcidaM.volume = 0.1; canalTorcidaV.volume = 0.1;

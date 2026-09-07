@@ -67,7 +67,7 @@ async function checarRotinas(liga) {
         }, (error, committed) => {
             if (committed) {
                 console.log("🔥 MOTOR P2P: Iniciando varredura Oficial!");
-                // Aqui nós CHAMAMOS a função corretamente!
+                // Aqui nós CHAMAMOS a função, e não criamos ela!
                 processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados);
             }
         });
