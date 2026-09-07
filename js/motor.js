@@ -676,6 +676,97 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
             updates[`banco_global_times/${jog.time}/jogadores/${jog.id}`] = j;
         });
 
+        // ========================================================
+        // --- PASSO C.3: BANCO CENTRAL (COBRANÇAS E PENHORAS) ---
+        // ========================================================
+        let novaRodadaCobranca = cal ? (cal.rodadaAtual || 1) : 1;
+        let rodadasParaCobrar = novaRodadaCobranca - (rodadaAtual || 1); // Garante cobrar retroativo se ficou dias sem logar
+
+        if (rodadasParaCobrar > 0) {
+            const snapDividas = await db.ref(`ligas/${liga}/dividas_financeiras`).once('value');
+            const dividas = snapDividas.val();
+
+            if (dividas) {
+                // Precisamos buscar o estado atual dos cofres para pagar os investidores
+                const snapCofres = await db.ref(`ligas/${liga}/banco_investidores`).once('value');
+                let cofres = snapCofres.val() || {};
+
+                for (let idDivida in dividas) {
+                    let div = dividas[idDivida];
+                    let devedor = div.devedor;
+                    let credor = div.credor;
+                    let parcelaBase = div.parcela_rodada;
+
+                    // Multiplica a parcela pelos dias atrasados
+                    let totalCobradoNaRodada = parcelaBase * rodadasParaCobrar;
+
+                    let loginDevedor = null;
+                    for (let u in usuarios) { if (usuarios[u].timeAtual === devedor) { loginDevedor = u; break; } }
+
+                    if (loginDevedor && usuarios[loginDevedor]) {
+                        if (usuarios[loginDevedor].caixaClube >= totalCobradoNaRodada) {
+                            // 🟢 PAGAMENTO EM DIA
+                            usuarios[loginDevedor].caixaClube -= totalCobradoNaRodada;
+                            updates[`ligas/${liga}/usuarios/${loginDevedor}/caixaClube`] = usuarios[loginDevedor].caixaClube;
+
+                            // Repassa ao Credor (se não for o Banco Central)
+                            if (credor !== 'Banco Central da Liga') {
+                                if (!cofres[credor]) cofres[credor] = { saldo: 0 };
+                                cofres[credor].saldo += totalCobradoNaRodada;
+                                updates[`ligas/${liga}/banco_investidores/${credor}/saldo`] = cofres[credor].saldo;
+                            }
+
+                            div.rodadas_restantes -= rodadasParaCobrar;
+                            div.valor_total -= totalCobradoNaRodada;
+
+                            if (div.rodadas_restantes <= 0 || div.valor_total <= 0) {
+                                updates[`ligas/${liga}/dividas_financeiras/${idDivida}`] = null; // Dívida Quitada!
+                            } else {
+                                updates[`ligas/${liga}/dividas_financeiras/${idDivida}/rodadas_restantes`] = div.rodadas_restantes;
+                                updates[`ligas/${liga}/dividas_financeiras/${idDivida}/valor_total`] = div.valor_total;
+                            }
+                        } else {
+                            // 🔴 CALOTE! MODO OFICIAL DE JUSTIÇA (PENHORA)
+                            let elencoDevedor = times[devedor] && times[devedor].jogadores ? Object.values(times[devedor].jogadores) : [];
+
+                            if (elencoDevedor.length > 0) {
+                                // Pega o jogador mais barato do time
+                                let piorJogador = elencoDevedor.sort((a,b) => (a.valor_mercado||0) - (b.valor_mercado||0))[0];
+                                let idBagre = Object.keys(times[devedor].jogadores).find(k => times[devedor].jogadores[k].nome === piorJogador.nome);
+
+                                if (idBagre) {
+                                    updates[`banco_global_times/${devedor}/jogadores/${idBagre}`] = null; // Tira do devedor
+
+                                    // Para onde vai o jogador? Se for Banco Central, vira Agente Livre. Se for Player, vai pro time dele!
+                                    let destinoPenhora = credor === 'Banco Central da Liga' ? `Agentes_Livres_${liga}` : credor;
+                                    updates[`banco_global_times/${destinoPenhora}/jogadores/${idBagre}`] = piorJogador;
+
+                                    let valorAbatido = piorJogador.valor_mercado || 1000000;
+                                    div.valor_total -= valorAbatido;
+
+                                    // Envia o telegrama assustador pro devedor
+                                    let idMsg = "msg_penhora_" + Date.now() + Math.floor(Math.random()*1000);
+                                    updates[`ligas/${liga}/caixa_mensagens/${loginDevedor}/${idMsg}`] = {
+                                        tipo: 'recusa',
+                                        texto: `🚨 PENHORA! Sem dinheiro para pagar a dívida com ${credor.replace(/_/g,' ')}, a justiça confiscou seu jogador ${piorJogador.nome} (Abateu ${formatarDinheiro(valorAbatido)}).`,
+                                        data: new Date().toISOString()
+                                    };
+
+                                    // Se o jogador era mais caro que a dívida, quita tudo. Senão, ajusta o saldo.
+                                    if (div.valor_total <= 0) {
+                                        updates[`ligas/${liga}/dividas_financeiras/${idDivida}`] = null;
+                                    } else {
+                                        div.parcela_rodada = Math.round(div.valor_total / (div.rodadas_restantes || 1)); // Recalcula a parcela
+                                        updates[`ligas/${liga}/dividas_financeiras/${idDivida}`] = div;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // --- PASSO D: FINALIZAR E AVISAR ---
         if (horaDeRodar) {
             updates[`ligas/${liga}/sistema/ultima_simulacao`] = dataAtualStr;
@@ -835,3 +926,5 @@ window.marcarMensagemLida = function(idMsg) {
         }
     });
 }
+
+function formatarDinheiro(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v); }
