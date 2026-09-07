@@ -1145,28 +1145,90 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
         </div>
     `;
 
-    let somTorcida = new Audio(getTorcida(mandante));
+    // 🔊 DINÂMICA DE ÁUDIO DUPLO (Casa vs Fora)
+    let somTorcidaM = new Audio(getTorcida(mandante));
+    let somTorcidaV = new Audio(getTorcida(visitante));
     let somGol = new Audio('sounds/gol_generico.mp3');
     let somHinoM = new Audio(getHino(mandante));
     let somHinoV = new Audio(getHino(visitante));
     let somFim = new Audio('sounds/final_do_jogo.mp3');
     let somApito = new Audio('sounds/apito_arbitro.mp3');
 
-    somTorcida.volume = 0.3;
-    somTorcida.loop = true;
-    somTorcida.play().catch(()=>{});
+    somTorcidaM.loop = true; somTorcidaV.loop = true;
+    somTorcidaM.play().catch(()=>{}); somTorcidaV.play().catch(()=>{});
 
     let minutoAtual = 0;
     let placarM_tela = 0; let placarV_tela = 0;
     let divLances = document.getElementById('x1-lances');
     let relogio = document.getElementById('x1-relogio');
 
+    let filaNarracao = [];
+    let narradorOcupado = false;
+
+    // 🧠 INTELIGÊNCIA DE VOLUME (Guerra de Torcidas)
+    function atualizarTorcidas() {
+        if (placarM_tela > placarV_tela) { somTorcidaM.volume = 0.5; somTorcidaV.volume = 0.1; } // Casa ganhando
+        else if (placarV_tela > placarM_tela) { somTorcidaM.volume = 0.1; somTorcidaV.volume = 0.5; } // Fora ganhando
+        else { somTorcidaM.volume = 0.4; somTorcidaV.volume = 0.2; } // Empate (Leve vantagem pra Casa)
+    }
+    atualizarTorcidas();
+
+    function narrarProximoLance() {
+        if (narradorOcupado || filaNarracao.length === 0) return;
+        let lance = filaNarracao.shift();
+        narradorOcupado = true; // 🔴 TRANCA O CRONÔMETRO!
+
+        let cor = '#ccc';
+        if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
+        if (lance.tipo.includes('ataque_v')) cor = '#ffc107';
+        if (lance.tipo.includes('gol_m')) cor = 'var(--verde-campo)';
+        if (lance.tipo.includes('gol_v')) cor = '#dc3545';
+        if (lance.tipo === 'penaltis') cor = '#ff8c00';
+        if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff';
+
+        divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
+        divLances.scrollTop = divLances.scrollHeight;
+
+        if (lance.tipo === 'inicio') somApito.play().catch(()=>{});
+
+        // ⚽ GOL MANDANTE
+        if (lance.tipo === 'gol_m') {
+            placarM_tela++; document.getElementById('x1-placar-m').innerText = placarM_tela;
+            somTorcidaM.volume = 1.0; somTorcidaV.volume = 0.0; // Torcida explode
+            somGol.play().catch(()=>{});
+            setTimeout(() => { somHinoM.volume = 0.4; somHinoM.play().catch(()=>{}); }, 1500); // Entra o hino
+
+            // ⏳ Espera o show acabar (12s) para soltar a narração
+            setTimeout(() => { somHinoM.pause(); somHinoM.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+        }
+        // ⚽ GOL VISITANTE
+        else if (lance.tipo === 'gol_v') {
+            placarV_tela++; document.getElementById('x1-placar-v').innerText = placarV_tela;
+            somTorcidaM.volume = 0.0; somTorcidaV.volume = 1.0; // Torcida explode
+            somGol.play().catch(()=>{});
+            setTimeout(() => { somHinoV.volume = 0.3; somHinoV.play().catch(()=>{}); }, 1500); // Entra o hino
+
+            setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+        }
+        // LANCES NORMAIS (Ataque, Pênalti, Fim)
+        else {
+            if (lance.tipo === 'ataque_m') { somTorcidaM.volume = 0.8; }
+            if (lance.tipo === 'ataque_v') { somTorcidaV.volume = 0.8; }
+            setTimeout(() => { atualizarTorcidas(); narradorOcupado = false; }, 3500); // Lances normais travam por 3s
+        }
+    }
+
+    // ⌚ LOOP DO CRONÔMETRO (Só avança se o narrador não estiver celebrando gol!)
     let transmissaoLoop = setInterval(async () => {
+        narrarProximoLance();
+
+        if (narradorOcupado) return; // 🛑 Se estiver tocando hino/gol, o cronômetro NÃO AVANÇA!
+
         minutoAtual++;
 
-        if (minutoAtual === 46) somTorcida.volume = 0.1;
+        if (minutoAtual === 46) { somTorcidaM.volume = 0.1; somTorcidaV.volume = 0.1; }
         else if (minutoAtual === 47) {
-            somTorcida.volume = 0.3;
+            atualizarTorcidas();
             divLances.innerHTML += `<div style="margin-top:8px; border-bottom:1px solid #222; padding-bottom:5px; color:#aaa;">🟢 Rola a bola para o segundo tempo!</div>`;
         }
 
@@ -1174,40 +1236,15 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             if (relogio) relogio.innerText = minutoAtual + "'";
         }
 
+        // Puxa lances novos do minuto e joga na Fila de Narração
         let lancesAgora = linhaTempo.filter(l => l.minuto === minutoAtual);
-        lancesAgora.forEach(lance => {
-            let cor = '#ccc';
-            if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
-            if (lance.tipo.includes('ataque_v')) cor = '#ffc107';
-            if (lance.tipo.includes('gol_m')) cor = 'var(--verde-campo)';
-            if (lance.tipo.includes('gol_v')) cor = '#dc3545';
-            if (lance.tipo === 'penaltis') cor = '#ff8c00';
-            if (lance.tipo === 'intervalo' || lance.tipo === 'inicio') cor = '#007bff';
+        if (lancesAgora.length > 0) filaNarracao.push(...lancesAgora);
 
-            divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
-            divLances.scrollTop = divLances.scrollHeight;
-
-            if (lance.tipo === 'inicio') somApito.play().catch(()=>{});
-            if (lance.tipo === 'ataque_m') { somTorcida.volume = 0.8; setTimeout(() => somTorcida.volume = 0.3, 4000); }
-            if (lance.tipo === 'ataque_v') { somTorcida.volume = 0.1; setTimeout(() => somTorcida.volume = 0.3, 4000); }
-
-            if (lance.tipo === 'gol_m') {
-                placarM_tela++; document.getElementById('x1-placar-m').innerText = placarM_tela;
-                somTorcida.volume = 1.0; somGol.play().catch(()=>{});
-                setTimeout(() => { somHinoM.volume = 0.4; somHinoM.play().catch(()=>{}); }, 1500);
-                setTimeout(() => { somHinoM.pause(); somHinoM.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
-            }
-            if (lance.tipo === 'gol_v') {
-                placarV_tela++; document.getElementById('x1-placar-v').innerText = placarV_tela;
-                somTorcida.volume = 0.1; somGol.play().catch(()=>{});
-                setTimeout(() => { somHinoV.volume = 0.2; somHinoV.play().catch(()=>{}); }, 1500);
-                setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; somTorcida.volume = 0.3; }, 12000);
-            }
-        });
-
+        // 🏁 FIM DE JOGO
         if (minutoAtual > 99 || (minutoAtual >= 90 && golsM_final !== golsV_final && !linhaTempo.some(l => l.minuto > minutoAtual))) {
             clearInterval(transmissaoLoop);
-            somTorcida.pause(); somHinoM.pause(); somHinoV.pause();
+            somTorcidaM.pause(); somTorcidaV.pause();
+            somHinoM.pause(); somHinoV.pause();
             somFim.play().catch(()=>{});
 
             if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
@@ -1218,7 +1255,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                 somCampeao.play().catch(()=>{});
             }, 1500);
 
-            // SE for IA, a gente não gravou os dados antes de gerar a partida, então gravamos agora no final.
+            // Gravação no Banco (Apenas se for IA que não gravou antes)
             if (isIADuel && apostaValidadaIA) {
                 let updates = {};
                 let v = apostaValidadaIA.valor;
@@ -1246,5 +1283,5 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                 </div>
             `);
         }
-    }, 1333);
+    }, 1000); // Relógio bate a cada 1 segundo (se não estiver narrando gol)
 }
