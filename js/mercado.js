@@ -132,7 +132,9 @@ function carregarMundo() {
                     valor: lance.valor_oferecido, id_troca: lance.id_jogador_oferecido,
                     is_comp_real: isCompReal, is_vend_real: isVendReal,
                     data_proposta: lance.data_proposta,
-                    login_comprador: login // Importante para sabermos quem pagar!
+                    login_comprador: login,
+                    tipo_negocio: lance.tipo_negocio || 'compra', // 🤝 Identifica se é aluguel
+                    duracao_rodadas: lance.duracao_rodadas || 0
                 };
 
                 if (comp === dadosUsuario.timeAtual) propostasEnviadasGlobais.push(objLance);
@@ -147,8 +149,6 @@ function carregarMundo() {
 
 function renderizarMercado(termoBusca = "") {
     const selectPos = document.getElementById('filtro-posicao');
-
-    // Injeta o filtro de PRO Players automaticamente no HTML se ele não existir
     if (selectPos && !document.getElementById('opt-pro')) {
         selectPos.innerHTML += `<option id="opt-pro" value="PRO_PLAYERS" style="color:var(--verde-campo); font-weight:bold;">🌟 Apenas Pro Players</option>`;
     }
@@ -156,6 +156,23 @@ function renderizarMercado(termoBusca = "") {
     const filtroPos = selectPos ? selectPos.value : "TODOS";
     const tbody = document.getElementById('tabela-mercado');
     tbody.innerHTML = "";
+
+    // Detecta se a tela é de Celular (Mobile)
+    let isMobile = window.innerWidth <= 768;
+
+    // Otimiza os Títulos da Tabela se for Mobile
+    let theadTr = document.querySelector('thead tr');
+    if (theadTr) {
+        if (isMobile) {
+            theadTr.innerHTML = `
+                <th style="text-align: left; padding: 12px;">Atleta</th><th>P</th><th>OVR</th><th>C</th><th>V</th>
+            `;
+        } else {
+            theadTr.innerHTML = `
+                <th style="text-align: left; padding: 12px;">Atleta</th><th>Posição</th><th>OVR</th><th>Clube Atual</th><th>Passe (Valor)</th><th>Ação</th>
+            `;
+        }
+    }
 
     let exibidos = 0;
 
@@ -171,134 +188,232 @@ function renderizarMercado(termoBusca = "") {
         if (termoBusca && !j.nome.toLowerCase().includes(termoBusca.toLowerCase())) continue;
         if (exibidos >= 50) break;
 
-        let btnAcao = "";
+        let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
 
-        if (j.avaliando) {
-            btnAcao = `<button disabled style="background:#222; border:1px dashed #555; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px; cursor:not-allowed;">Na Base</button>`;
-        } else if (dadosUsuario.timeAtual === "Sem Clube") {
-            btnAcao = `<button disabled style="background:#555; border:none; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px; cursor:not-allowed;">Requer Clube</button>`;
-        } else {
-            let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
-            btnAcao = ehDoMeuTime
-                ? `<button disabled style="background:#555; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Seu Atleta</button>`
-                : `<button onclick="fazerProposta('${j.id_banco}')" style="background:#ff8c00; border:none; color:#fff; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">Fazer Proposta</button>`;
+        // Ação Dinâmica de Clique na Linha (Mobile & Desktop)
+        let acaoClick = "";
+        if (j.avaliando) acaoClick = `alert('Na Base. Aguarde a formatação deste Pro Player!')`;
+        else if (dadosUsuario.timeAtual === "Sem Clube") acaoClick = `alert('Requer Clube para negociar.')`;
+        else if (ehDoMeuTime) acaoClick = `abrirOpcoesMeuJogador('${j.id_banco}')`;
+        else acaoClick = `fazerProposta('${j.id_banco}')`;
+
+        // Formatação Enxuta (Celular) vs Completa (PC)
+        let posF = isMobile ? j.posicao.charAt(0) : j.posicao;
+        let clubeF = isMobile ? j.clube.substring(0, 3).toUpperCase() : j.clube;
+        let valorF = formatarDinheiro(j.valor);
+
+        if (isMobile && j.valor > 0) {
+            valorF = (j.valor / 1000000).toFixed(1) + "M"; // Transforma 10.000.000 em 10.0M
+        } else if (j.valor === 0) {
+            valorF = "-";
+        }
+
+        let btnDesktop = "";
+        if (!isMobile) {
+            if (j.avaliando) btnDesktop = `<button disabled style="background:#222; border:1px dashed #555; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px; cursor:not-allowed;">Na Base</button>`;
+            else if (dadosUsuario.timeAtual === "Sem Clube") btnDesktop = `<button disabled style="background:#555; border:none; color:#aaa; padding:4px 8px; border-radius:4px; font-size:11px;">Requer Clube</button>`;
+            else if (ehDoMeuTime) btnDesktop = `<button onclick="abrirOpcoesMeuJogador('${j.id_banco}')" style="background:#555; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;">Seu Atleta</button>`;
+            else btnDesktop = `<button onclick="fazerProposta('${j.id_banco}')" style="background:#ff8c00; border:none; color:#fff; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">Negociar</button>`;
         }
 
         tbody.innerHTML += `
-            <tr style="border-bottom: 1px solid #333;">
+            <tr onclick="${acaoClick}" style="border-bottom: 1px solid #333; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#222'" onmouseout="this.style.background='transparent'">
                 <td style="text-align: left; padding: 12px; font-weight: bold; color: ${j.isPro ? 'var(--verde-campo)' : '#fff'};">
                     ${j.isPro ? '🌟 ' : ''}${j.nome}
                 </td>
-                <td style="font-size: 13px;">${j.posicao}</td>
+                <td style="font-size: 13px;">${posF}</td>
                 <td style="color: #ff8c00; font-weight: bold;">${j.forca}</td>
-                <td style="font-size: 13px; color: ${j.avaliando ? '#888' : '#aaa'};">${j.clube}</td>
-                <td style="color: #ddd; font-size: 13px;">${j.valor > 0 ? formatarDinheiro(j.valor) : '-'}</td>
-                <td>${btnAcao}</td>
+                <td style="font-size: 13px; color: ${j.avaliando ? '#888' : '#aaa'};">${clubeF}</td>
+                <td style="color: #ddd; font-size: 13px;">${valorF}</td>
+                ${!isMobile ? `<td>${btnDesktop}</td>` : ''}
             </tr>
         `;
         exibidos++;
     }
 }
 
+// Opções para o Seu Próprio Jogador (Gatilho para o futuro)
+window.abrirOpcoesMeuJogador = function(idJogador) {
+    let j = todosJogadores.find(x => x.id_banco === idJogador);
+    if(!j) return;
+
+    if(confirm(`🛠️ OPÇÕES: ${j.nome}\n\nDeseja colocar este jogador na Lista de Empréstimos?`)) {
+        alert("Excelente! O sistema de colocar na vitrine será ativado na próxima Etapa!");
+    }
+};
+
 function pesquisarJogador() {
     const termo = document.getElementById('busca-jogador').value;
     renderizarMercado(termo);
 }
 
-// ========================================================
-// NOVO SISTEMA DE PROPOSTAS COM OPÇÃO DE TROCAS
-// ========================================================
-let propostaPendente = { idJogador: null, nome: "", valorBase: 0, clubeDono: "" };
+let propostaPendente = { idJogador: null, nome: "", valorBase: 0, clubeDono: "", tipoAtual: "compra", rodadas: 5 };
 
 function fazerProposta(idJogador) {
     let j = todosJogadores.find(x => x.id_banco === idJogador);
     if (!j) return;
 
-    propostaPendente = { idJogador: j.id_banco, nome: j.nome, valorBase: j.valor, clubeDono: j.clube };
+    propostaPendente = { idJogador: j.id_banco, nome: j.nome, valorBase: j.valor, clubeDono: j.clube, tipoAtual: "compra", rodadas: 5 };
 
-    // Preenche o modal com o Raio-X do jogador
-    document.getElementById('prop-nome-jogador').innerText = j.nome;
-    document.getElementById('prop-clube-dono').innerText = j.clube;
-    document.getElementById('prop-idade-jogador').innerText = j.idade + " anos";
-    document.getElementById('prop-ovr-jogador').innerText = j.forca;
+    // Criamos um modal novinho em folha dinamicamente para suportar o sistema de Abas
+    let modal = document.getElementById('modal-proposta-dinamico');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-proposta-dinamico';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:center;";
+        document.body.appendChild(modal);
+    }
 
-    document.getElementById('prop-atq').innerText = j.atributos.ataque;
-    document.getElementById('prop-def').innerText = j.atributos.defesa;
-    document.getElementById('prop-for').innerText = j.atributos.forca;
-    document.getElementById('prop-vel').innerText = j.atributos.velocidade;
-    document.getElementById('prop-hab').innerText = j.atributos.habilidade;
-
-    document.getElementById('prop-valor-base').innerText = formatarDinheiro(j.valor);
-    document.getElementById('prop-seu-caixa').innerText = formatarDinheiro(saldoAtual);
-
-    document.getElementById('input-valor-proposta').value = j.valor;
-
-    // Popula o select com os seus próprios jogadores
-    const selectTroca = document.getElementById('select-jogador-troca');
-    selectTroca.innerHTML = '<option value="">Nenhum - Apenas Dinheiro</option>';
-
-    // Organiza seu elenco do mais caro pro mais barato pra facilitar a busca
-    meuElenco.sort((a,b) => b.valor - a.valor).forEach(j => {
-        selectTroca.innerHTML += `<option value="${j.id_banco}">${j.nome} (OVR: ${j.forca}) - Passe: ${formatarDinheiro(j.valor)}</option>`;
+    let optionsTroca = '<option value="">Nenhum - Apenas Dinheiro</option>';
+    meuElenco.sort((a,b) => b.valor - a.valor).forEach(meuJ => {
+        optionsTroca += `<option value="${meuJ.id_banco}">${meuJ.nome} (OVR: ${meuJ.forca})</option>`;
     });
 
-    document.getElementById('modal-proposta').style.display = 'flex';
+    // Layout Moderno com Abas de Negociação
+    modal.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:450px; border-radius:8px; border:1px solid #444; overflow:hidden;">
+            <div style="padding:15px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111;">
+                <h2 style="color:#ff8c00; margin:0; font-size:18px;">Negociar: ${j.nome}</h2>
+                <button onclick="fecharModalProposta()" style="background:transparent; border:none; color:#aaa; font-size:22px; cursor:pointer;">&times;</button>
+            </div>
+
+            <div style="display:flex; border-bottom:1px solid #333;">
+                <button id="aba-compra" onclick="mudarAbaProposta('compra')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s;">💰 Compra Definitiva</button>
+                <button id="aba-emp" onclick="mudarAbaProposta('emprestimo')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; transition:0.2s;">🤝 Empréstimo</button>
+            </div>
+
+            <div id="conteudo-proposta" style="padding:20px;">
+                <!-- O JavaScript vai preencher isso baseado na aba clicada -->
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    window.optionsTrocaGlobais = optionsTroca; // Guarda para usar na aba
+    window.mudarAbaProposta('compra'); // Abre direto na aba de compra padrão
 }
 
+window.mudarAbaProposta = function(tipo) {
+    propostaPendente.tipoAtual = tipo;
+    document.getElementById('aba-compra').style.background = tipo === 'compra' ? '#2a2a2a' : '#111';
+    document.getElementById('aba-compra').style.color = tipo === 'compra' ? '#fff' : '#888';
+    document.getElementById('aba-emp').style.background = tipo === 'emprestimo' ? '#2a2a2a' : '#111';
+    document.getElementById('aba-emp').style.color = tipo === 'emprestimo' ? '#fff' : '#888';
+
+    const div = document.getElementById('conteudo-proposta');
+
+    if (tipo === 'compra') {
+        div.innerHTML = `
+            <p style="color:#ccc; font-size:13px; margin-top:0;">Adquira o passe definitivo do jogador para o seu clube.</p>
+            <div style="margin-bottom:15px;">
+                <label style="color:#888; font-size:12px;">Valor Oferecido (Passe base: ${formatarDinheiro(propostaPendente.valorBase)})</label>
+                <input type="number" id="input-valor-proposta" value="${propostaPendente.valorBase}" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="color:#888; font-size:12px;">Incluir jogador na troca (Opcional)</label>
+                <select id="select-jogador-troca" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                    ${window.optionsTrocaGlobais}
+                </select>
+            </div>
+            <div style="text-align:right; font-size:12px; color:#aaa; margin-bottom:15px;">Seu Caixa: <strong id="prop-seu-caixa" style="color:var(--verde-campo);">${formatarDinheiro(saldoAtual)}</strong></div>
+            <button onclick="confirmarProposta()" style="width:100%; padding:12px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px;">Enviar Proposta de Compra</button>
+        `;
+    } else {
+        // Cálculo Mágico da Diretoria: A IA sugere cobrar 2% do passe por cada rodada emprestada
+        let valorEmprestimoSugerido = Math.round(propostaPendente.valorBase * 0.02 * propostaPendente.rodadas);
+        if(valorEmprestimoSugerido === 0) valorEmprestimoSugerido = 100000; // Taxa mínima
+
+        div.innerHTML = `
+            <p style="color:#ccc; font-size:13px; margin-top:0;">Alugue o jogador temporariamente. (Sem opções de troca)</p>
+            <div style="margin-bottom:15px;">
+                <label style="color:#888; font-size:12px;">Prazo do Empréstimo (Rodadas)</label>
+                <select id="select-rodadas-emp" onchange="atualizarValorEmprestimo()" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                    <option value="5">Curto (5 Rodadas)</option>
+                    <option value="10">Médio (10 Rodadas)</option>
+                    <option value="19">Meio Turno (19 Rodadas)</option>
+                    <option value="38">Temporada Cheia (38 Rodadas)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="color:#888; font-size:12px;">Taxa do Empréstimo (Paga à vista)</label>
+                <input type="number" id="input-valor-proposta" value="${valorEmprestimoSugerido}" style="width:100%; padding:10px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-top:5px;">
+                <small style="color:#666;">Sugestão da liga: ~2% do passe por rodada.</small>
+            </div>
+            <div style="text-align:right; font-size:12px; color:#aaa; margin-bottom:15px;">Seu Caixa: <strong id="prop-seu-caixa" style="color:var(--verde-campo);">${formatarDinheiro(saldoAtual)}</strong></div>
+            <button onclick="confirmarProposta()" style="width:100%; padding:12px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px;">Enviar Oferta de Empréstimo</button>
+        `;
+        document.getElementById('select-rodadas-emp').value = propostaPendente.rodadas;
+    }
+};
+
+window.atualizarValorEmprestimo = function() {
+    let rodadas = parseInt(document.getElementById('select-rodadas-emp').value);
+    propostaPendente.rodadas = rodadas;
+    let valorEmprestimoSugerido = Math.round(propostaPendente.valorBase * 0.02 * rodadas);
+    if(valorEmprestimoSugerido === 0) valorEmprestimoSugerido = 100000;
+    document.getElementById('input-valor-proposta').value = valorEmprestimoSugerido;
+};
+
 function fecharModalProposta() {
-    document.getElementById('modal-proposta').style.display = 'none';
-    propostaPendente = { idJogador: null, nome: "", valorBase: 0, clubeDono: "" };
+    const modalDin = document.getElementById('modal-proposta-dinamico');
+    if (modalDin) modalDin.style.display = 'none';
+
+    // Oculta o modal antigo caso ele ainda esteja perdido no HTML do usuário
+    const modalAntigo = document.getElementById('modal-proposta');
+    if (modalAntigo) modalAntigo.style.display = 'none';
+
+    propostaPendente = { idJogador: null, nome: "", valorBase: 0, clubeDono: "", tipoAtual: "compra", rodadas: 5 };
 }
 
 function confirmarProposta() {
     let valorSugerido = parseInt(document.getElementById('input-valor-proposta').value);
-    let idJogadorTroca = document.getElementById('select-jogador-troca').value;
+    let selectTroca = document.getElementById('select-jogador-troca');
+    let idJogadorTroca = selectTroca ? selectTroca.value : "";
+    let tipo = propostaPendente.tipoAtual;
+    let rodadas = tipo === 'emprestimo' ? parseInt(document.getElementById('select-rodadas-emp').value) : 0;
 
-    // Se ele deixou o campo de dinheiro vazio mas ofereceu um jogador, consideramos R$ 0 em dinheiro
     if (isNaN(valorSugerido)) valorSugerido = 0;
 
-    // Remove bordas vermelhas de tentativas anteriores
     document.getElementById('input-valor-proposta').style.borderColor = '#555';
     document.getElementById('prop-seu-caixa').style.color = 'var(--verde-campo)';
 
-    // Validação: Tem que oferecer pelo menos dinheiro OU um jogador
-    if (valorSugerido <= 0 && !idJogadorTroca) {
+    // Validação
+    if (valorSugerido <= 0 && (!idJogadorTroca || tipo === 'emprestimo')) {
         document.getElementById('input-valor-proposta').style.borderColor = '#dc3545';
         return;
     }
-
-    // Validação: Checa se tem o saldo em caixa
     if (valorSugerido > saldoAtual) {
         document.getElementById('input-valor-proposta').style.borderColor = '#dc3545';
         document.getElementById('prop-seu-caixa').style.color = '#dc3545';
         return;
     }
 
-    // Monta a Proposta (com ou sem jogador)
     let propostaObj = {
         time_comprador: dadosUsuario.timeAtual,
         valor_oferecido: valorSugerido,
-        data_proposta: new Date().toISOString()
+        data_proposta: new Date().toISOString(),
+        tipo_negocio: tipo // Agora o banco de dados sabe se é compra ou empréstimo!
     };
 
-    if (idJogadorTroca) {
+    if (tipo === 'compra' && idJogadorTroca) {
         propostaObj.id_jogador_oferecido = idJogadorTroca;
+    } else if (tipo === 'emprestimo') {
+        propostaObj.duracao_rodadas = rodadas;
     }
 
-    // Grava a proposta no Firebase
     db.ref(`ligas/${ligaLogada}/mercado_propostas/${propostaPendente.idJogador}/${userLogado}`).set(propostaObj).then(() => {
-        fecharModalProposta();
+        let textoSucesso = tipo === 'compra'
+            ? "A diretoria analisará os valores oferecidos para a compra em definitivo."
+            : `A diretoria analisará a taxa proposta para o empréstimo de ${rodadas} rodadas.`;
 
-        // Tela de sucesso imersiva
-        const modal = document.getElementById('modal-proposta');
+        let modal = document.getElementById('modal-proposta-dinamico');
         modal.innerHTML = `
-            <div style="background: var(--card-bg); width: 100%; max-width: 400px; border-radius: 12px; border: 1px solid #00b853; text-align: center; padding: 30px;">
+            <div style="background: var(--card-bg); width: 100%; max-width: 400px; border-radius: 12px; border: 1px solid #00b853; text-align: center; padding: 30px; background: #1a1a1a;">
                 <h2 style="color: #00b853; margin-top: 0;">📄 Oferta Enviada!</h2>
-                <p style="color: #ccc;">A diretoria analisará os valores ${idJogadorTroca ? 'e o atleta envolvido na troca' : 'oferecidos'} e responderá no fim do dia (Aguarde o Motor P2P rodar!).</p>
+                <p style="color: #ccc;">${textoSucesso}</p>
                 <button onclick="window.location.reload()" style="background: #333; color: white; border: 1px solid #555; padding: 8px 20px; border-radius: 6px; margin-top: 15px; cursor: pointer;">Fechar</button>
             </div>
         `;
-        modal.style.display = 'flex';
     }).catch(erro => console.error("Erro ao enviar proposta:", erro));
 }
 
@@ -448,7 +563,16 @@ window.renderListaTransacoes = function(aba) {
             dataFormatada = d.toLocaleDateString('pt-BR') + " às " + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
         }
 
-        let txtInfo = `<div style="color:#888; font-size:11px; margin-top:8px; border-top: 1px dashed #333; padding-top: 6px;">📅 Enviada em: ${dataFormatada}<br>⏳ Expira hoje, no fechamento do mercado (20h).</div>`;
+        // Badge elegante para destacar Empréstimo vs Compra
+        let badgeTipo = t.tipo_negocio === 'emprestimo'
+            ? `<span style="background:#0056b3; color:#fff; padding:2px 6px; border-radius:4px; font-size:10px;">🤝 Aluguel (${t.duracao_rodadas} Rodadas)</span>`
+            : `<span style="background:var(--verde-campo); color:#fff; padding:2px 6px; border-radius:4px; font-size:10px;">💰 Compra Definitiva</span>`;
+
+        let txtInfo = `
+            <div style="margin-top:6px; margin-bottom: 6px;">${badgeTipo}</div>
+            <div style="color:#888; font-size:11px; border-top: 1px dashed #333; padding-top: 6px;">
+                📅 Enviada em: ${dataFormatada}<br>⏳ Expira hoje, no fechamento do mercado (20h).
+            </div>`;
 
         let acao = "";
         let nomeEscapado = t.nome_alvo.replace(/'/g, "\\'"); // Evita erro se o nome tiver aspas
@@ -513,7 +637,7 @@ window.recusarProposta = function(idAlvo, loginComprador, nomeAlvo) {
 };
 
 window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
-    if(!confirm("Atenção! Ao aceitar, seu jogador será transferido na hora. Confirmar Venda?")) return;
+    if(!confirm("Atenção! Deseja realmente bater o martelo e aceitar esta proposta?")) return;
 
     try {
         const snapBanco = await db.ref('banco_global_times').once('value');
@@ -523,14 +647,14 @@ window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
         const snapProposta = await db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).once('value');
         const lance = snapProposta.val();
 
-        if(!lance) return alert("Esta proposta já não existe mais (pode ter sido cancelada pelo comprador).");
+        if(!lance) return alert("Esta proposta já não existe mais.");
 
         let comprador = usuarios[loginComprador];
         let meuTime = dadosUsuario.timeAtual;
         let timeComprador = lance.time_comprador;
 
         if(comprador.caixaClube < lance.valor_oferecido) {
-            return alert("O clube comprador gastou dinheiro com outras coisas e não tem saldo para honrar esta proposta!");
+            return alert("O clube comprador não tem saldo suficiente para honrar esta proposta!");
         }
 
         let dadosDoAlvo = banco[meuTime].jogadores[idAlvo];
@@ -538,32 +662,106 @@ window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
 
         let updates = {};
 
+        // 1. O Dinheiro troca de mãos (Igual para Compra ou Empréstimo)
         updates[`ligas/${ligaLogada}/usuarios/${loginComprador}/caixaClube`] = comprador.caixaClube - lance.valor_oferecido;
         updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + lance.valor_oferecido;
 
-        updates[`banco_global_times/${meuTime}/jogadores/${idAlvo}`] = null;
-        updates[`banco_global_times/${timeComprador}/jogadores/${idAlvo}`] = dadosDoAlvo;
+        // Limpa a mesa de leilão
+        updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}`] = null;
+        let idMsg = "msg_" + Date.now();
 
-        if(dadosTroca && lance.id_jogador_oferecido) {
-            updates[`banco_global_times/${timeComprador}/jogadores/${lance.id_jogador_oferecido}`] = null;
-            updates[`banco_global_times/${meuTime}/jogadores/${lance.id_jogador_oferecido}`] = dadosTroca;
+        // 2. A Bifurcação: É compra ou aluguel?
+        if (lance.tipo_negocio === 'emprestimo') {
+            // 🤝 LÓGICA DE EMPRÉSTIMO
+
+            // Adiciona a "etiqueta de locação" na mala do jogador
+            dadosDoAlvo.status_emprestimo = {
+                time_origem: meuTime,
+                rodadas_restantes: lance.duracao_rodadas
+            };
+
+            updates[`banco_global_times/${meuTime}/jogadores/${idAlvo}`] = null;
+            updates[`banco_global_times/${timeComprador}/jogadores/${idAlvo}`] = dadosDoAlvo;
+
+            // Registra no Cartório da Liga (Para o Motor P2P saber que tem que devolver depois)
+            updates[`ligas/${ligaLogada}/emprestimos_ativos/${idAlvo}`] = {
+                jogador_id: idAlvo,
+                time_origem: meuTime,
+                time_destino: timeComprador,
+                rodadas_restantes: lance.duracao_rodadas
+            };
+
+            updates[`ligas/${ligaLogada}/caixa_mensagens/${loginComprador}/${idMsg}`] = {
+                tipo: 'sucesso',
+                texto: `Sua proposta de EMPRÉSTIMO por ${nomeAlvo} foi ACEITA! Ele jogará por ${lance.duracao_rodadas} rodadas pelo seu clube.`,
+                data: new Date().toISOString()
+            };
+
+        } else {
+            // 💰 LÓGICA DE COMPRA DEFINITIVA (Padrão)
+            updates[`banco_global_times/${meuTime}/jogadores/${idAlvo}`] = null;
+            updates[`banco_global_times/${timeComprador}/jogadores/${idAlvo}`] = dadosDoAlvo;
+
+            if(dadosTroca && lance.id_jogador_oferecido) {
+                updates[`banco_global_times/${timeComprador}/jogadores/${lance.id_jogador_oferecido}`] = null;
+                updates[`banco_global_times/${meuTime}/jogadores/${lance.id_jogador_oferecido}`] = dadosTroca;
+            }
+
+            updates[`ligas/${ligaLogada}/caixa_mensagens/${loginComprador}/${idMsg}`] = {
+                tipo: 'sucesso',
+                texto: `A sua oferta de COMPRA por ${nomeAlvo} foi ACEITA! O jogador é seu em definitivo.`,
+                data: new Date().toISOString()
+            };
         }
 
-        updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}`] = null;
-
-        // ✉️ Envia a notificação de Sucesso!
-        let idMsg = "msg_" + Date.now();
-        updates[`ligas/${ligaLogada}/caixa_mensagens/${loginComprador}/${idMsg}`] = {
-            tipo: 'sucesso',
-            texto: `A sua oferta por ${nomeAlvo} foi ACEITA! O jogador já está no seu elenco.`,
-            data: new Date().toISOString()
-        };
-
         await db.ref().update(updates);
-        alert("💰 Negócio Fechado! O dinheiro está no seu caixa e os papéis foram assinados.");
+        alert(lance.tipo_negocio === 'emprestimo' ? "🤝 Empréstimo Fechado! O dinheiro foi transferido." : "💰 Compra Confirmada! A papelada foi assinada.");
         location.reload();
     } catch(e) {
         console.error(e);
-        alert("Erro no servidor ao processar a venda.");
+        alert("Erro no servidor ao processar o contrato.");
     }
 };
+
+// ========================================================
+// REFINAMENTO DE UI: CABEÇALHO RETRÁTIL & ANIMAÇÕES
+// ========================================================
+(function otimizarInterfaceMobile() {
+    // 1. Cabeçalho Inteligente (Some ao descer, aparece ao subir)
+    let lastScrollTop = 0;
+    window.addEventListener("scroll", function() {
+        let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+
+        // Busca a barra do topo (Tenta achar pelas tags/classes mais comuns)
+        let header = document.querySelector('header') || document.querySelector('.topbar') || document.body.firstElementChild;
+
+        if (header && window.innerWidth <= 768) {
+            header.style.transition = "margin-top 0.3s ease-in-out";
+            header.style.position = "sticky";
+            header.style.top = "0";
+            header.style.zIndex = "999";
+
+            if (currentScroll > lastScrollTop && currentScroll > 60) {
+                header.style.marginTop = `-${header.offsetHeight}px`; // Esconde
+            } else {
+                header.style.marginTop = "0px"; // Mostra
+            }
+        }
+        lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+    }, false);
+
+    // 2. Feedback Visual para o Cálculo de Empréstimo
+    let oldAtualizarValor = window.atualizarValorEmprestimo;
+    if (oldAtualizarValor) {
+        window.atualizarValorEmprestimo = function() {
+            oldAtualizarValor(); // Executa o cálculo original
+            let inputBox = document.getElementById('input-valor-proposta');
+            if (inputBox) {
+                // Efeito piscar verde para indicar que o preço mudou automaticamente!
+                inputBox.style.transition = "background 0.3s";
+                inputBox.style.background = "rgba(0, 184, 83, 0.3)";
+                setTimeout(() => inputBox.style.background = "#111", 400);
+            }
+        };
+    }
+})();
