@@ -93,11 +93,104 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, horaDeRodar)
 
         // --- PASSO A: RESOLVER O MERCADO E TROCAS ---
         const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
-        const propostas = snapPropostas.val();
+        let propostas = snapPropostas.val() || {}; // Alterado para 'let' para a IA poder injetar propostas
+
+        // ============================================
+        // --- PASSO A.0: IA ATIVA NO MERCADO E FINANÇAS ---
+        // ============================================
+        let timesHumanos = Object.values(usuarios).map(u => u.timeAtual).filter(t => t && t !== "Sem Clube");
+        let timesIA = Object.keys(times).filter(t => !t.startsWith("Agentes_Livres") && t !== "Fantasma" && !timesHumanos.includes(t));
+
+        for (let t of timesIA) {
+            let loginIA = `IA_${t}`;
+
+            // 🤖 Cria uma "Conta Bancária Virtual" para a Máquina operar no jogo
+            if (!usuarios[loginIA]) {
+                usuarios[loginIA] = { nome: `Diretoria ${t.replace(/_/g,' ')}`, timeAtual: t, caixaClube: 30000000 };
+                updates[`ligas/${liga}/usuarios/${loginIA}`] = usuarios[loginIA];
+            }
+
+            let caixaClubeIA = usuarios[loginIA].caixaClube || 0;
+
+            // 🎲 25% de chance da Diretoria da IA agir nesta rodada
+            if (Math.random() < 0.25) {
+
+                // AÇÃO 1: Pegar Empréstimo se estiver à beira da falência (Caixa < 5M)
+                if (caixaClubeIA < 5000000) {
+                    let valorPedido = 15000000;
+                    let rodadas = 10;
+                    let parcela = Math.round((valorPedido * 1.5) / rodadas); // O Banco cobra 50% de juros da IA
+
+                    caixaClubeIA += valorPedido;
+                    usuarios[loginIA].caixaClube = caixaClubeIA;
+                    updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
+
+                    updates[`ligas/${liga}/dividas_financeiras/divida_ia_${t}_${Date.now()}`] = {
+                        devedor: t, credor: 'Banco Central da Liga', valor_total: valorPedido * 1.5, parcela_rodada: parcela, rodadas_restantes: rodadas
+                    };
+                }
+
+                // AÇÃO 2: Comprar ou Alugar Jogadores (Se tiver grana razoável)
+                else if (caixaClubeIA >= 10000000 && caixaClubeIA <= 40000000) {
+                    let todosAlvos = [];
+                    for (let outroT in times) {
+                        // IA não tenta comprar do próprio time nem varre os Agentes Livres (ainda)
+                        if (outroT !== t && times[outroT].jogadores && !outroT.startsWith("Agentes_Livres")) {
+                            for (let idJog in times[outroT].jogadores) {
+                                todosAlvos.push({ id: idJog, time: outroT, dados: times[outroT].jogadores[idJog] });
+                            }
+                        }
+                    }
+
+                    if (todosAlvos.length > 0) {
+                        // A máquina procura jogadores que não quebrem o cofre (Custa no máximo 70% do que ela tem)
+                        let alvosBons = todosAlvos.filter(x => x.dados.valor_mercado > 1000000 && x.dados.valor_mercado <= (caixaClubeIA * 0.7));
+
+                        if (alvosBons.length > 0) {
+                            let alvo = alvosBons[Math.floor(Math.random() * alvosBons.length)];
+                            let isCompra = Math.random() < 0.7; // 70% de chance de tentar Comprar Definitivo
+
+                            // Oferece 5% a mais do passe na compra, ou paga as 10 rodadas justas no aluguel
+                            let valorOferecido = isCompra ? Math.round(alvo.dados.valor_mercado * 1.05) : Math.round((alvo.dados.valor_mercado * 0.02) * 10);
+                            let duracao = isCompra ? 0 : 10;
+
+                            if (!propostas[alvo.id]) propostas[alvo.id] = {};
+
+                            propostas[alvo.id][loginIA] = {
+                                time_comprador: t,
+                                valor_oferecido: valorOferecido,
+                                data_proposta: new Date().toISOString(),
+                                tipo_negocio: isCompra ? 'compra' : 'emprestimo',
+                                duracao_rodadas: duracao
+                            };
+
+                            // Registra a proposta na mesa do leilão!
+                            updates[`ligas/${liga}/mercado_propostas/${alvo.id}/${loginIA}`] = propostas[alvo.id][loginIA];
+                        }
+                    }
+                }
+
+                // AÇÃO 3: Virar Investidor Agiota (Se estiver super rica > 40M)
+                else if (caixaClubeIA > 40000000 && Math.random() < 0.2) {
+                    const snapBanc = await db.ref(`ligas/${liga}/banco_investidores/${t}`).once('value');
+                    let invAtual = snapBanc.val() ? snapBanc.val().saldo : 0;
+
+                    let valorInvestido = 10000000; // Guarda 10 Milhões no banco para players pegarem!
+                    caixaClubeIA -= valorInvestido;
+                    usuarios[loginIA].caixaClube = caixaClubeIA;
+                    updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
+
+                    updates[`ligas/${liga}/banco_investidores/${t}`] = {
+                        saldo: invAtual + valorInvestido, dono_login: loginIA, is_ia: true
+                    };
+                }
+            }
+        }
 
         let transferenciasRealizadas = 0;
 
-        if (propostas) {
+        // Se o mercado tiver propostas de Humanos ou IAs, resolve a briga
+        if (Object.keys(propostas).length > 0) {
             for (let idAlvo in propostas) {
                 let lances = propostas[idAlvo];
                 let timeDoAlvo = null;
