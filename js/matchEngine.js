@@ -96,7 +96,10 @@ window.mudarRodadaTransmissao = function(novaRodada) {
 function renderizarPartida() {
     const topoRodada = document.getElementById('lbl-rodada-top');
 
-    if (topoRodada && (!rodadaExibicao || !document.getElementById('select-rodada-transmissao'))) {
+    // 1️⃣ MÁGICA DO FILTRO: Define a rodada atual ANTES de gerar o HTML do Dropdown!
+    if (!rodadaExibicao) rodadaExibicao = `camp_rodada_${rodadaSistema}`;
+
+    if (topoRodada && (!document.getElementById('select-rodada-transmissao'))) {
         let selectHtml = `<select id="select-rodada-transmissao" onchange="mudarRodadaTransmissao(this.value)" style="background:#1a1a1a; color:var(--verde-campo); border:1px solid #444; padding:2px 5px; border-radius:4px; font-weight:bold; outline:none; margin-left: 5px; cursor: pointer;">`;
 
         for (let r = 1; r <= rodadaSistema; r++) {
@@ -110,8 +113,6 @@ function renderizarPartida() {
         selectHtml += `</select>`;
         topoRodada.innerHTML = selectHtml;
     }
-
-    if (!rodadaExibicao) rodadaExibicao = `camp_rodada_${rodadaSistema}`;
 
     let isCopa = rodadaExibicao.startsWith("copa_");
     let chave = rodadaExibicao.replace("camp_", "").replace("copa_", "");
@@ -130,7 +131,9 @@ function renderizarPartida() {
     }
 
     let jaTerminouDeVerdade = false;
+    let tempoPassadoMs = -1;
     const HORA_JOGO = isCopa ? 20 : 19;
+    let horaInicioFake = new Date();
 
     if (jogoAoVivo) {
         let dataHoje = new Date();
@@ -140,21 +143,16 @@ function renderizarPartida() {
         let hojeDT = new Date(dataHoje.getFullYear(), dataHoje.getMonth(), dataHoje.getDate());
 
         let isAtrasado = jogoDT < hojeDT;
+        let isHoje = jogoDT.getTime() === hojeDT.getTime();
 
-        if (jogoAoVivo.horaInicio) {
-            // Alguém clicou no botão "Iniciar" e gerou o jogo na nuvem!
-            let tempoDesdeInicio = Date.now() - jogoAoVivo.horaInicio;
+        horaInicioFake.setHours(HORA_JOGO, 0, 0, 0);
 
-            // Se for jogo atrasado, ou se já passaram os 130 segundos da simulação oficial
-            if (isAtrasado || tempoDesdeInicio > 130000) {
-                jaTerminouDeVerdade = true;
-            } else {
-                jaTerminouDeVerdade = false; // Está rolando AO VIVO exatamente agora!
-            }
-        } else {
-            // O jogo ainda não foi iniciado (botão não foi clicado)
-            jaTerminouDeVerdade = isAtrasado && jogoAoVivo.jogado;
+        if (isHoje) {
+            tempoPassadoMs = Date.now() - horaInicioFake.getTime();
         }
+
+        let rodandoAoVivo = (isHoje && tempoPassadoMs >= 0 && tempoPassadoMs <= 130000);
+        jaTerminouDeVerdade = isAtrasado || (!rodandoAoVivo && jogoAoVivo.jogado) || (!rodandoAoVivo && isHoje && tempoPassadoMs > 130000);
     }
 
     const lblMandante = document.getElementById('placar-nome-mandante');
@@ -165,10 +163,29 @@ function renderizarPartida() {
 
     if (jogoAoVivo) {
         jogoAtual = jogoAoVivo;
-        try { document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.7), rgba(18, 18, 18, 0.9)), url('${getEstadio(jogoAoVivo.mandante)}')`; } catch(e) {}
 
-        if (lblMandante) lblMandante.innerHTML = `${jogoAoVivo.mandante.replace(/_/g, ' ')} <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar">`;
-        if (lblVisitante) lblVisitante.innerHTML = `<img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-placar"> ${jogoAoVivo.visitante.replace(/_/g, ' ')}`;
+        // 2️⃣ MÁGICA DA IMERSÃO: Background Absoluto para o Estádio não falhar!
+        try {
+            document.body.style.background = "transparent";
+            document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.98)), url('${getEstadio(jogoAoVivo.mandante)}')`;
+            document.body.style.backgroundPosition = "center";
+            document.body.style.backgroundSize = "cover";
+            document.body.style.backgroundAttachment = "fixed";
+        } catch(e) {}
+
+        // 3️⃣ MÁGICA DOS ESCUDOS: Injeção de CSS embutido para crescer a foto e alinhar o texto
+        if (lblMandante) {
+            lblMandante.innerHTML = `
+                <span style="vertical-align: middle; font-size: 22px;">${jogoAoVivo.mandante.replace(/_/g, ' ')}</span>
+                <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" style="width: 40px; height: 40px; object-fit: contain; vertical-align: middle; margin-left: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+            `;
+        }
+        if (lblVisitante) {
+            lblVisitante.innerHTML = `
+                <img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" style="width: 40px; height: 40px; object-fit: contain; vertical-align: middle; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                <span style="vertical-align: middle; font-size: 22px;">${jogoAoVivo.visitante.replace(/_/g, ' ')}</span>
+            `;
+        }
 
         let linhaObj = jogoAoVivo.linhaDoTempo || [];
         let linhaArray = Array.isArray(linhaObj) ? linhaObj : Object.values(linhaObj);
