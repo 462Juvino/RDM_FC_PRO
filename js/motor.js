@@ -496,8 +496,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                             let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                             jogoDT.setHours(0,0,0,0);
 
-                            // O TRATOR: Atrasados rodam na hora. Os de hoje rodam se já passou das 19h.
-                            if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && rodarCampHoje)) {
+                            // O TRATOR: Apenas simula caso o jogo esteja atrasado (Ontem para trás)
+                            if (jogoDT < hojeDT) {
                                 processarPartidaAoVivo(jogo, false);
                                 teveJogoLiga = true;
                                 if (r >= proximaRodada) proximaRodada = r + 1;
@@ -527,7 +527,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                                 let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                                 jogoDT.setHours(0,0,0,0);
 
-                                if (jogoDT < hojeDT || (jogoDT.getTime() === hojeDT.getTime() && rodarCopaHoje)) {
+                                // O TRATOR: Apenas simula caso a Copa esteja atrasada
+                                if (jogoDT < hojeDT) {
                                     processarPartidaAoVivo(jogo, true); // True = Pênaltis
 
                                     let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;

@@ -230,9 +230,14 @@ function renderizarPartida() {
                 }
             }
             else if (linhaArray.length === 0) {
-                // É O HORÁRIO, MAS O MOTOR AINDA TÁ SALVANDO
-                if(statusTransmissao) { statusTransmissao.innerText = "Conectando 📡"; statusTransmissao.style.animation = "piscar 1s infinite"; }
-                if(narracao) narracao.innerHTML = `<div style="color: #ff8c00; text-align: center; padding: 30px; font-weight:bold;">O árbitro está conferindo as redes com o VAR. O jogo vai rolar em segundos!</div>`;
+                // PASSOU DA HORA MAS AINDA NÃO TEM LINHA DO TEMPO!
+                if(statusTransmissao) { statusTransmissao.innerText = "Aguardando Início ⏱️"; statusTransmissao.style.animation = "piscar 1s infinite"; }
+                if(narracao) narracao.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <h3 style="color: #ff8c00;">As equipes estão preparadas!</h3>
+                        <p style="color:#aaa; font-size:14px; margin-bottom:15px;">Seja o primeiro a iniciar a simulação oficial desta partida.</p>
+                        <button onclick="gerarPartidaAoVivo()" style="background: #dc3545; color: white; padding: 12px 25px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 0 15px rgba(220,53,69,0.5);">⚽ INICIAR PARTIDA</button>
+                    </div>`;
             }
             else if (!audioLiberado) {
                 if(statusTransmissao) statusTransmissao.innerText = "Sinal Encontrado 📡";
@@ -545,3 +550,159 @@ function deslogar() {
     localStorage.removeItem('treinadorUsuario');
     window.location.href = "index.html";
 }
+
+// ========================================================
+// 🧠 GERADOR P2P: O PRIMEIRO QUE CLICA SIMULA O JOGO E SALVA NA NUVEM!
+// ========================================================
+window.gerarPartidaAoVivo = async function() {
+    document.getElementById('narracao-container').innerHTML = `<div style="color: #ff8c00; text-align: center; padding: 30px; font-weight:bold;">Gerando simulação na nuvem... Aguarde.</div>`;
+
+    try {
+        const snapB = await db.ref('banco_global_times').once('value');
+        const times = snapB.val() || {};
+        const snapU = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        const usuarios = snapU.val() || {};
+        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+        const cal = snapCal.val() || {};
+
+        let chave = rodadaExibicao.replace("camp_", "").replace("copa_", "");
+        let isMataMata = rodadaExibicao.startsWith("copa_");
+        let caminhoBase = isMataMata ? `copa/${chave}/${meuJogoId}` : (divisaoAtual === "A" ? `serieA/${chave}/${meuJogoId}` : `serieB/${chave}/${meuJogoId}`);
+
+        let jogoReal = null;
+        if (isMataMata && cal.copa && cal.copa[chave]) jogoReal = cal.copa[chave][meuJogoId];
+        else if (!isMataMata && divisaoAtual === "A" && cal.serieA) jogoReal = cal.serieA[chave][meuJogoId];
+        else if (!isMataMata && divisaoAtual === "B" && cal.serieB) jogoReal = cal.serieB[chave][meuJogoId];
+
+        if (!jogoReal) return alert("Erro ao encontrar a partida no calendário.");
+
+        // Proteção contra duplos cliques (Se alguém já gerou, ele apenas ignora)
+        if (jogoReal.jogado || jogoReal.linhaDoTempo) return alert("Alguém já iniciou esta partida! A transmissão vai começar em instantes.");
+
+        let updates = {};
+
+        // ==== INÍCIO DA LÓGICA DO MOTOR NATIVO ====
+        let donoM = null; let donoV = null;
+        let forcaM = times[jogoReal.mandante]?.forca_base || 500;
+        let forcaV = times[jogoReal.visitante]?.forca_base || 500;
+        let mentM = "Moderado"; let mentV = "Moderado";
+
+        for (let u in usuarios) {
+            if (usuarios[u].timeAtual === jogoReal.mandante) { if (usuarios[u].forcaAtual) forcaM = usuarios[u].forcaAtual; mentM = usuarios[u].mentalidade || "Moderado"; donoM = u; }
+            if (usuarios[u].timeAtual === jogoReal.visitante) { if (usuarios[u].forcaAtual) forcaV = usuarios[u].forcaAtual; mentV = usuarios[u].mentalidade || "Moderado"; donoV = u; }
+        }
+
+        let fadigaM = (times[jogoReal.mandante]?.jogadores && Object.keys(times[jogoReal.mandante].jogadores).length > 11) ? 1.0 : 0.85;
+        let fadigaV = (times[jogoReal.visitante]?.jogadores && Object.keys(times[jogoReal.visitante].jogadores).length > 11) ? 1.0 : 0.85;
+
+        let modM = 1.0 * fadigaM; let modV = 1.0 * fadigaV;
+        let capGolsM = 99; let capGolsV = 99;
+
+        if (mentM === "Retranca") { modM *= 0.7; modV *= 0.5; capGolsM = 1; }
+        if (mentM === "Ofensivo") { modM *= 1.3; modV *= 1.2; }
+        if (mentV === "Retranca") { modV *= 0.7; modM *= 0.5; capGolsV = 1; }
+        if (mentV === "Ofensivo") { modV *= 1.3; modM *= 1.2; }
+
+        let golsM = 0; let golsV = 0;
+        let linhaTempo = [];
+
+        linhaTempo.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Rola a bola para a partida oficial!` });
+
+        if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogoReal.mandante.replace(/_/g,' ')}: Fôlego novo!`, cor: "#aaa" });
+        if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogoReal.visitante.replace(/_/g,' ')}: Alteração tática!`, cor: "#aaa" });
+
+        const narracoesM = ["🔥 UUUHH! O atacante chuta forte e a bola raspa a trave!", "🛡️ Bela roubada de bola da zaga, desarmando com classe.", "👟 Troca de passes envolvente. O time procura espaço.", "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima!"];
+        const narracoesV = ["⚠️ PERIGO! O visitante ataca com velocidade, mas o chute vai fora.", "🧤 MILAGRE! O goleiro se estica todo e salva um gol certo!", "👟 O visitante domina a posse de bola no meio campo.", "🥅 Chute de muito longe, a bola passa assustando!"];
+
+        for(let i=0; i<16; i++) {
+            let minAleatorio = Math.floor(Math.random()*89)+1;
+            if (minAleatorio === 45) minAleatorio = 46;
+            if (Math.random() > 0.5) linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_mandante', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
+            else linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_visitante', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
+        }
+
+        const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
+
+        let gkM_id = Object.keys(times[jogoReal.mandante]?.jogadores || {}).find(k => times[jogoReal.mandante].jogadores[k].posicoes?.p === "Goleiro");
+        let gkV_id = Object.keys(times[jogoReal.visitante]?.jogadores || {}).find(k => times[jogoReal.visitante].jogadores[k].posicoes?.p === "Goleiro");
+
+        if (gkM_id) { let gkM = times[jogoReal.mandante].jogadores[gkM_id]; gkM.estatisticas = gkM.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0}; gkM.estatisticas.jogos = (gkM.estatisticas.jogos || 0) + 1; updates[`banco_global_times/${jogoReal.mandante}/jogadores/${gkM_id}`] = gkM; }
+        if (gkV_id) { let gkV = times[jogoReal.visitante].jogadores[gkV_id]; gkV.estatisticas = gkV.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0}; gkV.estatisticas.jogos = (gkV.estatisticas.jogos || 0) + 1; updates[`banco_global_times/${jogoReal.visitante}/jogadores/${gkV_id}`] = gkV; }
+
+        for(let i=0; i<5; i++) {
+            if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
+                golsM++;
+                if (gkV_id) { let gkV = times[jogoReal.visitante].jogadores[gkV_id]; gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogoReal.visitante}/jogadores/${gkV_id}`] = gkV; }
+                let idA = sortearAtleta(jogoReal.mandante); let nA = idA ? times[jogoReal.mandante].jogadores[idA].nome : "Jogador";
+                if(idA) {
+                    let jg = times[jogoReal.mandante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+                    if (Math.random() > 0.4) { let idAst = sortearAtleta(jogoReal.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogoReal.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogoReal.mandante}/jogadores/${idAst}`] = jgAst; } }
+                    updates[`banco_global_times/${jogoReal.mandante}/jogadores/${idA}`] = jg;
+                }
+                linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogoReal.mandante.replace(/_/g,' ')}! (${nA})` });
+            }
+            if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
+                golsV++;
+                let idA = sortearAtleta(jogoReal.visitante); let nA = idA ? times[jogoReal.visitante].jogadores[idA].nome : "Jogador";
+                if(idA) {
+                    let jg = times[jogoReal.visitante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
+                    if (Math.random() > 0.4) { let idAst = sortearAtleta(jogoReal.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogoReal.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogoReal.visitante}/jogadores/${idAst}`] = jgAst; } }
+                    updates[`banco_global_times/${jogoReal.visitante}/jogadores/${idA}`] = jg;
+                }
+                linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogoReal.visitante.replace(/_/g,' ')}! (${nA})` });
+            }
+            if (gkM_id) { let gkM = times[jogoReal.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogoReal.mandante}/jogadores/${gkM_id}`] = gkM; }
+        }
+
+        if (!linhaTempo.some(l => l.minuto === 45 && l.tipo.includes('gol'))) {
+            linhaTempo.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo! Os jogadores vão para o vestiário.` });
+        }
+
+        if (isMataMata && golsM === golsV) {
+            linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!` });
+            if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: "gol_mandante", texto: `🏆 O ${jogoReal.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
+            else { golsV++; linhaTempo.push({ minuto: 99, tipo: "gol_visitante", texto: `🏆 O ${jogoReal.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
+        }
+
+        linhaTempo.sort((a,b) => a.minuto - b.minuto);
+
+        if (donoM) {
+            let pub = 15000 + ((usuarios[donoM].moral||50) * 400); let ren = pub * 60;
+            let cxa = (usuarios[donoM].caixaClube || 0) + ren;
+            updates[`ligas/${ligaLogada}/usuarios/${donoM}/caixaClube`] = cxa;
+            linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes)` });
+        }
+
+        if (golsM > golsV) { if(donoM) updates[`ligas/${ligaLogada}/usuarios/${donoM}/moral`] = Math.min(100, (usuarios[donoM].moral||50)+10); if(donoV) updates[`ligas/${ligaLogada}/usuarios/${donoV}/moral`] = Math.max(0, (usuarios[donoV].moral||50)-10); }
+        else if (golsV > golsM) { if(donoV) updates[`ligas/${ligaLogada}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10); if(donoM) updates[`ligas/${ligaLogada}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10); }
+
+        jogoReal.linhaDoTempo = linhaTempo;
+
+        // 🚨 O PULO DO GATO: A HORA DO CLIQUE SE TORNA A HORA DE INÍCIO DA PARTIDA PARA TODOS!
+        jogoReal.horaInicio = Date.now();
+
+        jogoReal.placarMandante = golsM;
+        jogoReal.placarVisitante = golsV;
+        jogoReal.jogado = true;
+
+        updates[`ligas/${ligaLogada}/calendario/${caminhoBase}`] = jogoReal;
+
+        if (isMataMata) {
+            let f = chave; let idJ = meuJogoId;
+            let vencedor = golsM > golsV ? jogoReal.mandante : jogoReal.visitante;
+            let num = parseInt(idJ.split('_')[1]);
+
+            if (f === "oitavas" && cal.copa.quartas) { let tgt = `jogo_${9 + Math.floor((num-1)/2)}`; num%2!==0 ? updates[`ligas/${ligaLogada}/calendario/copa/quartas/${tgt}/mandante`] = vencedor : updates[`ligas/${ligaLogada}/calendario/copa/quartas/${tgt}/visitante`] = vencedor; }
+            else if (f === "quartas" && cal.copa.semis) { let tgt = `jogo_${13 + Math.floor((num-9)/2)}`; num%2!==0 ? updates[`ligas/${ligaLogada}/calendario/copa/semis/${tgt}/mandante`] = vencedor : updates[`ligas/${ligaLogada}/calendario/copa/semis/${tgt}/visitante`] = vencedor; }
+            else if (f === "semis" && cal.copa.final) { let tgt = `jogo_15`; num===13 ? updates[`ligas/${ligaLogada}/calendario/copa/final/${tgt}/mandante`] = vencedor : updates[`ligas/${ligaLogada}/calendario/copa/final/${tgt}/visitante`] = vencedor; }
+            else if (f === "final") { updates[`ligas/${ligaLogada}/calendario/sistema_campeao_copa`] = vencedor; }
+        }
+
+        await db.ref().update(updates);
+        // Não precisa fazer mais nada, o Firebase vai ver o 'update' e disparar a TV pra todos que estão assistindo!
+
+    } catch (e) {
+        console.error("Erro ao gerar partida:", e);
+        alert("Houve um erro ao se conectar com o servidor.");
+    }
+};
