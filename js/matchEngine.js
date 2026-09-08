@@ -130,9 +130,7 @@ function renderizarPartida() {
     }
 
     let jaTerminouDeVerdade = false;
-    let tempoPassadoMs = -1;
     const HORA_JOGO = isCopa ? 20 : 19;
-    let horaInicioFake = new Date();
 
     if (jogoAoVivo) {
         let dataHoje = new Date();
@@ -142,18 +140,21 @@ function renderizarPartida() {
         let hojeDT = new Date(dataHoje.getFullYear(), dataHoje.getMonth(), dataHoje.getDate());
 
         let isAtrasado = jogoDT < hojeDT;
-        let isHoje = jogoDT.getTime() === hojeDT.getTime();
 
-        horaInicioFake.setHours(HORA_JOGO, 0, 0, 0);
+        if (jogoAoVivo.horaInicio) {
+            // Alguém clicou no botão "Iniciar" e gerou o jogo na nuvem!
+            let tempoDesdeInicio = Date.now() - jogoAoVivo.horaInicio;
 
-        if (isHoje) {
-            tempoPassadoMs = Date.now() - horaInicioFake.getTime();
+            // Se for jogo atrasado, ou se já passaram os 130 segundos da simulação oficial
+            if (isAtrasado || tempoDesdeInicio > 130000) {
+                jaTerminouDeVerdade = true;
+            } else {
+                jaTerminouDeVerdade = false; // Está rolando AO VIVO exatamente agora!
+            }
+        } else {
+            // O jogo ainda não foi iniciado (botão não foi clicado)
+            jaTerminouDeVerdade = isAtrasado && jogoAoVivo.jogado;
         }
-
-        // 🚨 O GRANDE SEGREDO: A Janela de TV! 🚨
-        // O Jogo fica "Ao Vivo" entre 19:00:00 e 19:02:10!
-        let rodandoAoVivo = (isHoje && tempoPassadoMs >= 0 && tempoPassadoMs <= 130000);
-        jaTerminouDeVerdade = isAtrasado || (!rodandoAoVivo && jogoAoVivo.jogado) || (!rodandoAoVivo && isHoje && tempoPassadoMs > 130000);
     }
 
     const lblMandante = document.getElementById('placar-nome-mandante');
@@ -215,7 +216,9 @@ function renderizarPartida() {
             }
         }
         else {
-            if (tempoPassadoMs < 0) {
+            let isAntesDaHora = (new Date().getHours() < HORA_JOGO);
+
+            if (isAntesDaHora) {
                 // ANTES DA HORA DO JOGO!
                 const horaAtual = new Date().getHours();
                 const minAtual = new Date().getMinutes();
@@ -230,7 +233,7 @@ function renderizarPartida() {
                 }
             }
             else if (linhaArray.length === 0) {
-                // PASSOU DA HORA MAS AINDA NÃO TEM LINHA DO TEMPO!
+                // DEU A HORA (19h/20h), MAS ALGUÉM PRECISA CLICAR PARA INICIAR!
                 if(statusTransmissao) { statusTransmissao.innerText = "Aguardando Início ⏱️"; statusTransmissao.style.animation = "piscar 1s infinite"; }
                 if(narracao) narracao.innerHTML = `
                     <div style="text-align: center; padding: 30px;">
@@ -252,7 +255,9 @@ function renderizarPartida() {
                     canalTorcidaV.src = getTorcida(jogoAoVivo.visitante);
                     canalTorcidaM.play().catch(()=>{}); canalTorcidaV.play().catch(()=>{});
                 }
-                reproduzirLinhaDoTempo(linhaArray, horaInicioFake.getTime(), placarMReal, placarVReal);
+
+                // O pulo do gato: A TV agora usa o exato milissegundo em que o botão foi clicado!
+                reproduzirLinhaDoTempo(linhaArray, jogoAoVivo.horaInicio, placarMReal, placarVReal);
             }
         }
     } else {
