@@ -224,9 +224,6 @@ function carregarVisaoGeralClube() {
     window.loopNoticias = setInterval(() => gerarNoticia(meuTime), 10000);
 }
 
-// ========================================================
-// 🚨 INTELIGÊNCIA DA CENTRAL DE AVISOS
-// ========================================================
 async function carregarCentralDeAvisos(meuTimeId) {
     const ul = document.getElementById('lista-avisos');
     const widget = document.getElementById('widget-avisos');
@@ -240,6 +237,9 @@ async function carregarCentralDeAvisos(meuTimeId) {
             db.ref(`banco_global_times/${meuTimeId}`).once('value')
         ]);
 
+        // Estilo blindado para os botões da central (Evita herdar botões gigantes do layout principal)
+        const btnStyle = "margin-left:10px; border:none; padding:4px 10px !important; border-radius:4px; cursor:pointer; font-size:11px !important; flex-shrink:0; width:auto !important; max-width:max-content; white-space:nowrap; height:fit-content; line-height:normal; align-self:center;";
+
         // 1. Mensagens da Diretoria e Transferências
         const msgs = snapMsgs.val();
         if (msgs) {
@@ -247,10 +247,10 @@ async function carregarCentralDeAvisos(meuTimeId) {
                 let cor = msgs[m].tipo === 'sucesso' ? 'var(--verde-campo)' : '#dc3545';
                 avisos.push(`
                     <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
+                        <div style="padding-right: 10px;">
                             <strong style="color:${cor};">📬 Comunicado:</strong> <span style="color:#ccc;">${msgs[m].texto}</span>
                         </div>
-                        <button onclick="marcarMensagemLidaDash('${m}')" style="margin-left:10px; background:#333; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; flex-shrink:0;">Ciente</button>
+                        <button onclick="marcarMensagemLidaDash('${m}')" style="${btnStyle} background:#333; color:#fff;">Ciente</button>
                     </li>
                 `);
             }
@@ -269,8 +269,10 @@ async function carregarCentralDeAvisos(meuTimeId) {
         if (propostasRecebidas > 0) {
             avisos.push(`
                 <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
-                    <div><strong style="color:#ff8c00;">💼 Mercado da Bola:</strong> <span style="color:#ccc;">Você tem ${propostasRecebidas} proposta(s) na mesa aguardando aprovação.</span></div>
-                    <button onclick="window.location.href='mercado.html'" style="margin-left:10px; background:#ff8c00; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; flex-shrink:0;">Ver Propostas</button>
+                    <div style="padding-right: 10px;">
+                        <strong style="color:#ff8c00;">💼 Mercado da Bola:</strong> <span style="color:#ccc;">Você tem ${propostasRecebidas} proposta(s) na mesa aguardando aprovação.</span>
+                    </div>
+                    <button onclick="window.location.href='mercado.html'" style="${btnStyle} background:#ff8c00; color:#fff;">Ver Propostas</button>
                 </li>
             `);
         }
@@ -288,8 +290,10 @@ async function carregarCentralDeAvisos(meuTimeId) {
         if (avaliacoesFaltando > 0) {
             avisos.push(`
                 <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
-                    <div><strong style="color:#00b853;">⭐ Olheiro da Base:</strong> <span style="color:#ccc;">Existem ${avaliacoesFaltando} Pro Player(s) aguardando sua nota de avaliação.</span></div>
-                    <button onclick="window.location.href='perfil.html'" style="margin-left:10px; background:#00b853; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; flex-shrink:0;">Avaliar</button>
+                    <div style="padding-right: 10px;">
+                        <strong style="color:#00b853;">⭐ Olheiro da Base:</strong> <span style="color:#ccc;">Existem ${avaliacoesFaltando} Pro Player(s) aguardando sua nota de avaliação.</span>
+                    </div>
+                    <button onclick="window.location.href='perfil.html'" style="${btnStyle} background:#00b853; color:#fff;">Avaliar</button>
                 </li>
             `);
         }
