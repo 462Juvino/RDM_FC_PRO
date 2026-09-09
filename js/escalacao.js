@@ -45,10 +45,19 @@ function carregarElenco(nomeTime) {
     db.ref(`banco_global_times/${nomeTime}/jogadores`).once('value').then(snap => {
         elencoCompleto = snap.val() || {};
 
-        // --- LÓGICA DE ESCALAÇÃO AUTOMÁTICA ---
-        let timeVazio = titulares.every(slot => slot === null);
+        // --- LÓGICA INTELIGENTE DE ESCALAÇÃO E VENDAS ---
+        let precisaSalvar = false;
 
-        if (timeVazio && Object.keys(elencoCompleto).length > 0) {
+        // 1. Limpa os jogadores que foram vendidos ou devolveram empréstimo (Não estão mais no elenco)
+        for (let i = 0; i < titulares.length; i++) {
+            if (titulares[i] && !elencoCompleto[titulares[i]]) {
+                titulares[i] = null; // O jogador foi vendido/saiu, a vaga abre!
+                precisaSalvar = true;
+            }
+        }
+
+        // 2. Preenche os buracos automaticamente com os melhores reservas
+        if (Object.keys(elencoCompleto).length > 0) {
             let todosJogadores = Object.keys(elencoCompleto).map(id => ({ id, ...elencoCompleto[id] }));
 
             // Ordena os jogadores por Força Total (OVR)
@@ -58,21 +67,36 @@ function carregarElenco(nomeTime) {
                 return ovrB - ovrA;
             });
 
-            // Isola o melhor Goleiro no Slot 10
-            let goleiroIndex = todosJogadores.findIndex(j => j.posicoes.p === "Goleiro" || j.posicoes.s === "Goleiro");
-            if (goleiroIndex !== -1) {
-                titulares[10] = todosJogadores[goleiroIndex].id;
-                todosJogadores.splice(goleiroIndex, 1);
+            // Tira da lista quem já é titular pra não duplicar
+            let reservas = todosJogadores.filter(j => !titulares.includes(j.id));
+
+            // A) Garante o Goleiro no Slot 10 se faltar
+            if (titulares[10] === null) {
+                let goleiroIndex = reservas.findIndex(j => j.posicoes.p === "Goleiro" || j.posicoes.s === "Goleiro");
+                if (goleiroIndex !== -1) {
+                    titulares[10] = reservas[goleiroIndex].id;
+                    reservas.splice(goleiroIndex, 1);
+                    precisaSalvar = true;
+                } else if (reservas.length > 0) {
+                    // Se não tem goleiro reserva, improvisa o melhor jogador de linha no gol
+                    titulares[10] = reservas[0].id;
+                    reservas.shift();
+                    precisaSalvar = true;
+                }
             }
 
-            // Coloca os 10 melhores de linha nos slots restantes
-            let countLinha = 0;
-            for (let i = 0; i < todosJogadores.length; i++) {
-                if (countLinha >= 10) break;
-                titulares[countLinha] = todosJogadores[i].id;
-                countLinha++;
+            // B) Preenche os jogadores de linha faltantes (Slots 0 a 9)
+            for (let i = 0; i < 10; i++) {
+                if (titulares[i] === null && reservas.length > 0) {
+                    titulares[i] = reservas[0].id;
+                    reservas.shift();
+                    precisaSalvar = true;
+                }
             }
-            // Salva no banco de dados silenciosamente
+        }
+
+        if (precisaSalvar) {
+            // Salva no banco de dados silenciosamente a nova formação com os reservas cobrindo buracos
             db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/titulares`).set(titulares);
         }
         // ---------------------------------------
@@ -134,7 +158,10 @@ function gerarBolinhas(qtd, siglaBase) {
 
 function salvarEscalacao() {
     const escaladosCount = titulares.filter(id => id !== null).length;
-    if(escaladosCount < 11 && !confirm(`Apenas ${escaladosCount} jogadores em campo. Salvar incompleto? O time será punido.`)) return;
+    if (escaladosCount < 11) {
+        alert(`🚨 Tática Incompleta! Você tem apenas ${escaladosCount} jogadores escalados. É obrigatório ter os 11 titulares em campo para salvar.`);
+        return;
+    }
 
     db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
         titulares: titulares,
