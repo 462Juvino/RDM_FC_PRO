@@ -214,18 +214,30 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 }
 
                 if (isDonoHumano) {
-                    // A IA PULA JOGADORES HUMANOS. A proposta fica lá aguardando o clique de "Aceitar/Recusar" na tela do jogador!
+                    // A IA PULA JOGADORES HUMANOS. A proposta fica aguardando o clique do player.
                     continue;
                 }
 
                 // ============================================
-                // A PARTIR DAQUI: SÓ CLUBES DA MÁQUINA (IA)
+                // ⏰ REGRAS TEMPORAIS DO LEILÃO DA MÁQUINA
                 // ============================================
+                let primeiraDataStr = Object.values(lances)[0].data_proposta || new Date().toISOString();
+                let dataProp = new Date(primeiraDataStr);
+                let agora = new Date();
+
+                let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
+                let horaAtual = agora.getHours();
+
+                // 🔴 Se a proposta é de HOJE e ainda NÃO deu 19h: PULA A AVALIAÇÃO!
+                if (isHoje && horaAtual < 19) {
+                    continue; // A proposta fica estacionada no banco de dados para concorrência
+                }
+
+                // 🟢 Se passou das 19h OU é uma proposta atrasada (dias anteriores): BATE O MARTELO!
                 let maiorScore = 0;
                 let lanceVencedor = null;
                 let loginVencedor = "";
 
-                // 🧠 NOVA INTELIGÊNCIA: Verifica se o jogador alvo é "Titular" (Top 14 do elenco da IA)
                 let elencoIA = Object.values(times[timeDoAlvo].jogadores || {}).sort((a,b) => (b.valor_mercado || 0) - (a.valor_mercado || 0));
                 let isTitularIA = false;
                 if (elencoIA.length >= 14) {
@@ -240,10 +252,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     let scoreLance = lance.valor_oferecido || 0;
 
                     if (lance.tipo_negocio === 'emprestimo') {
-                        // 1. A Máquina NUNCA empresta seus craques titulares!
-                        if (isTitularIA) continue;
-
-                        // 2. A Máquina exige pelo menos 1.5% do passe por rodada alugada
+                        if (isTitularIA) continue; // IA não aluga titular
                         let taxaMinima = (dadosDoAlvo.valor_mercado * 0.015) * lance.duracao_rodadas;
                         if (scoreLance >= taxaMinima && scoreLance > maiorScore) {
                             maiorScore = scoreLance;
@@ -251,7 +260,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                             loginVencedor = login;
                         }
                     } else {
-                        // Lógica Original de Compra Definitiva
                         let dadosJogadorOferecido = null;
                         if (lance.id_jogador_oferecido) {
                             dadosJogadorOferecido = times[lance.time_comprador].jogadores[lance.id_jogador_oferecido];
@@ -267,37 +275,63 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
                 }
 
-                if (lanceVencedor && usuarios[loginVencedor].caixaClube >= lanceVencedor.valor_oferecido) {
+                // AVALIAÇÃO DO VENCEDOR
+                if (lanceVencedor && usuarios[loginVencedor] && usuarios[loginVencedor].caixaClube >= lanceVencedor.valor_oferecido) {
                     let timeNovo = lanceVencedor.time_comprador;
                     transferenciasRealizadas++;
 
+                    // Tira do Comprador
                     usuarios[loginVencedor].caixaClube -= lanceVencedor.valor_oferecido;
                     updates[`ligas/${liga}/usuarios/${loginVencedor}/caixaClube`] = usuarios[loginVencedor].caixaClube;
 
+                    // Paga ao Vendedor IA
+                    let loginVendedor = `IA_${timeDoAlvo}`;
+                    if (usuarios[loginVendedor]) {
+                        usuarios[loginVendedor].caixaClube += lanceVencedor.valor_oferecido;
+                        updates[`ligas/${liga}/usuarios/${loginVendedor}/caixaClube`] = usuarios[loginVendedor].caixaClube;
+                    }
+
+                    // Efetiva as Trocas
                     if (lanceVencedor.tipo_negocio === 'emprestimo') {
-                        // IA FECHA O EMPRÉSTIMO
-                        dadosDoAlvo.status_emprestimo = {
-                            time_origem: timeDoAlvo,
-                            rodadas_restantes: lanceVencedor.duracao_rodadas
-                        };
+                        dadosDoAlvo.status_emprestimo = { time_origem: timeDoAlvo, rodadas_restantes: lanceVencedor.duracao_rodadas };
                         updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
                         updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
-
-                        updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = {
-                            jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeNovo, rodadas_restantes: lanceVencedor.duracao_rodadas
-                        };
+                        updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = { jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeNovo, rodadas_restantes: lanceVencedor.duracao_rodadas };
                     } else {
-                        // IA FECHA A VENDA
                         updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
                         updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
-
                         if (lanceVencedor.id_jogador_oferecido && lanceVencedor.dados_jogador_oferecido) {
                             updates[`banco_global_times/${timeNovo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = null;
                             updates[`banco_global_times/${timeDoAlvo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = lanceVencedor.dados_jogador_oferecido;
                         }
                     }
+
+                    // 📬 NOTIFICAÇÕES (Vencedor e Perdedores)
+                    if (!loginVencedor.startsWith('IA_')) {
+                        updates[`ligas/${liga}/caixa_mensagens/${loginVencedor}/msg_compra_${Date.now()}`] = {
+                            tipo: 'sucesso', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} ACEITOU sua oferta. ${dadosDoAlvo.nome} se juntou ao elenco!`, data: new Date().toISOString()
+                        };
+                    }
+                    for (let login in lances) {
+                        if (login !== loginVencedor && !login.startsWith('IA_')) {
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_perda_${Date.now()}_${Math.random()}`] = {
+                                tipo: 'recusa', texto: `Você perdeu o leilão por ${dadosDoAlvo.nome}. Outro clube cobriu sua oferta final.`, data: new Date().toISOString()
+                            };
+                        }
+                    }
+
+                } else {
+                    // RECUSADO (Nenhuma proposta prestou)
+                    for (let login in lances) {
+                        if (!login.startsWith('IA_')) {
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_recusa_${Date.now()}_${Math.random()}`] = {
+                                tipo: 'recusa', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} RECUSOU sua proposta por ${dadosDoAlvo.nome}. Os valores ficaram abaixo da pedida.`, data: new Date().toISOString()
+                            };
+                        }
+                    }
                 }
 
+                // Fim do Leilão: Remove a pasta da mesa
                 updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
             }
         }
