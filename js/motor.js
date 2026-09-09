@@ -226,19 +226,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     continue;
                 }
 
-                // 🛡️ PROTEÇÃO: O dono deste clube é um Player Humano?
-                let isDonoHumano = false;
-                for (let u in usuarios) {
-                    if (usuarios[u].timeAtual === timeDoAlvo) { isDonoHumano = true; break; }
-                }
-
-                if (isDonoHumano) {
-                    // A IA PULA JOGADORES HUMANOS. A proposta fica aguardando o clique do player.
-                    continue;
-                }
-
                 // ============================================
-                // ⏰ REGRAS TEMPORAIS DO LEILÃO DA MÁQUINA
+                // ⏰ REGRAS TEMPORAIS DO LEILÃO
                 // ============================================
                 let primeiraDataStr = Object.values(lances)[0].data_proposta || new Date().toISOString();
                 let dataProp = new Date(primeiraDataStr);
@@ -249,10 +238,33 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
                 // 🔴 Se a proposta é de HOJE e ainda NÃO deu 19h: PULA A AVALIAÇÃO!
                 if (isHoje && horaAtual < 19) {
-                    continue; // A proposta fica estacionada no banco de dados para concorrência
+                    continue; // A proposta fica estacionada no banco de dados
                 }
 
-                // 🟢 Se passou das 19h OU é uma proposta atrasada (dias anteriores): BATE O MARTELO!
+                // 🟢 Se passou das 19h OU é atrasada, vamos julgar a proposta!
+
+                // 🛡️ PROTEÇÃO: O dono deste clube é um Player Humano?
+                let isDonoHumano = false;
+                for (let u in usuarios) {
+                    if (usuarios[u].timeAtual === timeDoAlvo) { isDonoHumano = true; break; }
+                }
+
+                if (isDonoHumano) {
+                    // O prazo acabou e o humano não respondeu! Cancela a proposta automaticamente.
+                    for (let login in lances) {
+                        if (!login.startsWith('IA_')) {
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_expirou_${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
+                                tipo: 'recusa', texto: `Sua oferta por ${dadosDoAlvo.nome} EXPIROU. O treinador do ${timeDoAlvo.replace(/_/g,' ')} não respondeu a tempo.`, data: new Date().toISOString()
+                            };
+                        }
+                    }
+                    updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
+                    continue;
+                }
+
+                // ============================================
+                // A PARTIR DAQUI: SÓ CLUBES DA MÁQUINA (IA)
+                // ============================================
                 let maiorScore = 0;
                 let lanceVencedor = null;
                 let loginVencedor = "";
@@ -333,7 +345,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
                     for (let login in lances) {
                         if (login !== loginVencedor && !login.startsWith('IA_')) {
-                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_perda_${Date.now()}_${Math.random()}`] = {
+                            // 🐛 BUG CORRIGIDO AQUI: Retirado o ponto (.) do Math.random() com um Math.floor!
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_perda_${Date.now()}_${Math.floor(Math.random() * 1000)}`] = {
                                 tipo: 'recusa', texto: `Você perdeu o leilão por ${dadosDoAlvo.nome}. Outro clube cobriu sua oferta final.`, data: new Date().toISOString()
                             };
                         }
@@ -343,7 +356,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     // RECUSADO (Nenhuma proposta prestou)
                     for (let login in lances) {
                         if (!login.startsWith('IA_')) {
-                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_recusa_${Date.now()}_${Math.random()}`] = {
+                            // 🐛 BUG CORRIGIDO AQUI TAMBÉM!
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_recusa_${Date.now()}_${Math.floor(Math.random() * 1000)}`] = {
                                 tipo: 'recusa', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} RECUSOU sua proposta por ${dadosDoAlvo.nome}. Os valores ficaram abaixo da pedida.`, data: new Date().toISOString()
                             };
                         }
