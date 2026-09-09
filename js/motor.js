@@ -60,7 +60,7 @@ async function checarRotinas(liga) {
         let rodarCopaHoje = (hora >= HORA_COPA && ultCopa !== dataAtualStr);
         let rodarAtrasados = (!ultCamp || ultCamp < ontemStr);
 
-        // 🔍 OLHEIRO DO MERCADO
+        // 🔍 OLHEIRO DO MERCADO: Verifica se há propostas pendentes que já passaram das 19h ou são de ontem
         const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
         const propostasPendentes = snapPropostas.val() || {};
         let temMercadoPendente = false;
@@ -71,6 +71,7 @@ async function checarRotinas(liga) {
                 let objLances = propostasPendentes[id];
                 let primeiraDataStr = Object.values(objLances)[0].data_proposta;
 
+                // Se a proposta é tão velha que nem data tem, é pendência urgente!
                 if (!primeiraDataStr) {
                     console.log(`⚠️ [MOTOR] Proposta ID ${id} não tem data! Pendência de Mercado ativada!`);
                     temMercadoPendente = true;
@@ -86,19 +87,25 @@ async function checarRotinas(liga) {
                     break;
                 }
             }
+        } else {
+            console.log(`🧹 [MOTOR] Mesa de negociações está limpa.`);
         }
 
+        console.log(`💤 [MOTOR] Diagnóstico: CampHoje(${rodarCampHoje}) | CopaHoje(${rodarCopaHoje}) | Atrasados(${rodarAtrasados}) | MercadoPendente(${temMercadoPendente})`);
+
+        // Se o Motor está em dia com os Jogos E o Mercado não tem pendências aguardando martelo, ele dorme.
         if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados && !temMercadoPendente) return;
 
         const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
         const snapLock = await lockRef.once('value');
         const lockData = snapLock.val();
 
-        // 🔓 ANTI-TRAVAMENTO
+        // 🔓 ANTI-TRAVAMENTO: Se a tranca for antiga (mais de 1 minuto), o motor ignora o bug e quebra a porta!
         if (lockData && lockData.locked && (Date.now() - lockData.timestamp < 60000)) {
-            return;
+            return; // Outro jogador está processando neste exato segundo, tudo bem.
         }
 
+        // Tranca com a hora exata
         await lockRef.set({ locked: true, timestamp: Date.now() });
         console.log("🔥 MOTOR P2P: Iniciando varredura Oficial e/ou de Mercado!");
 
@@ -107,6 +114,7 @@ async function checarRotinas(liga) {
     } catch (e) { console.error("Falha no Motor P2P:", e); }
 }
 
+// A função que faz a mágica acontecer!
 async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados) {
     try {
         const snapTimesGlobais = await db.ref('banco_global_times').once('value');
@@ -124,6 +132,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         let timesHumanos = Object.values(usuarios).map(u => u.timeAtual).filter(t => t && t !== "Sem Clube");
         let timesIA = Object.keys(times).filter(t => !t.startsWith("Agentes_Livres") && t !== "Fantasma" && !timesHumanos.includes(t));
 
+        // 🧠 A IA só toma novas iniciativas se for hora oficial do campeonato
         if (rodarCampHoje || rodarAtrasados) {
             for (let t of timesIA) {
                 let loginIA = `IA_${t}`;
@@ -199,6 +208,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 if (!dadosDoAlvo) { updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null; continue; }
 
                 let primeiraDataStr = Object.values(lances)[0].data_proposta;
+                // Se não tem data, data base para expirar logo
                 let dataProp = primeiraDataStr ? new Date(primeiraDataStr) : new Date(0);
                 let agora = new Date();
                 let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
@@ -410,3 +420,97 @@ function registrarHallDaFama(liga, timeLiga, timeCopa, timeMundial, usuarios) {
     let idTemp = "Temporada_" + new Date().getFullYear() + "_" + Math.floor(Math.random() * 1000);
     db.ref(`ligas/${liga}/historico_campeoes/${idTemp}`).set({ nome_temporada: `Temporada Finalizada (${new Date().getFullYear()})`, campeao_serie_a: { time: timeLiga.replace(/_/g, ' '), treinador: donoL }, campeao_copa: { time: timeCopa.replace(/_/g, ' '), treinador: donoC }, campeao_mundial: { time: timeMundial.replace(/_/g, ' '), treinador: donoM } });
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+    carregarNotificacoesGlobais();
+});
+
+let dropdownAberto = false;
+function toggleNotificacoes() {
+    dropdownAberto = !dropdownAberto;
+    const drop = document.getElementById('dropdown-notificacoes');
+    if(drop) drop.style.display = dropdownAberto ? 'block' : 'none';
+}
+
+async function carregarNotificacoesGlobais() {
+    const badge = document.getElementById('badge-notificacao');
+    const lista = document.getElementById('lista-notificacoes-drop');
+
+    if(!badge || !lista) return;
+
+    db.ref(`ligas/${ligaMotor}`).on('value', async snapLiga => {
+        const ligaDados = snapLiga.val();
+        if(!ligaDados) return;
+
+        let countNotif = 0;
+        let htmlNotif = "";
+
+        if (ligaDados.pro_players) {
+            let avaliacoesFaltando = 0;
+            for (let dono in ligaDados.pro_players) {
+                if (dono === userLogadoMotor) continue;
+                let p = ligaDados.pro_players[dono];
+                if (!p.avaliacoes || !p.avaliacoes[userLogadoMotor]) {
+                    avaliacoesFaltando++;
+                }
+            }
+            if (avaliacoesFaltando > 0) {
+                countNotif++;
+                htmlNotif += `<div onclick="window.location.href='perfil.html'" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #00b853; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                    <strong style="color:#00b853; font-size:12px;">Olheiro Comunitário</strong><br>
+                    <span style="color:#ccc; font-size:11px;">Você tem ${avaliacoesFaltando} promessa(s) para avaliar.</span>
+                </div>`;
+            }
+        }
+
+        if (ligaDados.mercado_propostas) {
+            let meuTimeId = ligaDados.usuarios && ligaDados.usuarios[userLogadoMotor] ? ligaDados.usuarios[userLogadoMotor].timeAtual : null;
+            if (meuTimeId && meuTimeId !== "Sem Clube") {
+                const snapMeuTime = await db.ref(`banco_global_times/${meuTimeId}/jogadores`).once('value');
+                const meusJogadores = snapMeuTime.val() || {};
+                let propostasRecebidas = 0;
+                for (let idJogador in ligaDados.mercado_propostas) {
+                    if (meusJogadores[idJogador]) {
+                        propostasRecebidas += Object.keys(ligaDados.mercado_propostas[idJogador]).length;
+                    }
+                }
+                if (propostasRecebidas > 0) {
+                    countNotif++;
+                    htmlNotif += `<div onclick="window.location.href='mercado.html'" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #ff8c00; cursor: pointer; transition: 0.2s; margin-top: 5px;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                        <strong style="color:#ff8c00; font-size:12px;">Mercado da Bola</strong><br>
+                        <span style="color:#ccc; font-size:11px;">O seu clube recebeu ${propostasRecebidas} oferta(s)!</span>
+                    </div>`;
+                }
+            }
+        }
+
+        if (ligaDados.caixa_mensagens && ligaDados.caixa_mensagens[userLogadoMotor]) {
+            let msgs = ligaDados.caixa_mensagens[userLogadoMotor];
+            for (let m in msgs) {
+                let msg = msgs[m];
+                countNotif++;
+                let cor = msg.tipo === 'sucesso' ? '#00b853' : '#dc3545';
+                htmlNotif += `<div onclick="marcarMensagemLida('${m}')" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid ${cor}; cursor: pointer; transition: 0.2s; margin-top: 5px;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                    <strong style="color:${cor}; font-size:12px;">Retorno do Mercado</strong><br>
+                    <span style="color:#ccc; font-size:11px;">${msg.texto}</span>
+                    <div style="text-align:right; margin-top:4px;"><small style="color:#666;">Clique para apagar aviso</small></div>
+                </div>`;
+            }
+        }
+
+        if (countNotif > 0) {
+            badge.style.display = 'block';
+            badge.innerText = countNotif;
+            lista.innerHTML = htmlNotif;
+        } else {
+            badge.style.display = 'none';
+            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
+        }
+    });
+}
+
+window.marcarMensagemLida = function(idMsg) {
+    db.ref(`ligas/${ligaMotor}/caixa_mensagens/${userLogadoMotor}/${idMsg}`).remove();
+};
+
+function formatarDinheiro(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v); }
