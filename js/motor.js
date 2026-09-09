@@ -62,34 +62,52 @@ async function checarRotinas(liga) {
         let temMercadoPendente = false;
 
         if (Object.keys(propostasPendentes).length > 0) {
+            console.log(`📦 [MOTOR] Encontradas ${Object.keys(propostasPendentes).length} propostas na mesa. Verificando as datas...`);
             for (let id in propostasPendentes) {
                 let objLances = propostasPendentes[id];
-                let primeiraDataStr = Object.values(objLances)[0].data_proposta || agora.toISOString();
-                let dataProp = new Date(primeiraDataStr);
+                let primeiraDataStr = Object.values(objLances)[0].data_proposta;
 
-                let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
-
-                // A regra mestre: Se a proposta não for de hoje (antiga), OU se for de hoje e a hora for >= 19, ele precisa agir!
-                if (!isHoje || (isHoje && hora >= 19)) {
+                if (!primeiraDataStr) {
+                    console.log(`⚠️ [MOTOR] Proposta ID ${id} não tem data! Pendência de Mercado ativada!`);
                     temMercadoPendente = true;
                     break;
                 }
+
+                let dataProp = new Date(primeiraDataStr);
+                let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
+
+                if (!isHoje || (isHoje && hora >= 19)) {
+                    console.log(`⏳ [MOTOR] Proposta ID ${id} ESTÁ VENCIDA. Pendência de Mercado ativada!`);
+                    temMercadoPendente = true;
+                    break;
+                } else {
+                    console.log(`⏰ [MOTOR] Proposta ID ${id} ainda está no prazo. Aguardando dar 19h.`);
+                }
             }
+        } else {
+            console.log(`🧹 [MOTOR] Mesa de negociações está limpa.`);
         }
+
+        console.log(`💤 [MOTOR] Diagnóstico: CampHoje(${rodarCampHoje}) | CopaHoje(${rodarCopaHoje}) | Atrasados(${rodarAtrasados}) | MercadoPendente(${temMercadoPendente})`);
 
         // Se o Motor está em dia com os Jogos E o Mercado não tem pendências aguardando martelo, ele dorme.
         if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados && !temMercadoPendente) return;
 
         const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
-        lockRef.transaction((currentLock) => {
-            if (currentLock === true) return;
-            return true;
-        }, (error, committed) => {
-            if (committed) {
-                console.log("🔥 MOTOR P2P: Iniciando varredura Oficial e/ou de Mercado!");
-                processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados);
-            }
-        });
+        const snapLock = await lockRef.once('value');
+        const lockData = snapLock.val();
+
+        // 🔓 ANTI-TRAVAMENTO: Se a tranca for antiga (mais de 1 minuto), o motor ignora o bug e quebra a porta!
+        if (lockData && lockData.locked && (Date.now() - lockData.timestamp < 60000)) {
+            return; // Outro jogador está processando neste exato segundo, tudo bem.
+        }
+
+        // Tranca com a hora exata
+        await lockRef.set({ locked: true, timestamp: Date.now() });
+        console.log("🔥 MOTOR P2P: Iniciando varredura Oficial e/ou de Mercado!");
+
+        processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados);
+
     } catch (e) { console.error("Falha no Motor P2P:", e); }
 }
 
@@ -207,10 +225,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
         // Se o mercado tiver propostas de Humanos ou IAs, resolve a briga
         if (Object.keys(propostas).length > 0) {
+            console.log(`🔨 [MERCADO] Iniciando o julgamento de ${Object.keys(propostas).length} jogador(es) na mesa...`);
             for (let idAlvo in propostas) {
                 let lances = propostas[idAlvo];
                 let timeDoAlvo = null;
                 let dadosDoAlvo = null;
+                console.log(`▶️ [MERCADO] Avaliando situação do Alvo ID: ${idAlvo}`);
 
                 for (let t in times) {
                     if (times[t].jogadores && times[t].jogadores[idAlvo]) {
@@ -220,37 +240,32 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
                 }
 
-                // Se o jogador foi apagado do banco, cancela a oferta
                 if (!dadosDoAlvo) {
                     updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
                     continue;
                 }
 
                 // ============================================
-                // ⏰ REGRAS TEMPORAIS DO LEILÃO
+                // ⏰ REGRAS TEMPORAIS E BLINDAGEM CONTRA BUGS
                 // ============================================
-                let primeiraDataStr = Object.values(lances)[0].data_proposta || new Date().toISOString();
-                let dataProp = new Date(primeiraDataStr);
+                let primeiraDataStr = Object.values(lances)[0].data_proposta;
+                // Se a proposta não tem data, trata como de 1970 para ser encerrada Imediatamente!
+                let dataProp = primeiraDataStr ? new Date(primeiraDataStr) : new Date(0);
                 let agora = new Date();
 
                 let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
                 let horaAtual = agora.getHours();
 
-                // 🔴 Se a proposta é de HOJE e ainda NÃO deu 19h: PULA A AVALIAÇÃO!
                 if (isHoje && horaAtual < 19) {
-                    continue; // A proposta fica estacionada no banco de dados
+                    continue;
                 }
 
-                // 🟢 Se passou das 19h OU é atrasada, vamos julgar a proposta!
-
-                // 🛡️ PROTEÇÃO: O dono deste clube é um Player Humano?
                 let isDonoHumano = false;
                 for (let u in usuarios) {
                     if (usuarios[u].timeAtual === timeDoAlvo) { isDonoHumano = true; break; }
                 }
 
                 if (isDonoHumano) {
-                    // O prazo acabou e o humano não respondeu! Cancela a proposta automaticamente.
                     for (let login in lances) {
                         if (!login.startsWith('IA_')) {
                             updates[`ligas/${liga}/caixa_mensagens/${login}/msg_expirou_${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
@@ -262,9 +277,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     continue;
                 }
 
-                // ============================================
-                // A PARTIR DAQUI: SÓ CLUBES DA MÁQUINA (IA)
-                // ============================================
                 let maiorScore = 0;
                 let lanceVencedor = null;
                 let loginVencedor = "";
@@ -283,7 +295,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     let scoreLance = lance.valor_oferecido || 0;
 
                     if (lance.tipo_negocio === 'emprestimo') {
-                        if (isTitularIA) continue; // IA não aluga titular
+                        if (isTitularIA) continue;
                         let taxaMinima = (dadosDoAlvo.valor_mercado * 0.015) * lance.duracao_rodadas;
                         if (scoreLance >= taxaMinima && scoreLance > maiorScore) {
                             maiorScore = scoreLance;
@@ -293,7 +305,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     } else {
                         let dadosJogadorOferecido = null;
                         if (lance.id_jogador_oferecido) {
-                            dadosJogadorOferecido = times[lance.time_comprador].jogadores[lance.id_jogador_oferecido];
+                            // Proteção de sintaxe para clubes que já apagaram todos os jogadores (evita quebrar o Motor)
+                            dadosJogadorOferecido = times[lance.time_comprador]?.jogadores?.[lance.id_jogador_oferecido];
                             if (dadosJogadorOferecido) scoreLance += dadosJogadorOferecido.valor_mercado;
                         }
 
@@ -306,23 +319,19 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
                 }
 
-                // AVALIAÇÃO DO VENCEDOR
                 if (lanceVencedor && usuarios[loginVencedor] && usuarios[loginVencedor].caixaClube >= lanceVencedor.valor_oferecido) {
                     let timeNovo = lanceVencedor.time_comprador;
                     transferenciasRealizadas++;
 
-                    // Tira do Comprador
                     usuarios[loginVencedor].caixaClube -= lanceVencedor.valor_oferecido;
                     updates[`ligas/${liga}/usuarios/${loginVencedor}/caixaClube`] = usuarios[loginVencedor].caixaClube;
 
-                    // Paga ao Vendedor IA
                     let loginVendedor = `IA_${timeDoAlvo}`;
                     if (usuarios[loginVendedor]) {
                         usuarios[loginVendedor].caixaClube += lanceVencedor.valor_oferecido;
                         updates[`ligas/${liga}/usuarios/${loginVendedor}/caixaClube`] = usuarios[loginVendedor].caixaClube;
                     }
 
-                    // Efetiva as Trocas
                     if (lanceVencedor.tipo_negocio === 'emprestimo') {
                         dadosDoAlvo.status_emprestimo = { time_origem: timeDoAlvo, rodadas_restantes: lanceVencedor.duracao_rodadas };
                         updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
@@ -337,7 +346,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         }
                     }
 
-                    // 📬 NOTIFICAÇÕES (Vencedor e Perdedores)
                     if (!loginVencedor.startsWith('IA_')) {
                         updates[`ligas/${liga}/caixa_mensagens/${loginVencedor}/msg_compra_${Date.now()}`] = {
                             tipo: 'sucesso', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} ACEITOU sua oferta. ${dadosDoAlvo.nome} se juntou ao elenco!`, data: new Date().toISOString()
@@ -345,7 +353,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
                     for (let login in lances) {
                         if (login !== loginVencedor && !login.startsWith('IA_')) {
-                            // 🐛 BUG CORRIGIDO AQUI: Retirado o ponto (.) do Math.random() com um Math.floor!
                             updates[`ligas/${liga}/caixa_mensagens/${login}/msg_perda_${Date.now()}_${Math.floor(Math.random() * 1000)}`] = {
                                 tipo: 'recusa', texto: `Você perdeu o leilão por ${dadosDoAlvo.nome}. Outro clube cobriu sua oferta final.`, data: new Date().toISOString()
                             };
@@ -353,18 +360,14 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
 
                 } else {
-                    // RECUSADO (Nenhuma proposta prestou)
                     for (let login in lances) {
                         if (!login.startsWith('IA_')) {
-                            // 🐛 BUG CORRIGIDO AQUI TAMBÉM!
                             updates[`ligas/${liga}/caixa_mensagens/${login}/msg_recusa_${Date.now()}_${Math.floor(Math.random() * 1000)}`] = {
                                 tipo: 'recusa', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} RECUSOU sua proposta por ${dadosDoAlvo.nome}. Os valores ficaram abaixo da pedida.`, data: new Date().toISOString()
                             };
                         }
                     }
                 }
-
-                // Fim do Leilão: Remove a pasta da mesa
                 updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
             }
         }
@@ -382,45 +385,28 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
                     if (p.status === "avaliando") {
                         let at = p.atributos_base;
-
-                        // O Criador conta como o voto número 1
                         let qtdVotos = 1;
                         let sA = at.ataque, sD = at.defesa, sF = at.forca, sV = at.velocidade, sH = at.habilidade;
 
                         if (p.avaliacoes) {
                             for (let v in p.avaliacoes) {
-                                sA += p.avaliacoes[v].ataque || 60;
-                                sD += p.avaliacoes[v].defesa || 60;
-                                sF += p.avaliacoes[v].forca || 60;
-                                sV += p.avaliacoes[v].velocidade || 60;
-                                sH += p.avaliacoes[v].habilidade || 60;
+                                sA += p.avaliacoes[v].ataque || 60; sD += p.avaliacoes[v].defesa || 60; sF += p.avaliacoes[v].forca || 60; sV += p.avaliacoes[v].velocidade || 60; sH += p.avaliacoes[v].habilidade || 60;
                                 qtdVotos++;
                             }
                         }
 
-                        // Calcula a média exata e CONVERTE para a Escala 1-15 (Divide por 6)
-                        let finalAtq = Math.round((sA / qtdVotos) / 6);
-                        let finalDef = Math.round((sD / qtdVotos) / 6);
-                        let finalFor = Math.round((sF / qtdVotos) / 6);
-                        let finalVel = Math.round((sV / qtdVotos) / 6);
-                        let finalHab = Math.round((sH / qtdVotos) / 6);
-
-                        // OVR é a Média!
+                        let finalAtq = Math.round((sA / qtdVotos) / 6); let finalDef = Math.round((sD / qtdVotos) / 6); let finalFor = Math.round((sF / qtdVotos) / 6); let finalVel = Math.round((sV / qtdVotos) / 6); let finalHab = Math.round((sH / qtdVotos) / 6);
                         let ovrFinal = Math.round((finalAtq + finalDef + finalFor + finalVel + finalHab) / 5);
-
-                        // Adequa o valor de mercado (Ex: OVR 10 = R$ 25.000.000)
                         let valorMercado = ovrFinal * 2500000;
 
                         let jogadorPronto = {
-                            nome: p.nome + " (PRO)",
-                            posicoes: { p: p.posicao, s: "IND", t: "IND" },
+                            nome: p.nome + " (PRO)", posicoes: { p: p.posicao, s: "IND", t: "IND" },
                             atributos: { ataque: finalAtq, defesa: finalDef, forca: finalFor, velocidade: finalVel, habilidade: finalHab },
-                            valor_mercado: valorMercado,
-                            pro_player: true
+                            valor_mercado: valorMercado, pro_player: true
                         };
 
                         let idUnico = "PRO_" + criador;
-                        let timeAgentes = `Agentes_Livres_${liga}`; // Isolamento da Liga!
+                        let timeAgentes = `Agentes_Livres_${liga}`;
 
                         updates[`banco_global_times/${timeAgentes}/divisao`] = "Livre";
                         updates[`banco_global_times/${timeAgentes}/jogadores/${idUnico}`] = jogadorPronto;
@@ -437,7 +423,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         // --- PASSO C: MOTOR DE CALENDÁRIO INTELIGENTE ---
         if (cal) {
             const agoraDT = new Date();
-            const horaMotor = agoraDT.getHours(); // O Relógio interno do Motor
+            const horaMotor = agoraDT.getHours();
             let teveJogoLiga = false;
 
             const processarPartidaAoVivo = (jogo, isMataMata = false) => {
@@ -472,7 +458,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.mandante.replace(/_/g,' ')}: Fôlego novo!`, cor: "#aaa" });
                 if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração tática!`, cor: "#aaa" });
 
-                // INJEÇÃO DO MOTOR NARRATIVO PARA TRANSMISSÃO AO VIVO
                 const narracoesM = ["🔥 UUUHH! O atacante chuta forte e a bola raspa a trave!", "🛡️ Bela roubada de bola da zaga, desarmando com classe.", "👟 Troca de passes envolvente. O time procura espaço.", "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima!"];
                 const narracoesV = ["⚠️ PERIGO! O visitante ataca com velocidade, mas o chute vai fora.", "🧤 MILAGRE! O goleiro se estica todo e salva um gol certo!", "👟 O visitante domina a posse de bola no meio campo.", "🥅 Chute de muito longe, a bola passa assustando!"];
 
@@ -546,7 +531,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             let proximaRodada = cal.rodadaAtual || 1;
             const hojeDT = new Date(); hojeDT.setHours(0,0,0,0);
 
-            // 1. VARRE O CAMPEONATO (Atrados ou hoje após 19h)
             for (let r = 1; r <= 38; r++) {
                 let rodadaKey = `rodada_${r}`;
 
@@ -563,7 +547,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                             let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                             jogoDT.setHours(0,0,0,0);
 
-                            // O TRATOR: Apenas simula caso o jogo esteja atrasado (Ontem para trás)
                             if (jogoDT < hojeDT) {
                                 processarPartidaAoVivo(jogo, false);
                                 teveJogoLiga = true;
@@ -580,7 +563,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 cal.rodadaAtual = proximaRodada;
             }
 
-            // 2. VARRE A COPA (Atrasados ou hoje após 20h)
             if (cal.copa) {
                 let fasesMata = ["oitavas", "quartas", "semis", "final", "mundial"];
                 for (let f of fasesMata) {
@@ -594,9 +576,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                                 let jogoDT = new Date(hojeDT.getFullYear(), parseInt(mJ) - 1, parseInt(dJ));
                                 jogoDT.setHours(0,0,0,0);
 
-                                // O TRATOR: Apenas simula caso a Copa esteja atrasada
                                 if (jogoDT < hojeDT) {
-                                    processarPartidaAoVivo(jogo, true); // True = Pênaltis
+                                    processarPartidaAoVivo(jogo, true);
 
                                     let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
                                     let num = parseInt(idJ.split('_')[1]);
@@ -678,7 +659,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         }
 
         // --- PASSO C.2: FISCALIZAÇÃO DOS CONTRATOS DE EMPRÉSTIMO ---
-        // Calcula quantas rodadas avançaram hoje (1 rodada ao vivo, ou várias se o trator puxou atrasos)
         let novaRodadaAtual = cal ? (cal.rodadaAtual || 1) : 1;
         let rodadasAvancadas = novaRodadaAtual - rodadaAtual;
 
@@ -692,22 +672,19 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     emp.rodadas_restantes -= rodadasAvancadas;
 
                     if (emp.rodadas_restantes <= 0) {
-                        // 🚨 ACABOU O CONTRATO! O Trator confisca o jogador de volta para a casa.
                         let tLocatario = emp.time_destino;
                         let tDono = emp.time_origem;
                         let dJog = null;
 
-                        // Pega o jogador do time que alugou
                         if (times[tLocatario] && times[tLocatario].jogadores && times[tLocatario].jogadores[idJog]) {
                             dJog = times[tLocatario].jogadores[idJog];
                         }
 
                         if (dJog) {
-                            delete dJog.status_emprestimo; // Arranca a etiqueta de locação
+                            delete dJog.status_emprestimo;
                             updates[`banco_global_times/${tLocatario}/jogadores/${idJog}`] = null;
                             updates[`banco_global_times/${tDono}/jogadores/${idJog}`] = dJog;
 
-                            // Avisa os Técnicos (Caso sejam humanos) na Caixa de Entrada
                             let idMsgE = "msg_emp_" + Date.now() + Math.floor(Math.random()*1000);
                             for (let u in usuarios) {
                                 if (usuarios[u].timeAtual === tLocatario) {
@@ -718,10 +695,8 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                                 }
                             }
                         }
-                        // Apaga o registro do cartório
                         updates[`ligas/${liga}/emprestimos_ativos/${idJog}`] = null;
                     } else {
-                        // Contrato segue ativo: Atualiza os dias restantes no Cartório e no Perfil do Atleta!
                         updates[`ligas/${liga}/emprestimos_ativos/${idJog}/rodadas_restantes`] = emp.rodadas_restantes;
                         updates[`banco_global_times/${emp.time_destino}/jogadores/${idJog}/status_emprestimo/rodadas_restantes`] = emp.rodadas_restantes;
                     }
@@ -741,7 +716,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             }
         }
 
-        // 1. Limpa o bônus da rodada anterior (Se cair de posição, perde a força)
         todosParaRanking.forEach(jog => {
             let j = jog.dados;
             if (j.bonus_ranking_ativo) {
@@ -753,14 +727,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             }
         });
 
-        // 2. Lê a Tabela Atual e encontra os 10 melhores
         let topGols = [...todosParaRanking].filter(j => j.dados.estatisticas && j.dados.estatisticas.gols > 0)
             .sort((a,b) => b.dados.estatisticas.gols - a.dados.estatisticas.gols).slice(0, 10);
 
         let topAsts = [...todosParaRanking].filter(j => j.dados.estatisticas && j.dados.estatisticas.assistencias > 0)
             .sort((a,b) => b.dados.estatisticas.assistencias - a.dados.estatisticas.assistencias).slice(0, 10);
 
-        // 3. Injeta a Bonificação (1º ganha 5.0, caindo 0.5 até o 10º ganhar 0.5)
         topGols.forEach((jog, i) => {
             let bonus = 5.0 - (i * 0.5);
             jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0 };
@@ -782,17 +754,17 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
             let atq = at.ataque || 5; let def = at.defesa || 5; let frc = at.forca || 5; let vel = at.velocidade || 5; let hab = at.habilidade || 5;
 
-            // Simula a escala oficial para precificar corretamente
             if ((j.pro_player || (j.nome && j.nome.includes("(PRO)"))) && (atq > 20 || def > 20)) {
                 atq /= 6; def /= 6; frc /= 6; vel /= 6; hab /= 6;
             }
 
             let ovrMercado = (atq + def + frc + vel + hab) / 5;
-
-            // Ex: Se o cara ganhou +5 e o OVR subiu para 12, ele agora vale R$ 30 milhões!
             j.valor_mercado = Math.round(ovrMercado * 2500000);
 
-            updates[`banco_global_times/${jog.time}/jogadores/${jog.id}`] = j;
+            // 🛡️ PROTEÇÃO: Se o jogador foi VENDIDO hoje, não ressuscite ele no time antigo!
+            if (updates[`banco_global_times/${jog.time}/jogadores/${jog.id}`] !== null) {
+                updates[`banco_global_times/${jog.time}/jogadores/${jog.id}`] = j;
+            }
         });
 
         // ========================================================
@@ -893,25 +865,297 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             if (!updates[`ligas/${liga}/sistema/ultima_simulacao_camp`]) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = ontemStr;
             if (!updates[`ligas/${liga}/sistema/ultima_simulacao_copa`]) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = ontemStr;
         }
-        await db.ref().update(updates);
-        await lockRef.set(false);
 
-        console.log("✅ MOTOR P2P: Rotinas noturnas concluídas com sucesso!");
+        console.log(`📝 [FIREBASE] Pacote de atualizações montado! Total de itens a alterar: ${Object.keys(updates).length}`);
+        console.log(`🔍 [FIREBASE] Espiando o pacote:`, updates);
 
-        if (transferenciasRealizadas > 0) {
-            dispararNotificacao("Mercado Fechado! 🛒", "As negociações foram encerradas e jogadores foram transferidos.");
+        try {
+            // Dispara todos os dados para o Firebase!
+            await db.ref().update(updates);
+            console.log("✅ [FIREBASE] Banco de dados atualizado com sucesso. Nenhuma rejeição!");
+        } catch (errDb) {
+            console.error("❌ [FIREBASE] ERRO CRÍTICO! A nuvem recusou o pacote. Motivo:", errDb);
         }
 
-        // Verifica se o motor rodou ao vivo (20h) ou se o Trator foi acionado para cobrir o atraso
-        if (horaDeRodar) {
+        // 🔓 Libera a tranca de forma segura para o próximo ciclo
+        await lockRef.set({ locked: false, timestamp: 0 });
+
+        console.log("✅ MOTOR P2P: O Trator terminou o serviço.");
+
+        if (transferenciasRealizadas > 0) {
+            dispararNotificacao("Mercado Fechado! 🛒", "Negociações e avaliações de propostas encerradas.");
+        }
+
+        // Corrige a variável antiga e mostra o aviso correto!
+        if (rodarCampHoje || rodarCopaHoje) {
             dispararNotificacao("Fim do Aquecimento! ⚽", "As escalações foram bloqueadas e a bola vai rolar!");
-        } else {
-            dispararNotificacao("🚜 Trator Acionado!", "O sistema simulou todas as rodadas e transações que estavam atrasadas no calendário.");
+        } else if (rodarAtrasados) {
+            dispararNotificacao("🚜 Trator Acionado!", "O sistema simulou rodadas ou limpezas de mercado que estavam pendentes.");
         }
 
     } catch (e) {
         console.error("Erro crítico no Motor P2P:", e);
-        await lockRef.set(false);
+        // Em caso de falha severa, garante que a porta NUNCA fique trancada
+        if (lockRef) await lockRef.set({ locked: false, timestamp: 0 });
+    }
+}
+
+// ========================================================
+// 3. GRAVAR NO HALL DA FAMA (FIM DA TEMPORADA)
+// ========================================================
+function registrarHallDaFama(liga, timeLiga, timeCopa, timeMundial, usuarios) {
+    let donoL = "Sem Treinador"; let donoC = "Sem Treinador"; let donoM = "Sem Treinador";
+    for(let u in usuarios) {
+        if(usuarios[u].timeAtual === timeLiga) donoL = usuarios[u].nome || u;
+        if(usuarios[u].timeAtual === timeCopa) donoC = usuarios[u].nome || u;
+        if(usuarios[u].timeAtual === timeMundial) donoM = usuarios[u].nome || u;
+    }
+    let idTemp = "Temporada_" + new Date().getFullYear() + "_" + Math.floor(Math.random() * 1000);
+    db.ref(`ligas/${liga}/historico_campeoes/${idTemp}`).set({
+        nome_temporada: `Temporada Finalizada (${new Date().getFullYear()})`,
+        campeao_serie_a: { time: timeLiga.replace(/_/g, ' '), treinador: donoL },
+        campeao_copa: { time: timeCopa.replace(/_/g, ' '), treinador: donoC },
+        campeao_mundial: { time: timeMundial.replace(/_/g, ' '), treinador: donoM }
+    });
+}
+
+// ========================================================
+// 4. SISTEMA GLOBAL DE NOTIFICAÇÕES (SINO CLICÁVEL)
+// ========================================================
+window.addEventListener('DOMContentLoaded', () => {
+    carregarNotificacoesGlobais();
+});
+
+let dropdownAberto = false;
+function toggleNotificacoes() {
+    dropdownAberto = !dropdownAberto;
+    const drop = document.getElementById('dropdown-notificacoes');
+    if(drop) drop.style.display = dropdownAberto ? 'block' : 'none';
+}
+
+async function carregarNotificacoesGlobais() {
+    const badge = document.getElementById('badge-notificacao');
+    const lista = document.getElementById('lista-notificacoes-drop');
+
+    // Só roda a função se a página atual possuir o ícone do sino nela
+    if(!badge || !lista) return;
+
+    db.ref(`ligas/${ligaMotor}`).on('value', async snapLiga => {
+        const ligaDados = snapLiga.val();
+        if(!ligaDados) return;
+
+        let countNotif = 0;
+        let htmlNotif = "";
+
+        // CHECAGEM 1: AVALIAÇÕES PENDENTES (Olheiro)
+        if (ligaDados.pro_players) {
+            let avaliacoesFaltando = 0;
+            for (let dono in ligaDados.pro_players) {
+                if (dono === userLogadoMotor) continue; // Pula o seu próprio
+                let p = ligaDados.pro_players[dono];
+                if (!p.avaliacoes || !p.avaliacoes[userLogadoMotor]) {
+                    avaliacoesFaltando++;
+                }
+            }
+            if (avaliacoesFaltando > 0) {
+                countNotif++;
+                htmlNotif += `<div onclick="window.location.href='perfil.html'" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #00b853; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                    <strong style="color:#00b853; font-size:12px;">Olheiro Comunitário</strong><br>
+                    <span style="color:#ccc; font-size:11px;">Você tem ${avaliacoesFaltando} promessa(s) para avaliar.</span>
+                </div>`;
+            }
+        }
+
+        // CHECAGEM 2: PROPOSTAS DE MERCADO
+        if (ligaDados.mercado_propostas) {
+            let meuTimeId = ligaDados.usuarios && ligaDados.usuarios[userLogadoMotor] ? ligaDados.usuarios[userLogadoMotor].timeAtual : null;
+
+            if (meuTimeId && meuTimeId !== "Sem Clube") {
+                const snapMeuTime = await db.ref(`banco_global_times/${meuTimeId}/jogadores`).once('value');
+                const meusJogadores = snapMeuTime.val() || {};
+                let propostasRecebidas = 0;
+
+                for (let idJogador in ligaDados.mercado_propostas) {
+                    if (meusJogadores[idJogador]) {
+                        // Tenho proposta num jogador meu!
+                        propostasRecebidas += Object.keys(ligaDados.mercado_propostas[idJogador]).length;
+                    }
+                }
+
+                if (propostasRecebidas > 0) {
+                    countNotif++;
+                    htmlNotif += `<div onclick="window.location.href='mercado.html'" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #ff8c00; cursor: pointer; transition: 0.2s; margin-top: 5px;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                        <strong style="color:#ff8c00; font-size:12px;">Mercado da Bola</strong><br>
+                        <span style="color:#ccc; font-size:11px;">O seu clube recebeu ${propostasRecebidas} oferta(s)!</span>
+                    </div>`;
+                }
+            }
+        }
+
+        // CHECAGEM 3: CAIXA DE MENSAGENS (Alertas de Transferência)
+        if (ligaDados.caixa_mensagens && ligaDados.caixa_mensagens[userLogadoMotor]) {
+            let msgs = ligaDados.caixa_mensagens[userLogadoMotor];
+            for (let m in msgs) {
+                let msg = msgs[m];
+                countNotif++;
+                let cor = msg.tipo === 'sucesso' ? '#00b853' : '#dc3545';
+
+                htmlNotif += `<div onclick="marcarMensagemLida('${m}')" style="background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid ${cor}; cursor: pointer; transition: 0.2s; margin-top: 5px;" onmouseover="this.style.background='#333'" onmouseout="this.style.background='#1a1a1a'">
+                    <strong style="color:${cor}; font-size:12px;">Retorno do Mercado</strong><br>
+                    <span style="color:#ccc; font-size:11px;">${msg.texto}</span>
+                    <div style="text-align:right; margin-top:4px;"><small style="color:#666;">Clique para apagar aviso</small></div>
+                </div>`;
+            }
+        }
+
+        if (countNotif > 0) {
+            badge.style.display = 'block';
+            badge.innerText = countNotif;
+            lista.innerHTML = htmlNotif;
+        } else {
+            badge.style.display = 'none';
+            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
+        }
+    });
+}
+
+// Apaga a mensagem quando o usuário clica nela!
+window.marcarMensagemLida = function(idMsg) {
+    db.ref(`ligas/${ligaMotor}/caixa_mensagens/${userLogadoMotor}/${idMsg}`).remove();
+};
+            badge.innerText = countNotif;
+            lista.innerHTML = htmlNotif;
+        } else {
+            badge.style.display = 'none';
+            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
+        }
+    });
+}
+
+function formatarDinheiro(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v); }
+
+        // ========================================================
+        // --- PASSO C.3: BANCO CENTRAL (COBRANÇAS E PENHORAS) ---
+        // ========================================================
+        let novaRodadaCobranca = cal ? (cal.rodadaAtual || 1) : 1;
+        let rodadasParaCobrar = novaRodadaCobranca - (rodadaAtual || 1); // Garante cobrar retroativo se ficou dias sem logar
+
+        if (rodadasParaCobrar > 0) {
+            const snapDividas = await db.ref(`ligas/${liga}/dividas_financeiras`).once('value');
+            const dividas = snapDividas.val();
+
+            if (dividas) {
+                // Precisamos buscar o estado atual dos cofres para pagar os investidores
+                const snapCofres = await db.ref(`ligas/${liga}/banco_investidores`).once('value');
+                let cofres = snapCofres.val() || {};
+
+                for (let idDivida in dividas) {
+                    let div = dividas[idDivida];
+                    let devedor = div.devedor;
+                    let credor = div.credor;
+                    let parcelaBase = div.parcela_rodada;
+
+                    // Multiplica a parcela pelos dias atrasados
+                    let totalCobradoNaRodada = parcelaBase * rodadasParaCobrar;
+
+                    let loginDevedor = null;
+                    for (let u in usuarios) { if (usuarios[u].timeAtual === devedor) { loginDevedor = u; break; } }
+
+                    if (loginDevedor && usuarios[loginDevedor]) {
+                        if (usuarios[loginDevedor].caixaClube >= totalCobradoNaRodada) {
+                            // 🟢 PAGAMENTO EM DIA
+                            usuarios[loginDevedor].caixaClube -= totalCobradoNaRodada;
+                            updates[`ligas/${liga}/usuarios/${loginDevedor}/caixaClube`] = usuarios[loginDevedor].caixaClube;
+
+                            // Repassa ao Credor (se não for o Banco Central)
+                            if (credor !== 'Banco Central da Liga') {
+                                if (!cofres[credor]) cofres[credor] = { saldo: 0 };
+                                cofres[credor].saldo += totalCobradoNaRodada;
+                                updates[`ligas/${liga}/banco_investidores/${credor}/saldo`] = cofres[credor].saldo;
+                            }
+
+                            div.rodadas_restantes -= rodadasParaCobrar;
+                            div.valor_total -= totalCobradoNaRodada;
+
+                            if (div.rodadas_restantes <= 0 || div.valor_total <= 0) {
+                                updates[`ligas/${liga}/dividas_financeiras/${idDivida}`] = null; // Dívida Quitada!
+                            } else {
+                                updates[`ligas/${liga}/dividas_financeiras/${idDivida}/rodadas_restantes`] = div.rodadas_restantes;
+                                updates[`ligas/${liga}/dividas_financeiras/${idDivida}/valor_total`] = div.valor_total;
+                            }
+                        } else {
+                            // 🔴 CALOTE! MODO OFICIAL DE JUSTIÇA (PENHORA)
+                            let elencoDevedor = times[devedor] && times[devedor].jogadores ? Object.values(times[devedor].jogadores) : [];
+
+                            if (elencoDevedor.length > 0) {
+                                // Pega o jogador mais barato do time
+                                let piorJogador = elencoDevedor.sort((a,b) => (a.valor_mercado||0) - (b.valor_mercado||0))[0];
+                                let idBagre = Object.keys(times[devedor].jogadores).find(k => times[devedor].jogadores[k].nome === piorJogador.nome);
+
+                                if (idBagre) {
+                                    updates[`banco_global_times/${devedor}/jogadores/${idBagre}`] = null; // Tira do devedor
+
+                                    // Para onde vai o jogador? Se for Banco Central, vira Agente Livre. Se for Player, vai pro time dele!
+                                    let destinoPenhora = credor === 'Banco Central da Liga' ? `Agentes_Livres_${liga}` : credor;
+                                    updates[`banco_global_times/${destinoPenhora}/jogadores/${idBagre}`] = piorJogador;
+
+                                    let valorAbatido = piorJogador.valor_mercado || 1000000;
+                                    div.valor_total -= valorAbatido;
+
+                                    // Envia o telegrama assustador pro devedor
+                                    let idMsg = "msg_penhora_" + Date.now() + Math.floor(Math.random()*1000);
+                                    updates[`ligas/${liga}/caixa_mensagens/${loginDevedor}/${idMsg}`] = {
+                                        tipo: 'recusa',
+                                        texto: `🚨 PENHORA! Sem dinheiro para pagar a dívida com ${credor.replace(/_/g,' ')}, a justiça confiscou seu jogador ${piorJogador.nome} (Abateu ${formatarDinheiro(valorAbatido)}).`,
+                                        data: new Date().toISOString()
+                                    };
+
+                                    // Se o jogador era mais caro que a dívida, quita tudo. Senão, ajusta o saldo.
+                                    if (div.valor_total <= 0) {
+                                        updates[`ligas/${liga}/dividas_financeiras/${idDivida}`] = null;
+                                    } else {
+                                        div.parcela_rodada = Math.round(div.valor_total / (div.rodadas_restantes || 1)); // Recalcula a parcela
+                                        updates[`ligas/${liga}/dividas_financeiras/${idDivida}`] = div;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- PASSO D: FINALIZAR E AVISAR ---
+        if (rodarCampHoje) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = dataAtualStr;
+        if (rodarCopaHoje) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = dataAtualStr;
+        if (rodarAtrasados) {
+            if (!updates[`ligas/${liga}/sistema/ultima_simulacao_camp`]) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = ontemStr;
+            if (!updates[`ligas/${liga}/sistema/ultima_simulacao_copa`]) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = ontemStr;
+        }
+
+        // Dispara todos os dados para o Firebase!
+        await db.ref().update(updates);
+
+        // 🔓 Libera a tranca de forma segura para o próximo ciclo
+        await lockRef.set({ locked: false, timestamp: 0 });
+
+        console.log("✅ MOTOR P2P: Rotinas noturnas concluídas com sucesso!");
+
+        if (transferenciasRealizadas > 0) {
+            dispararNotificacao("Mercado Fechado! 🛒", "Negociações e avaliações de propostas encerradas.");
+        }
+
+        // Corrige a variável antiga e mostra o aviso correto!
+        if (rodarCampHoje || rodarCopaHoje) {
+            dispararNotificacao("Fim do Aquecimento! ⚽", "As escalações foram bloqueadas e a bola vai rolar!");
+        } else if (rodarAtrasados) {
+            dispararNotificacao("🚜 Trator Acionado!", "O sistema simulou rodadas ou limpezas de mercado que estavam pendentes.");
+        }
+
+    } catch (e) {
+        console.error("Erro crítico no Motor P2P:", e);
+        // Em caso de falha severa, garante que a porta NUNCA fique trancada
+        if (lockRef) await lockRef.set({ locked: false, timestamp: 0 });
     }
 }
 
