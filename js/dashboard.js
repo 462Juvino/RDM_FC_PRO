@@ -102,9 +102,8 @@ async function sortearTimeParaNovoTreinador() {
 }
 
 function carregarVisaoGeralClube() {
-    iniciarSomAmbiente(dadosUsuario.timeAtual); // LIGA O SOM AMBIENTE! 🎵
+    iniciarSomAmbiente(dadosUsuario.timeAtual);
 
-    // Código antigo que já estava aqui carregando o painel...
     const area = document.getElementById('area-trabalho');
     const timeIdBanco = dadosUsuario.timeAtual;
     const meuTime = timeIdBanco.replace(/_/g, ' ');
@@ -121,6 +120,12 @@ function carregarVisaoGeralClube() {
             <span style="background: #333; padding: 5px 15px; border-radius: 20px; font-size: 14px; border: 1px solid #555;">
                 Meta: <strong>${dadosUsuario.tierMetas}ª Colocação</strong>
             </span>
+        </div>
+
+        <!-- 🚨 NOVA CENTRAL DE PENDÊNCIAS (Inicia oculta) 🚨 -->
+        <div id="widget-avisos" style="display:none; width: 100%; background: rgba(220, 53, 69, 0.1); border: 1px solid #dc3545; border-radius: 8px; padding: 15px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(220,53,69,0.2);">
+            <h3 style="color: #dc3545; margin-top: 0; margin-bottom: 10px; font-size: 16px;">⚠️ Pendências do Clube</h3>
+            <ul id="lista-avisos" style="list-style: none; padding: 0; margin: 0; font-size: 13px;"></ul>
         </div>
 
         <div style="width: 100%; background: #1a1a1a; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #444; display: flex; align-items: center; gap: 15px; box-sizing: border-box;">
@@ -148,7 +153,6 @@ function carregarVisaoGeralClube() {
         </div>
 
         <div class="dashboard-widgets" style="grid-template-columns: repeat(auto-fit, minmax(48%, 1fr));">
-
             <!-- WIDGET 1: PRÓXIMO JOGO -->
             <div class="widget-card">
                 <h3 style="margin-bottom: 5px;">Próximo Compromisso <span>📅</span></h3>
@@ -203,10 +207,9 @@ function carregarVisaoGeralClube() {
             <div class="widget-card" style="border: 1px solid #dc3545; box-shadow: 0 0 15px rgba(220,53,69,0.2);">
                 <h3 style="color: #dc3545; margin-bottom: 5px;">Arena X1 ⚔️</h3>
                 <p style="color: #aaa; font-size: 12px; margin-top:0; margin-bottom: 15px;">Desafie a Máquina ou outros Players. Aposte dinheiro do caixa ou passes de jogadores em um duelo instantâneo!</p>
-                <div style="flex: 1;"></div> <!-- Empurra o botão pro fundo -->
+                <div style="flex: 1;"></div>
                 <button class="widget-btn" onclick="abrirModalX1()" style="background: #dc3545; color: white; border: none; font-weight: bold; width: 100%;">Entrar na Arena</button>
             </div>
-
         </div>
     `;
 
@@ -214,11 +217,109 @@ function carregarVisaoGeralClube() {
     carregarEstatisticasGerais(timeIdBanco);
     carregarMiniTabela(timeIdBanco);
     carregarRadarMercado();
+    carregarCentralDeAvisos(timeIdBanco); // 🚨 Inicia a busca por pendências!
 
     if(window.loopNoticias) clearInterval(window.loopNoticias);
     gerarNoticia(meuTime);
     window.loopNoticias = setInterval(() => gerarNoticia(meuTime), 10000);
 }
+
+// ========================================================
+// 🚨 INTELIGÊNCIA DA CENTRAL DE AVISOS
+// ========================================================
+async function carregarCentralDeAvisos(meuTimeId) {
+    const ul = document.getElementById('lista-avisos');
+    const widget = document.getElementById('widget-avisos');
+    let avisos = [];
+
+    try {
+        const [snapMsgs, snapMercado, snapPros, snapTime] = await Promise.all([
+            db.ref(`ligas/${ligaLogada}/caixa_mensagens/${userLogado}`).once('value'),
+            db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value'),
+            db.ref(`ligas/${ligaLogada}/pro_players`).once('value'),
+            db.ref(`banco_global_times/${meuTimeId}`).once('value')
+        ]);
+
+        // 1. Mensagens da Diretoria e Transferências
+        const msgs = snapMsgs.val();
+        if (msgs) {
+            for (let m in msgs) {
+                let cor = msgs[m].tipo === 'sucesso' ? 'var(--verde-campo)' : '#dc3545';
+                avisos.push(`
+                    <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong style="color:${cor};">📬 Comunicado:</strong> <span style="color:#ccc;">${msgs[m].texto}</span>
+                        </div>
+                        <button onclick="marcarMensagemLidaDash('${m}')" style="margin-left:10px; background:#333; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; flex-shrink:0;">Ciente</button>
+                    </li>
+                `);
+            }
+        }
+
+        // 2. Propostas no Mercado
+        const propostas = snapMercado.val();
+        const meuElenco = snapTime.val()?.jogadores || {};
+        let propostasRecebidas = 0;
+
+        if (propostas) {
+            for (let idAlvo in propostas) {
+                if (meuElenco[idAlvo]) propostasRecebidas += Object.keys(propostas[idAlvo]).length;
+            }
+        }
+        if (propostasRecebidas > 0) {
+            avisos.push(`
+                <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong style="color:#ff8c00;">💼 Mercado da Bola:</strong> <span style="color:#ccc;">Você tem ${propostasRecebidas} proposta(s) na mesa aguardando aprovação.</span></div>
+                    <button onclick="window.location.href='mercado.html'" style="margin-left:10px; background:#ff8c00; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; flex-shrink:0;">Ver Propostas</button>
+                </li>
+            `);
+        }
+
+        // 3. Olheiro de Pro Players
+        const pros = snapPros.val();
+        let avaliacoesFaltando = 0;
+        if (pros) {
+            for (let dono in pros) {
+                if (dono !== userLogado && pros[dono].status === "avaliando") {
+                    if (!pros[dono].avaliacoes || !pros[dono].avaliacoes[userLogado]) avaliacoesFaltando++;
+                }
+            }
+        }
+        if (avaliacoesFaltando > 0) {
+            avisos.push(`
+                <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong style="color:#00b853;">⭐ Olheiro da Base:</strong> <span style="color:#ccc;">Existem ${avaliacoesFaltando} Pro Player(s) aguardando sua nota de avaliação.</span></div>
+                    <button onclick="window.location.href='perfil.html'" style="margin-left:10px; background:#00b853; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; flex-shrink:0;">Avaliar</button>
+                </li>
+            `);
+        }
+
+        // 4. Plantel Curto (Crítico!)
+        let numJogadores = Object.keys(meuElenco).length;
+        if (numJogadores > 0 && numJogadores < 11) {
+            avisos.push(`
+                <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444;">
+                    <strong style="color:#dc3545;">🚨 Plantel Incompleto:</strong> <span style="color:#ccc;">Atenção! Seu time tem apenas ${numJogadores} jogadores. Se o campeonato rodar, você perderá por W.O. Vá ao mercado agora!</span>
+                </li>
+            `);
+        }
+
+        // Se encontrou problemas, acende o telão vermelho!
+        if (avisos.length > 0) {
+            ul.innerHTML = avisos.join('');
+            widget.style.display = 'block';
+        } else {
+            widget.style.display = 'none';
+        }
+
+    } catch(e) { console.error("Erro ao carregar Central de Avisos:", e); }
+}
+
+window.marcarMensagemLidaDash = function(idMsg) {
+    db.ref(`ligas/${ligaLogada}/caixa_mensagens/${userLogado}/${idMsg}`).remove().then(() => {
+        carregarCentralDeAvisos(dadosUsuario.timeAtual); // Recarrega os avisos sem precisar de F5!
+    });
+};
 
 // INTEGRAÇÃO COM O CALENDÁRIO
 async function buscarMeuProximoJogo(timeIdBanco) {
@@ -245,8 +346,6 @@ async function buscarMeuProximoJogo(timeIdBanco) {
         // Verifica se é dia de Copa (Sábado) para mudar o título
         let dataHoje = new Date().getDay();
         if (dataHoje === 6 && cal.copa) {
-            // Lógica simples pra descobrir a fase da copa se necessário,
-            // mas vamos manter genérico para não quebrar a busca
             campeonatoNome = "Copa (Mata-Mata)";
         }
 
