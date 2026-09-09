@@ -1146,8 +1146,8 @@ function formatarDinheiro(v){ return new Intl.NumberFormat('pt-BR',{style:'curre
 
     } catch (e) {
         console.error("Erro crítico no Motor P2P:", e);
-        // Em caso de falha severa, garante que a porta NUNCA fique trancada
-        if (lockRef) await lockRef.set({ locked: false, timestamp: 0 });
+        // Em caso de falha severa, garante que a porta NUNCA fique trancada (Sem usar await aqui!)
+        if (lockRef) lockRef.set({ locked: false, timestamp: 0 }).catch(()=>{});
     }
 }
 
