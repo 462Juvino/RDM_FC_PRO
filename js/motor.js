@@ -1023,14 +1023,6 @@ async function carregarNotificacoesGlobais() {
 window.marcarMensagemLida = function(idMsg) {
     db.ref(`ligas/${ligaMotor}/caixa_mensagens/${userLogadoMotor}/${idMsg}`).remove();
 };
-            badge.innerText = countNotif;
-            lista.innerHTML = htmlNotif;
-        } else {
-            badge.style.display = 'none';
-            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
-        }
-    });
-}
 
 function formatarDinheiro(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v); }
 
