@@ -49,7 +49,6 @@ async function checarRotinas(liga) {
         const snapSist = await db.ref(`ligas/${liga}/sistema`).once('value');
         const sis = snapSist.val() || {};
 
-        // Separa as checagens: A liga tem que rodar as 19h e a Copa às 20h!
         let ultCamp = sis.ultima_simulacao_camp;
         let ultCopa = sis.ultima_simulacao_copa;
 
@@ -57,8 +56,29 @@ async function checarRotinas(liga) {
         let rodarCopaHoje = (hora >= HORA_COPA && ultCopa !== dataAtualStr);
         let rodarAtrasados = (!ultCamp || ultCamp < ontemStr);
 
-        // Se já rodou tudo na hora certa, ele descansa.
-        if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados) return;
+        // 🔍 OLHEIRO DO MERCADO: Verifica se há propostas pendentes que já passaram das 19h ou são de ontem
+        const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
+        const propostasPendentes = snapPropostas.val() || {};
+        let temMercadoPendente = false;
+
+        if (Object.keys(propostasPendentes).length > 0) {
+            for (let id in propostasPendentes) {
+                let objLances = propostasPendentes[id];
+                let primeiraDataStr = Object.values(objLances)[0].data_proposta || agora.toISOString();
+                let dataProp = new Date(primeiraDataStr);
+
+                let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
+
+                // A regra mestre: Se a proposta não for de hoje (antiga), OU se for de hoje e a hora for >= 19, ele precisa agir!
+                if (!isHoje || (isHoje && hora >= 19)) {
+                    temMercadoPendente = true;
+                    break;
+                }
+            }
+        }
+
+        // Se o Motor está em dia com os Jogos E o Mercado não tem pendências aguardando martelo, ele dorme.
+        if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados && !temMercadoPendente) return;
 
         const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
         lockRef.transaction((currentLock) => {
@@ -66,8 +86,7 @@ async function checarRotinas(liga) {
             return true;
         }, (error, committed) => {
             if (committed) {
-                console.log("🔥 MOTOR P2P: Iniciando varredura Oficial!");
-                // Aqui nós CHAMAMOS a função, e não criamos ela!
+                console.log("🔥 MOTOR P2P: Iniciando varredura Oficial e/ou de Mercado!");
                 processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados);
             }
         });
@@ -98,88 +117,88 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         let timesHumanos = Object.values(usuarios).map(u => u.timeAtual).filter(t => t && t !== "Sem Clube");
         let timesIA = Object.keys(times).filter(t => !t.startsWith("Agentes_Livres") && t !== "Fantasma" && !timesHumanos.includes(t));
 
-        for (let t of timesIA) {
-            let loginIA = `IA_${t}`;
+        // 🧠 A IA só toma novas iniciativas (pegar empréstimo, enviar proposta) se for hora oficial do campeonato
+        // Isso evita que a IA torre todo o dinheiro dela fazendo leilões a cada 3 minutos!
+        if (rodarCampHoje || rodarAtrasados) {
+            for (let t of timesIA) {
+                let loginIA = `IA_${t}`;
 
-            // 🤖 Cria uma "Conta Bancária Virtual" para a Máquina operar no jogo
-            if (!usuarios[loginIA]) {
-                usuarios[loginIA] = { nome: `Diretoria ${t.replace(/_/g,' ')}`, timeAtual: t, caixaClube: 30000000 };
-                updates[`ligas/${liga}/usuarios/${loginIA}`] = usuarios[loginIA];
-            }
-
-            let caixaClubeIA = usuarios[loginIA].caixaClube || 0;
-
-            // 🎲 25% de chance da Diretoria da IA agir nesta rodada
-            if (Math.random() < 0.25) {
-
-                // AÇÃO 1: Pegar Empréstimo se estiver à beira da falência (Caixa < 5M)
-                if (caixaClubeIA < 5000000) {
-                    let valorPedido = 15000000;
-                    let rodadas = 10;
-                    let parcela = Math.round((valorPedido * 1.5) / rodadas); // O Banco cobra 50% de juros da IA
-
-                    caixaClubeIA += valorPedido;
-                    usuarios[loginIA].caixaClube = caixaClubeIA;
-                    updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
-
-                    updates[`ligas/${liga}/dividas_financeiras/divida_ia_${t}_${Date.now()}`] = {
-                        devedor: t, credor: 'Banco Central da Liga', valor_total: valorPedido * 1.5, parcela_rodada: parcela, rodadas_restantes: rodadas
-                    };
+                // 🤖 Cria uma "Conta Bancária Virtual" para a Máquina operar no jogo
+                if (!usuarios[loginIA]) {
+                    usuarios[loginIA] = { nome: `Diretoria ${t.replace(/_/g,' ')}`, timeAtual: t, caixaClube: 30000000 };
+                    updates[`ligas/${liga}/usuarios/${loginIA}`] = usuarios[loginIA];
                 }
 
-                // AÇÃO 2: Comprar ou Alugar Jogadores (Se tiver grana razoável)
-                else if (caixaClubeIA >= 10000000 && caixaClubeIA <= 40000000) {
-                    let todosAlvos = [];
-                    for (let outroT in times) {
-                        // IA não tenta comprar do próprio time nem varre os Agentes Livres (ainda)
-                        if (outroT !== t && times[outroT].jogadores && !outroT.startsWith("Agentes_Livres")) {
-                            for (let idJog in times[outroT].jogadores) {
-                                todosAlvos.push({ id: idJog, time: outroT, dados: times[outroT].jogadores[idJog] });
+                let caixaClubeIA = usuarios[loginIA].caixaClube || 0;
+
+                // 🎲 25% de chance da Diretoria da IA agir nesta rodada
+                if (Math.random() < 0.25) {
+
+                    // AÇÃO 1: Pegar Empréstimo se estiver à beira da falência (Caixa < 5M)
+                    if (caixaClubeIA < 5000000) {
+                        let valorPedido = 15000000;
+                        let rodadas = 10;
+                        let parcela = Math.round((valorPedido * 1.5) / rodadas);
+
+                        caixaClubeIA += valorPedido;
+                        usuarios[loginIA].caixaClube = caixaClubeIA;
+                        updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
+
+                        updates[`ligas/${liga}/dividas_financeiras/divida_ia_${t}_${Date.now()}`] = {
+                            devedor: t, credor: 'Banco Central da Liga', valor_total: valorPedido * 1.5, parcela_rodada: parcela, rodadas_restantes: rodadas
+                        };
+                    }
+
+                    // AÇÃO 2: Comprar ou Alugar Jogadores (Se tiver grana razoável)
+                    else if (caixaClubeIA >= 10000000 && caixaClubeIA <= 40000000) {
+                        let todosAlvos = [];
+                        for (let outroT in times) {
+                            if (outroT !== t && times[outroT].jogadores && !outroT.startsWith("Agentes_Livres")) {
+                                for (let idJog in times[outroT].jogadores) {
+                                    todosAlvos.push({ id: idJog, time: outroT, dados: times[outroT].jogadores[idJog] });
+                                }
+                            }
+                        }
+
+                        if (todosAlvos.length > 0) {
+                            let alvosBons = todosAlvos.filter(x => x.dados.valor_mercado > 1000000 && x.dados.valor_mercado <= (caixaClubeIA * 0.7));
+
+                            if (alvosBons.length > 0) {
+                                let alvo = alvosBons[Math.floor(Math.random() * alvosBons.length)];
+                                let isCompra = Math.random() < 0.7;
+
+                                let valorOferecido = isCompra ? Math.round(alvo.dados.valor_mercado * 1.05) : Math.round((alvo.dados.valor_mercado * 0.02) * 10);
+                                let duracao = isCompra ? 0 : 10;
+
+                                if (!propostas[alvo.id]) propostas[alvo.id] = {};
+
+                                propostas[alvo.id][loginIA] = {
+                                    time_comprador: t,
+                                    valor_oferecido: valorOferecido,
+                                    data_proposta: new Date().toISOString(),
+                                    tipo_negocio: isCompra ? 'compra' : 'emprestimo',
+                                    duracao_rodadas: duracao
+                                };
+
+                                updates[`ligas/${liga}/mercado_propostas/${alvo.id}/${loginIA}`] = propostas[alvo.id][loginIA];
                             }
                         }
                     }
 
-                    if (todosAlvos.length > 0) {
-                        // A máquina procura jogadores que não quebrem o cofre (Custa no máximo 70% do que ela tem)
-                        let alvosBons = todosAlvos.filter(x => x.dados.valor_mercado > 1000000 && x.dados.valor_mercado <= (caixaClubeIA * 0.7));
+                    // AÇÃO 3: Virar Investidor Agiota (Se estiver super rica > 40M)
+                    else if (caixaClubeIA > 40000000 && Math.random() < 0.2) {
+                        const snapBanc = await db.ref(`ligas/${liga}/banco_investidores/${t}`).once('value');
+                        let invAtual = snapBanc.val() ? snapBanc.val().saldo : 0;
 
-                        if (alvosBons.length > 0) {
-                            let alvo = alvosBons[Math.floor(Math.random() * alvosBons.length)];
-                            let isCompra = Math.random() < 0.7; // 70% de chance de tentar Comprar Definitivo
+                        let valorInvestido = 10000000;
+                        caixaClubeIA -= valorInvestido;
+                        usuarios[loginIA].caixaClube = caixaClubeIA;
+                        updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
 
-                            // Oferece 5% a mais do passe na compra, ou paga as 10 rodadas justas no aluguel
-                            let valorOferecido = isCompra ? Math.round(alvo.dados.valor_mercado * 1.05) : Math.round((alvo.dados.valor_mercado * 0.02) * 10);
-                            let duracao = isCompra ? 0 : 10;
-
-                            if (!propostas[alvo.id]) propostas[alvo.id] = {};
-
-                            propostas[alvo.id][loginIA] = {
-                                time_comprador: t,
-                                valor_oferecido: valorOferecido,
-                                data_proposta: new Date().toISOString(),
-                                tipo_negocio: isCompra ? 'compra' : 'emprestimo',
-                                duracao_rodadas: duracao
-                            };
-
-                            // Registra a proposta na mesa do leilão!
-                            updates[`ligas/${liga}/mercado_propostas/${alvo.id}/${loginIA}`] = propostas[alvo.id][loginIA];
-                        }
+                        updates[`ligas/${liga}/banco_investidores/${t}`] = {
+                            saldo: invAtual + valorInvestido, dono_login: loginIA, is_ia: true
+                        };
                     }
-                }
-
-                // AÇÃO 3: Virar Investidor Agiota (Se estiver super rica > 40M)
-                else if (caixaClubeIA > 40000000 && Math.random() < 0.2) {
-                    const snapBanc = await db.ref(`ligas/${liga}/banco_investidores/${t}`).once('value');
-                    let invAtual = snapBanc.val() ? snapBanc.val().saldo : 0;
-
-                    let valorInvestido = 10000000; // Guarda 10 Milhões no banco para players pegarem!
-                    caixaClubeIA -= valorInvestido;
-                    usuarios[loginIA].caixaClube = caixaClubeIA;
-                    updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
-
-                    updates[`ligas/${liga}/banco_investidores/${t}`] = {
-                        saldo: invAtual + valorInvestido, dono_login: loginIA, is_ia: true
-                    };
                 }
             }
         }
