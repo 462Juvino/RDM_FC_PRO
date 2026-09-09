@@ -81,6 +81,26 @@ function iniciarTransmissao() {
         if (!calGlobal) return;
 
         rodadaSistema = calGlobal.rodadaAtual || 1;
+
+        // 🟢 CORREÇÃO: Força a rodada atual baseando-se na data real de hoje!
+        let dataHoje = new Date();
+        let hojeDT = new Date(dataHoje.getFullYear(), dataHoje.getMonth(), dataHoje.getDate());
+
+        if (calGlobal.serieA) {
+            for (let r = 1; r <= 38; r++) {
+                let rodadaData = calGlobal.serieA[`rodada_${r}`];
+                if (rodadaData) {
+                    let jogoExemplo = Object.values(rodadaData)[0];
+                    if (jogoExemplo && jogoExemplo.data_jogo) {
+                        let [dJ, mJ] = jogoExemplo.data_jogo.split(' ')[0].split('/');
+                        let jogoDT = new Date(dataHoje.getFullYear(), parseInt(mJ)-1, parseInt(dJ));
+                        // Se a data do jogo já chegou, libera a rodada no filtro!
+                        if (jogoDT <= hojeDT) rodadaSistema = r;
+                    }
+                }
+            }
+        }
+
         renderizarPartida();
     });
 }
@@ -144,6 +164,7 @@ function renderizarPartida() {
 
         let isAtrasado = jogoDT < hojeDT;
         let isHoje = jogoDT.getTime() === hojeDT.getTime();
+        let isFuturo = jogoDT > hojeDT; // 🟢 NOVA VARIÁVEL: Impede jogos adiantados!
 
         horaInicioFake.setHours(HORA_JOGO, 0, 0, 0);
 
@@ -235,7 +256,12 @@ function renderizarPartida() {
         else {
             let isAntesDaHora = (new Date().getHours() < HORA_JOGO);
 
-            if (isAntesDaHora) {
+            if (isFuturo) {
+                // JOGO AGENDADO PARA OUTRO DIA!
+                if(statusTransmissao) statusTransmissao.innerText = "Em Breve 📅";
+                if(narracao) narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 30px;"><h3 style="color: #666;">Partida Agendada</h3><p>Este jogo ocorrerá em ${jogoAoVivo.data_jogo}. Volte na data e horário corretos!</p></div>`;
+            }
+            else if (isAntesDaHora) {
                 // ANTES DA HORA DO JOGO!
                 const horaAtual = new Date().getHours();
                 const minAtual = new Date().getMinutes();
