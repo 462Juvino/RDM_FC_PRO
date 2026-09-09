@@ -657,27 +657,38 @@ async function carregarRadarMercado() {
         const snapTimes = await db.ref('banco_global_times').once('value');
         const timesGlobais = snapTimes.val() || {};
 
+        // Salva globalmente para o modal de detalhes poder ler
+        window.propostasRadarGlobal = propostas;
+        window.timesRadarGlobal = timesGlobais;
+
         let html = "";
         for (let idAlvo in propostas) {
             let lancesObj = propostas[idAlvo];
             let qtdLances = Object.keys(lancesObj).length;
 
-            // Tenta achar o nome do jogador alvo no banco global
+            // Tenta achar o nome do jogador alvo e o clube dono no banco global
             let nomeAlvo = "Atleta Desconhecido";
+            let donoAlvo = "Clube Desconhecido";
+
             for(let t in timesGlobais) {
                 if(timesGlobais[t].jogadores && timesGlobais[t].jogadores[idAlvo]) {
                     nomeAlvo = timesGlobais[t].jogadores[idAlvo].nome;
+                    donoAlvo = t;
                     break;
                 }
             }
 
+            // Prepara as variáveis para não quebrar a tela caso o nome do jogador tenha aspas simples
+            let nomeSeguro = nomeAlvo.replace(/'/g, "\\'");
+            let donoSeguro = donoAlvo.replace(/'/g, "\\'");
+
             html += `
-                <div style="padding: 8px; border-bottom: 1px dashed #444; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <div onclick="abrirDetalhesRadar('${idAlvo}', '${nomeSeguro}', '${donoSeguro}')" style="padding: 8px; border-bottom: 1px dashed #444; font-size: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#222'" onmouseout="this.style.background='transparent'">
                     <div style="display: flex; flex-direction: column;">
                         <strong style="color: #fff;">${nomeAlvo}</strong>
                         <span style="color: #888; font-size: 10px;">Recebeu ${qtdLances} proposta(s)</span>
                     </div>
-                    <span style="background: rgba(255, 140, 0, 0.2); color: #ff8c00; padding: 3px 6px; border-radius: 4px; font-weight: bold; border: 1px solid #ff8c00;">Em Negociação</span>
+                    <span style="background: rgba(255, 140, 0, 0.2); color: #ff8c00; padding: 3px 6px; border-radius: 4px; font-weight: bold; border: 1px solid #ff8c00;">Visualizar Ofertas 🔎</span>
                 </div>
             `;
         }
@@ -685,6 +696,75 @@ async function carregarRadarMercado() {
 
     } catch(e) { console.error(e); }
 }
+
+// ==========================================
+// MODAL DE DETALHES DO RADAR DE MERCADO
+// ==========================================
+window.abrirDetalhesRadar = function(idAlvo, nomeAlvo, donoAlvo) {
+    let lances = window.propostasRadarGlobal ? window.propostasRadarGlobal[idAlvo] : null;
+    if (!lances) return alert("As propostas já foram encerradas ou o radar desatualizou.");
+
+    let modal = document.getElementById('modal-detalhes-radar');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-detalhes-radar';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+        document.body.appendChild(modal);
+    }
+
+    let htmlLances = "";
+    for (let login in lances) {
+        let lance = lances[login];
+
+        // Trata a data da proposta
+        let dataF = lance.data_proposta ? new Date(lance.data_proposta).toLocaleString('pt-BR') : 'Data não registrada';
+
+        // Distingue Compra de Empréstimo
+        let badgeTipo = lance.tipo_negocio === 'emprestimo'
+            ? `<span style="background:#0056b3; padding:3px 8px; border-radius:4px; font-size:10px; color:#fff; font-weight:bold;">🤝 Empréstimo (${lance.duracao_rodadas} rodadas)</span>`
+            : `<span style="background:var(--verde-campo); padding:3px 8px; border-radius:4px; font-size:10px; color:#fff; font-weight:bold;">💰 Compra Definitiva</span>`;
+
+        // Verifica se há jogador incluído na troca
+        let txtTroca = "";
+        if (lance.id_jogador_oferecido && window.timesRadarGlobal && window.timesRadarGlobal[lance.time_comprador]) {
+            let jogTroca = window.timesRadarGlobal[lance.time_comprador].jogadores[lance.id_jogador_oferecido];
+            if (jogTroca) {
+                let at = jogTroca.atributos || {ataque:0, defesa:0, forca:0, velocidade:0, habilidade:0};
+                let ovrTroca = Math.round((at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade) / 5);
+                txtTroca = `<div style="color:#ff8c00; font-size:12px; margin-top:8px; padding-top:8px; border-top:1px dashed #333;">🔄 <strong style="color:#fff;">Inclui na troca:</strong> ${jogTroca.nome} (OVR: ${ovrTroca})</div>`;
+            }
+        }
+
+        htmlLances += `
+            <div style="background:#111; border:1px solid #333; padding:15px; border-radius:8px; margin-bottom:12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; padding-bottom:8px; margin-bottom:8px;">
+                    <strong style="color:#fff; font-size:15px;">🏢 ${lance.time_comprador.replace(/_/g, ' ')}</strong>
+                    <strong style="color:var(--verde-campo); font-size:16px;">${formatarDinheiro(lance.valor_oferecido)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    ${badgeTipo}
+                    <span style="color:#888; font-size:11px;">📅 ${dataF}</span>
+                </div>
+                ${txtTroca}
+            </div>
+        `;
+    }
+
+    modal.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:550px; border-radius:12px; border:1px solid #444; box-shadow: 0 10px 40px rgba(0,0,0,0.8); display:flex; flex-direction:column; max-height:85vh;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid #333; background:#222; border-radius: 12px 12px 0 0;">
+                <div>
+                    <h2 style="color:#ff8c00; margin:0; font-size:18px;">Dossiê de Mercado 🕵️‍♂️</h2>
+                    <span style="color:#aaa; font-size:12px;">Alvo: <strong style="color:#fff;">${nomeAlvo}</strong> (Dono Atual: ${donoAlvo.replace(/_/g, ' ')})</span>
+                </div>
+                <button onclick="document.getElementById('modal-detalhes-radar').remove()" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <div style="overflow-y:auto; flex:1; padding:20px;">
+                ${htmlLances}
+            </div>
+        </div>
+    `;
+};
 
 // ========================================================
 // 8. FERRAMENTAS GERAIS
