@@ -51,6 +51,24 @@ async function carregarTabela(timeIdBanco) {
         calendarioCopa = cal.copa || {};
         rodadaAtualSistema = cal.rodadaAtual || 1;
 
+        // 🟢 CORREÇÃO: Calcula a rodada exata do campeonato baseando-se na data de hoje!
+        let dataHoje = new Date();
+        let hojeDT = new Date(dataHoje.getFullYear(), dataHoje.getMonth(), dataHoje.getDate());
+
+        if (calendarioCompleto) {
+            for (let r = 1; r <= 38; r++) {
+                let rodadaData = calendarioCompleto[`rodada_${r}`];
+                if (rodadaData) {
+                    let jogoExemplo = Object.values(rodadaData)[0];
+                    if (jogoExemplo && jogoExemplo.data_jogo) {
+                        let [dJ, mJ] = jogoExemplo.data_jogo.split(' ')[0].split('/');
+                        let jogoDT = new Date(dataHoje.getFullYear(), parseInt(mJ)-1, parseInt(dJ));
+                        if (jogoDT <= hojeDT) rodadaAtualSistema = r;
+                    }
+                }
+            }
+        }
+
         let lblRodada = document.getElementById('lbl-rodada-atual');
         if(lblRodada) lblRodada.innerText = rodadaAtualSistema;
 
@@ -81,6 +99,9 @@ function preencherSeletorRodadas() {
     const seletor = document.getElementById('seletor-rodada');
     seletor.innerHTML = "";
 
+    let dataHoje = new Date();
+    let hojeDT = new Date(dataHoje.getFullYear(), dataHoje.getMonth(), dataHoje.getDate());
+
     if (modoAtual === "camp") {
         const totalRodadas = Object.keys(calendarioCompleto).length;
         for (let i = 1; i <= totalRodadas; i++) {
@@ -96,12 +117,28 @@ function preencherSeletorRodadas() {
         if (fases.length === 0) {
             seletor.innerHTML = "<option value=''>Sorteio Pendente</option>";
         } else {
+            // 🟢 CORREÇÃO: Descobre qual é a fase atual da Copa checando as datas
+            let faseAtualCopa = fases[0];
+
+            fases.forEach(fase => {
+                let jogosFase = calendarioCopa[fase];
+                if (jogosFase) {
+                    let jogoExemplo = Object.values(jogosFase)[0];
+                    if (jogoExemplo && jogoExemplo.data_jogo) {
+                        let [dJ, mJ] = jogoExemplo.data_jogo.split(' ')[0].split('/');
+                        let jogoDT = new Date(dataHoje.getFullYear(), parseInt(mJ)-1, parseInt(dJ));
+                        if (jogoDT <= hojeDT) faseAtualCopa = fase;
+                    }
+                }
+            });
+
             fases.forEach(fase => {
                 let opt = document.createElement('option');
                 opt.value = fase;
                 // Ex: "oitavas" vira "Oitavas de Final"
                 let textoFase = fase === 'oitavas' ? 'Oitavas de Final' : fase.charAt(0).toUpperCase() + fase.slice(1);
                 opt.text = textoFase;
+                if (fase === faseAtualCopa) opt.selected = true;
                 seletor.appendChild(opt);
             });
         }
