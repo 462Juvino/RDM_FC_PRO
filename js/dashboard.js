@@ -52,7 +52,8 @@ function mostrarTelaAguardandoSorteio() {
     const botoes = document.querySelectorAll('.sidebar button');
     botoes.forEach(btn => {
         let txt = btn.innerText.toLowerCase();
-        if (txt.includes('tática') || txt.includes('calendário') || txt.includes('classificação') || txt.includes('mercado') || txt.includes('transmissão') || txt.includes('jogo')) {
+        // 🟢 CORREÇÃO: Ignora o botão de sair usando a classe 'btn-sair'
+        if (!btn.classList.contains('btn-sair') && (txt.includes('tática') || txt.includes('calendário') || txt.includes('classificação') || txt.includes('mercado') || txt.includes('transmissão') || txt.includes('jogo'))) {
             btn.onclick = () => alert("Acesso bloqueado! Aguarde o sorteio do seu clube para liberar este menu.");
             btn.style.opacity = "0.5";
             btn.style.cursor = "not-allowed";
