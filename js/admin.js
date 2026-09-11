@@ -485,7 +485,18 @@ async function gerarCalendarioOculto(liga) {
         // LÓGICA DE DATAS INTELIGENTES E MUNDIAL
         // ==========================================
         let dataAtual = new Date();
+
+        // 🟢 CORREÇÃO: Se o sorteio for feito depois das 19h, o campeonato começa só amanhã!
+        if (dataAtual.getHours() >= 19) {
+            dataAtual.setDate(dataAtual.getDate() + 1);
+        }
+
         dataAtual.setHours(19, 0, 0, 0);
+
+        // Se o campeonato fosse começar no sábado (dia de Copa), joga pra domingo
+        if (dataAtual.getDay() === 6) {
+             dataAtual.setDate(dataAtual.getDate() + 1);
+        }
 
         function obterProximoDia(dataRef, diaSemana, hora) {
             let d = new Date(dataRef);
