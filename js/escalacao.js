@@ -157,9 +157,11 @@ function gerarBolinhas(qtd, siglaBase) {
 }
 
 function salvarEscalacao() {
-    const escaladosCount = titulares.filter(id => id !== null).length;
-    if (escaladosCount < 11) {
-        alert(`🚨 Tática Incompleta! Você tem apenas ${escaladosCount} jogadores escalados. É obrigatório ter os 11 titulares em campo para salvar.`);
+    // 🔒 TRAVA DE SEGURANÇA: Garante que só salva se o array tiver os 11 exatos!
+    const escalados = titulares.filter(id => id !== null && id !== undefined && id !== "");
+
+    if (escalados.length < 11) {
+        alert(`🚨 Tática Incompleta!\n\nVocê tem apenas ${escalados.length} jogador(es) no campo.\nArraste/clique nos jogadores do painel direito para preencher as ${11 - escalados.length} vaga(s) vazia(s) antes de salvar.`);
         return;
     }
 
