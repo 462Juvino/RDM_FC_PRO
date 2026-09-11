@@ -234,7 +234,7 @@ function renderizarPartida() {
                         if (evento.tipo === 'penaltis') cor = '#ff8c00';
                         if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
 
-                        adicionarNarraçao(`${evento.minuto}'`, evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`), cor);
+                        adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
                     });
                 } else { narracao.innerHTML = `<div style="text-align:center; padding: 20px; color:#aaa;">Partida sem lances computados (0x0).</div>`; }
             }
@@ -344,7 +344,7 @@ function processarNarradorOficial() {
         textoFinal = imgHtml + textoFinal.replace("GOOOL DO", "GOOOL DO");
     }
 
-    adicionarNarraçao(`${evento.minuto}'`, textoFinal, cor);
+    adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
 
     if (evento.tipo === 'inicio') { somApito.play().catch(()=>{}); }
 
@@ -402,7 +402,7 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFi
             let escudoID = evento.tipo.includes("mandante") ? jogoAtual.mandante : jogoAtual.visitante;
             let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
 
-            adicionarNarraçao(`${evento.minuto}'`, evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`), cor);
+            adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
 
             if (evento.tipo.includes('gol_mandante')) placarNarracaoM++;
             if (evento.tipo.includes('gol_visitante')) placarNarracaoV++;
@@ -456,14 +456,18 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFi
     }, 300); // Roda rápido para injetar os lances na fila instantaneamente!
 }
 
-function adicionarNarraçao(tempo, texto, cor = "#ccc") {
+function adicionarNarraçao(tempo, texto, cor = "#ccc", escudoID = null) {
     const narracao = document.getElementById('narracao-container');
     if(!narracao) return;
 
+    let imgHtml = escudoID ? `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" style="width:16px; height:16px; vertical-align:middle; margin-right:6px; border-radius:50%;">` : "";
+
     narracao.innerHTML += `
-        <div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;">
-            <strong style="color: ${cor}; font-size:15px; margin-right: 8px;">${tempo}</strong>
-            <span style="color: ${texto.includes('GOOOL') ? '#fff' : '#ccc'}; font-weight: ${texto.includes('GOOOL') ? 'bold' : 'normal'};">${texto}</span>
+        <div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px; display: flex; align-items: flex-start;">
+            <strong style="color: ${cor}; font-size:15px; margin-right: 8px; flex-shrink:0;">${tempo}</strong>
+            <span style="color: ${texto.includes('GOOOL') ? '#fff' : '#ccc'}; font-weight: ${texto.includes('GOOOL') ? 'bold' : 'normal'}; line-height: 1.4;">
+                ${imgHtml}${texto}
+            </span>
         </div>`;
     narracao.scrollTop = narracao.scrollHeight;
 }
@@ -486,7 +490,8 @@ function processarNarradorOficial() {
     if (evento.tipo === 'penaltis') cor = '#ff8c00';
     if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
 
-    adicionarNarraçao(`${evento.minuto}'`, evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`), cor);
+    // Removemos o replace do GOOOL antigo, pois a bandeira agora vai no começo da frase!
+    adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
 
     if (evento.tipo === 'inicio') { somApito.play().catch(()=>{}); }
 
@@ -675,22 +680,44 @@ window.gerarPartidaAoVivo = async function() {
             if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.mandante.replace(/_/g,' ')}: Fôlego novo!`, cor: "#aaa" });
             if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração tática!`, cor: "#aaa" });
 
-            const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
+            // NOVA INTELIGÊNCIA DE NOMES E POSIÇÕES
+                const sortearAtleta = (tId, posicoes = null) => {
+                    let el = times[tId]?.jogadores ? Object.values(times[tId].jogadores) : [];
+                    if(posicoes) {
+                        let filtrados = el.filter(j => posicoes.includes(j.posicoes?.p));
+                        if(filtrados.length > 0) return filtrados[Math.floor(Math.random() * filtrados.length)];
+                    }
+                    return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
+                };
 
-            for(let i=0; i<16; i++) {
-                let minAleatorio = Math.floor(Math.random()*89)+1;
-                if (minAleatorio === 45) minAleatorio = 46;
+                for(let i=0; i<16; i++) {
+                    let minAleatorio = Math.floor(Math.random()*89)+1;
+                    if (minAleatorio === 45) minAleatorio = 46;
 
-                // Sorteia os nomes reais!
-                let idAtqM = sortearAtleta(jogo.mandante); let nA_M = idAtqM ? times[jogo.mandante].jogadores[idAtqM].nome.split(" ")[0] : "O atacante";
-                let idAtqV = sortearAtleta(jogo.visitante); let nA_V = idAtqV ? times[jogo.visitante].jogadores[idAtqV].nome.split(" ")[0] : "O atacante";
+                    let isM = Math.random() > 0.5;
+                    let tAtq = isM ? jogoReal.mandante : jogoReal.visitante;
+                    let tDef = isM ? jogoReal.visitante : jogoReal.mandante;
+                    let tipoLance = isM ? 'ataque_mandante' : 'ataque_visitante';
 
-                const narracoesM = [`🔥 UUUHH! ${nA_M} chuta forte e a bola raspa a trave!`, `🛡️ Bela jogada iniciada por ${nA_M}, desarmando com classe.`, `👟 Troca de passes envolvente. ${nA_M} procura espaço.`, `🎯 Cruzamento venenoso, mas ${nA_M} cabeceia por cima!`];
-                const narracoesV = [`⚠️ PERIGO! ${nA_V} ataca com velocidade, mas o chute vai fora.`, `🧤 MILAGRE! O goleiro espalma o chutaço de ${nA_V}!`, `👟 ${nA_V} domina a posse de bola no meio campo.`, `🥅 Chute de muito longe de ${nA_V}, a bola passa assustando!`];
+                    // Seleciona os protagonistas do lance
+                    let atk = sortearAtleta(tAtq, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+                    let mei = sortearAtleta(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
+                    let zag = sortearAtleta(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
+                    let gol = sortearAtleta(tDef, ["Goleiro"]).nome.split(" ")[0];
 
-                if (Math.random() > 0.5) linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_mandante', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
-                else linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_visitante', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
-            }
+                    let frases = [
+                        `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,
+                        `Bela jogada! ${atk} tentou a finta, mas ${zag} fez um desarme cirúrgico na bola!`,
+                        `Troca de passes envolvente. ${mei} dita o ritmo no meio-campo.`,
+                        `Cruzamento venenoso na área, ${atk} cabeceia e o goleiro ${gol} faz uma defesa espetacular!`,
+                        `PERIGO! ${atk} arranca com velocidade, deixa a zaga para trás, mas o chute vai direto para fora.`,
+                        `MILAGRE! ${atk} finaliza à queima-roupa e ${gol} salva a pátria com a ponta dos dedos!`,
+                        `Chuteira calibrada! ${mei} arrisca uma bomba de muito longe, a bola passa assustando a zaga!`,
+                        `Falta dura de ${zag} em cima de ${atk}. O juiz marca a infração, mas guarda o cartão.`
+                    ];
+
+                    linhaTempo.push({ minuto: minAleatorio, tipo: tipoLance, texto: frases[Math.floor(Math.random()*frases.length)] });
+                }
 
             let gkM_id = Object.keys(times[jogo.mandante]?.jogadores || {}).find(k => times[jogo.mandante].jogadores[k].posicoes?.p === "Goleiro");
             let gkV_id = Object.keys(times[jogo.visitante]?.jogadores || {}).find(k => times[jogo.visitante].jogadores[k].posicoes?.p === "Goleiro");
@@ -702,23 +729,23 @@ window.gerarPartidaAoVivo = async function() {
                 if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
                     golsM++;
                     if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
-                    let idA = sortearAtleta(jogo.mandante); let nA = idA ? times[jogo.mandante].jogadores[idA].nome : "Jogador";
+                    let idA = sortearAtleta(jogo.mandante); let nA = idA ? times[jogo.mandante].jogadores[idA].nome.split(" ")[0] : "Jogador";
                     if(idA) {
                         let jg = times[jogo.mandante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
                         if (Math.random() > 0.4) { let idAst = sortearAtleta(jogo.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
                         updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
                     }
-                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})` });
+                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL! ${nA} estufa as redes e corre para os braços da torcida!` });
                 }
                 if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
                     golsV++;
-                    let idA = sortearAtleta(jogo.visitante); let nA = idA ? times[jogo.visitante].jogadores[idA].nome : "Jogador";
+                    let idA = sortearAtleta(jogo.visitante); let nA = idA ? times[jogo.visitante].jogadores[idA].nome.split(" ")[0] : "Jogador";
                     if(idA) {
                         let jg = times[jogo.visitante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
                         if (Math.random() > 0.4) { let idAst = sortearAtleta(jogo.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
                         updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                     }
-                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})` });
+                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL! ${nA} estufa as redes e corre para os braços da torcida!` });
                 }
                 if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
             }
@@ -729,8 +756,13 @@ window.gerarPartidaAoVivo = async function() {
 
             if (isMataMata && golsM === golsV && jogo.mandante !== "Fantasma" && jogo.visitante !== "Fantasma") {
                 linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!` });
-                if (Math.random() > 0.5) { golsM++; linhaTempo.push({ minuto: 99, tipo: "gol_mandante", texto: `🏆 O ${jogo.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
-                else { golsV++; linhaTempo.push({ minuto: 99, tipo: "gol_visitante", texto: `🏆 O ${jogo.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
+                if (Math.random() > 0.5) {
+                    golsM++;
+                    linhaTempo.push({ minuto: 99, tipo: "gol_mandante", texto: `🏆 O ${jogo.mandante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` });
+                } else {
+                    golsV++;
+                    linhaTempo.push({ minuto: 99, tipo: "gol_visitante", texto: `🏆 O ${jogo.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` });
+                }
             }
 
             linhaTempo.sort((a,b) => a.minuto - b.minuto);

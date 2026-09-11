@@ -177,6 +177,38 @@ function renderizarResultadoSorteio(times) {
     const grid = document.getElementById('grid-times');
     grid.innerHTML = "";
 
+    // 🔒 TRAVA DO SORTEIO: Impede novas modificações nos times após gerar!
+    // Bloqueia a lista de Pro Players (esquerda)
+    const painelEsquerdo = document.getElementById('lista-pro-players');
+    if (painelEsquerdo) {
+        painelEsquerdo.style.pointerEvents = "none";
+        painelEsquerdo.style.opacity = "0.6";
+    }
+
+    // Bloqueia o input e botão de Convidado (esquerda)
+    const inputConvidado = document.getElementById('input-convidado');
+    if (inputConvidado) inputConvidado.disabled = true;
+    const btnConvidado = document.querySelector('button[onclick="adicionarConvidado()"]');
+    if (btnConvidado) {
+        btnConvidado.disabled = true;
+        btnConvidado.style.opacity = "0.5";
+        btnConvidado.style.cursor = "not-allowed";
+    }
+
+    // Esconde os botões de remover jogadores (painel central) e desativa o botão de gerar
+    const painelDireito = document.getElementById('lista-selecionados');
+    if (painelDireito) {
+        const botoesRemover = painelDireito.querySelectorAll('button');
+        botoesRemover.forEach(btn => btn.style.display = 'none');
+    }
+    const btnGerar = document.querySelector('button[onclick="sortearTimesPelada()"]');
+    if (btnGerar) {
+        btnGerar.disabled = true;
+        btnGerar.style.opacity = "0.5";
+        btnGerar.innerText = "TIMES JÁ SORTEADOS";
+        btnGerar.style.cursor = "not-allowed";
+    }
+
     // Paleta de cores para os coletes
     const cores = ["#00b853", "#007bff", "#dc3545", "#ffc107", "#6f42c1", "#e83e8c"];
 

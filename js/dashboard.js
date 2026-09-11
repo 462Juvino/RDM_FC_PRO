@@ -4,6 +4,8 @@
 const ligaLogada = localStorage.getItem('treinadorLiga');
 const userLogado = localStorage.getItem('treinadorUsuario');
 
+window.x1Audios = { torcidaM: new Audio(), torcidaV: new Audio(), hino: new Audio(), gol: new Audio(), fim: new Audio(), apito: new Audio() };
+
 if (!ligaLogada || !userLogado) {
     window.location.href = "index.html";
 }
@@ -912,6 +914,10 @@ window.abrirModalX1 = async function() {
 window.fecharModalX1 = function() {
     let m = document.getElementById('modal-arena-x1');
     if(m) m.remove();
+    if(window.transmissaoX1Loop) clearInterval(window.transmissaoX1Loop);
+    if(window.x1Audios) {
+        Object.values(window.x1Audios).forEach(a => { if(a) { a.pause(); a.currentTime = 0; } });
+    }
 };
 
 window.renderAbaX1 = function(aba) {
@@ -1092,7 +1098,7 @@ window.enviarDesafioX1 = async function() {
 
     if (isOponenteIA) {
         // IA SIMULATION INSTANT (Fica pronto na hora)
-        let linhaTempoObj = gerarLinhaTempoX1(forcaM, forcaV);
+        let linhaTempoObj = gerarLinhaTempoX1(forcaM, forcaV, meuTime, oponente);
         let venci = linhaTempoObj.golsM > linhaTempoObj.golsV;
 
         let txtFim = (tipo === 'dinheiro')
@@ -1138,28 +1144,56 @@ window.aceitarDesafioX1 = async function(id) {
 // ========================================================
 // 🧠 MOTOR GERADOR DA PARTIDA (Nuvem / Local)
 // ========================================================
-function gerarLinhaTempoX1(forcaM, forcaV) {
+function gerarLinhaTempoX1(forcaM, forcaV, mandante, visitante) {
     let linhaTempo = [];
     let golsM = 0; let golsV = 0;
 
+    const sortearX1 = (tId, posicoes = null) => {
+        let el = arenaDadosGlobais.times[tId]?.jogadores ? Object.values(arenaDadosGlobais.times[tId].jogadores) : [];
+        if(posicoes) {
+            let filt = el.filter(j => posicoes.includes(j.posicoes?.p));
+            if(filt.length > 0) return filt[Math.floor(Math.random() * filt.length)];
+        }
+        return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
+    };
+
     for(let i=0; i<5; i++) {
         if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
-            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Um golaço espetacular do mandante! A Arena vai à loucura!` });
+            let nA = sortearX1(mandante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
             golsM++;
         }
         if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
-            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! Uma falha na zaga e a bola morre no fundo da rede!` });
+            let nA = sortearX1(visitante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
             golsV++;
         }
     }
-    const narracoesM = ["🔥 UUUHH! O atacante chuta forte e a bola raspa a trave!", "🛡️ Bela roubada de bola da zaga, desarmando com classe.", "👟 Troca de passes envolvente. O time procura espaço.", "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima!"];
-    const narracoesV = ["⚠️ PERIGO! O visitante ataca com velocidade, mas o chute vai fora.", "🧤 MILAGRE! O goleiro se estica todo e salva um gol certo!", "👟 O visitante domina a posse de bola.", "🥅 Chute de muito longe, a bola passa assustando!"];
 
     for(let i=0; i<16; i++) {
         let minAleatorio = Math.floor(Math.random()*89)+1;
         if (minAleatorio === 45) minAleatorio = 46;
-        if (Math.random() > 0.5) linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_m', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
-        else linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_v', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
+
+        let isM = Math.random() > 0.5;
+        let tAtq = isM ? mandante : visitante;
+        let tDef = isM ? visitante : mandante;
+
+        let atk = sortearX1(tAtq, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
+        let mei = sortearX1(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
+        let zag = sortearX1(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
+        let gol = sortearX1(tDef, ["Goleiro"]).nome.split(" ")[0];
+
+        let frases = [
+            `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,
+            `Bela jogada! ${atk} tentou a finta, mas ${zag} fez um desarme cirúrgico!`,
+            `Troca de passes envolvente. ${mei} dita o ritmo.`,
+            `Cruzamento venenoso na área, ${atk} cabeceia e o goleiro ${gol} salva!`,
+            `PERIGO! ${atk} arranca com velocidade, mas o chute vai para fora.`,
+            `MILAGRE! ${atk} finaliza à queima-roupa e ${gol} salva com as pontas dos dedos!`,
+            `Chuteira calibrada! ${mei} arrisca de longe, a bola passa assustando!`,
+            `Falta de ${zag} em cima de ${atk}. O juiz marca a infração.`
+        ];
+        linhaTempo.push({ minuto: minAleatorio, tipo: isM ? 'ataque_m' : 'ataque_v', texto: frases[Math.floor(Math.random()*frases.length)] });
     }
 
     linhaTempo.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Começa o duelo na Arena X1!` });
@@ -1286,16 +1320,21 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
     `;
 
     // 🔊 DINÂMICA DE ÁUDIO DUPLO (Casa vs Fora)
-    let somTorcidaM = new Audio(getTorcida(mandante));
-    let somTorcidaV = new Audio(getTorcida(visitante));
-    let somGol = new Audio('sounds/gol_generico.mp3');
-    let somHinoM = new Audio(getHino(mandante));
-    let somHinoV = new Audio(getHino(visitante));
-    let somFim = new Audio('sounds/final_do_jogo.mp3');
-    let somApito = new Audio('sounds/apito_arbitro.mp3');
+    window.x1Audios.torcidaM.src = getTorcida(mandante);
+    window.x1Audios.torcidaV.src = getTorcida(visitante);
+    window.x1Audios.gol.src = 'sounds/gol_generico.mp3';
+    window.x1Audios.fim.src = 'sounds/final_do_jogo.mp3';
+    window.x1Audios.apito.src = 'sounds/apito_arbitro.mp3';
 
-    somTorcidaM.loop = true; somTorcidaV.loop = true;
-    somTorcidaM.play().catch(()=>{}); somTorcidaV.play().catch(()=>{});
+    window.x1Audios.torcidaM.loop = true; window.x1Audios.torcidaV.loop = true;
+    window.x1Audios.torcidaM.play().catch(()=>{}); window.x1Audios.torcidaV.play().catch(()=>{});
+
+    let somTorcidaM = window.x1Audios.torcidaM;
+    let somTorcidaV = window.x1Audios.torcidaV;
+    let somGol = window.x1Audios.gol;
+    let somApito = window.x1Audios.apito;
+    let somFim = window.x1Audios.fim;
+    let canalHino = window.x1Audios.hino; // Unificado
 
     let minutoAtual = 0;
     let placarM_tela = 0; let placarV_tela = 0;
