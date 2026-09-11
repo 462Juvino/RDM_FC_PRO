@@ -326,8 +326,8 @@ function processarNarradorOficial() {
     narradorOficialOcupado = true; // Tranca o narrador e o relógio visual!
 
     let isMandante = evento.tipo.includes("mandante");
-    let escudoID = isMandante ? jogoAtual.mandante : jogoAtual.visitante;
-    let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
+    let isVisitante = evento.tipo.includes("visitante");
+    let escudoID = isMandante ? jogoAtual.mandante : (isVisitante ? jogoAtual.visitante : null);
 
     let cor = '#ccc';
     if (evento.tipo.includes('ataque_mandante')) cor = 'var(--verde-campo)';
@@ -337,7 +337,14 @@ function processarNarradorOficial() {
     if (evento.tipo === 'penaltis') cor = '#ff8c00';
     if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
 
-    adicionarNarraçao(`${evento.minuto}'`, evento.texto.replace("GOOOL DO", `GOOOL DO ${escudoHTML}`), cor);
+    let textoFinal = evento.texto;
+    if (escudoID) {
+        // Coloca a bandeira redondinha bem no começo do lance!
+        let imgHtml = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" style="width:16px; height:16px; vertical-align:middle; margin-right:5px; border-radius:50%;">`;
+        textoFinal = imgHtml + textoFinal.replace("GOOOL DO", "GOOOL DO");
+    }
+
+    adicionarNarraçao(`${evento.minuto}'`, textoFinal, cor);
 
     if (evento.tipo === 'inicio') { somApito.play().catch(()=>{}); }
 
@@ -668,17 +675,22 @@ window.gerarPartidaAoVivo = async function() {
             if (fadigaM === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.mandante.replace(/_/g,' ')}: Fôlego novo!`, cor: "#aaa" });
             if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração tática!`, cor: "#aaa" });
 
-            const narracoesM = ["🔥 UUUHH! O atacante chuta forte e a bola raspa a trave!", "🛡️ Bela roubada de bola da zaga, desarmando com classe.", "👟 Troca de passes envolvente. O time procura espaço.", "🎯 Cruzamento venenoso na área, mas o atacante cabeceia por cima!"];
-            const narracoesV = ["⚠️ PERIGO! O visitante ataca com velocidade, mas o chute vai fora.", "🧤 MILAGRE! O goleiro se estica todo e salva um gol certo!", "👟 O visitante domina a posse de bola no meio campo.", "🥅 Chute de muito longe, a bola passa assustando!"];
+            const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
 
             for(let i=0; i<16; i++) {
                 let minAleatorio = Math.floor(Math.random()*89)+1;
                 if (minAleatorio === 45) minAleatorio = 46;
+
+                // Sorteia os nomes reais!
+                let idAtqM = sortearAtleta(jogo.mandante); let nA_M = idAtqM ? times[jogo.mandante].jogadores[idAtqM].nome.split(" ")[0] : "O atacante";
+                let idAtqV = sortearAtleta(jogo.visitante); let nA_V = idAtqV ? times[jogo.visitante].jogadores[idAtqV].nome.split(" ")[0] : "O atacante";
+
+                const narracoesM = [`🔥 UUUHH! ${nA_M} chuta forte e a bola raspa a trave!`, `🛡️ Bela jogada iniciada por ${nA_M}, desarmando com classe.`, `👟 Troca de passes envolvente. ${nA_M} procura espaço.`, `🎯 Cruzamento venenoso, mas ${nA_M} cabeceia por cima!`];
+                const narracoesV = [`⚠️ PERIGO! ${nA_V} ataca com velocidade, mas o chute vai fora.`, `🧤 MILAGRE! O goleiro espalma o chutaço de ${nA_V}!`, `👟 ${nA_V} domina a posse de bola no meio campo.`, `🥅 Chute de muito longe de ${nA_V}, a bola passa assustando!`];
+
                 if (Math.random() > 0.5) linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_mandante', texto: narracoesM[Math.floor(Math.random()*narracoesM.length)] });
                 else linhaTempo.push({ minuto: minAleatorio, tipo: 'ataque_visitante', texto: narracoesV[Math.floor(Math.random()*narracoesV.length)] });
             }
-
-            const sortearAtleta = (tId) => { let el = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : []; return el.length ? el[Math.floor(Math.random() * el.length)] : null; };
 
             let gkM_id = Object.keys(times[jogo.mandante]?.jogadores || {}).find(k => times[jogo.mandante].jogadores[k].posicoes?.p === "Goleiro");
             let gkV_id = Object.keys(times[jogo.visitante]?.jogadores || {}).find(k => times[jogo.visitante].jogadores[k].posicoes?.p === "Goleiro");

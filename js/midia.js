@@ -46,33 +46,32 @@ const mapaMidia = {
     "Ponte_Preta": { escudo: "Ponte_Preta.png", estadio: "default.webp", hino: "gol_generico.mp3", torcida: "torcida_generica.mp3" }
 };
 
-// Funções tradutoras com Fallback
+// Funções tradutoras com Fallback blindado para URLs com parênteses e espaços
 function getEscudo(id) {
+    let path = `esculdos/default.png`;
     if (mapaMidia[id] && mapaMidia[id].escudo) {
-        return `esculdos/${mapaMidia[id].escudo}`;
+        path = `esculdos/${mapaMidia[id].escudo}`;
+    } else {
+        let safeId = id.replace(/[\s-]/g, '_');
+        path = `esculdos/${safeId}.png`;
     }
-    // Formata nomes velhos removendo espaços e hifens para tentar não quebrar
-    let safeId = id.replace(/[\s-]/g, '_');
-    return `esculdos/${safeId}.png`;
+    return encodeURI(path);
 }
 
 function getEstadio(id) {
-    if (mapaMidia[id] && mapaMidia[id].estadio) {
-        return `estadios/${mapaMidia[id].estadio}`;
-    }
-    return `estadios/default.webp`;
+    let path = `estadios/default.webp`;
+    if (mapaMidia[id] && mapaMidia[id].estadio) path = `estadios/${mapaMidia[id].estadio}`;
+    return encodeURI(path);
 }
 
 function getHino(id) {
-    if (mapaMidia[id] && mapaMidia[id].hino) {
-        return `sounds/${mapaMidia[id].hino}`;
-    }
-    return `sounds/gol_generico.mp3`;
+    let path = `sounds/gol_generico.mp3`;
+    if (mapaMidia[id] && mapaMidia[id].hino) path = `sounds/${mapaMidia[id].hino}`;
+    return encodeURI(path);
 }
 
 function getTorcida(id) {
-    if (mapaMidia[id] && mapaMidia[id].torcida) {
-        return `sounds/${mapaMidia[id].torcida}`;
-    }
-    return `sounds/torcida_generica.mp3`;
+    let path = `sounds/torcida_generica.mp3`;
+    if (mapaMidia[id] && mapaMidia[id].torcida) path = `sounds/${mapaMidia[id].torcida}`;
+    return encodeURI(path);
 }

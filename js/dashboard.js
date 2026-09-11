@@ -28,77 +28,34 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('saldo-treinador').innerText = formatarDinheiro(dadosUsuario.caixaClube);
 
         if (dadosUsuario.timeAtual === "Sem Clube" || !dadosUsuario.timeAtual) {
-           sortearTimeParaNovoTreinador();
+           mostrarTelaAguardandoSorteio();
         } else {
             carregarVisaoGeralClube();
         }
     });
 });
 
-async function sortearTimeParaNovoTreinador() {
+function mostrarTelaAguardandoSorteio() {
     const area = document.getElementById('area-trabalho');
-    if (!document.getElementById('animacao-espera')) {
-        const style = document.createElement('style');
-        style.id = 'animacao-espera';
-        style.innerHTML = `@keyframes spin { 100% { transform: rotate(360deg); } }`;
-        document.head.appendChild(style);
-    }
-
     area.innerHTML = `
-        <div style="text-align: center; margin-top: 80px;">
-            <div style="font-size: 50px; animation: spin 2s linear infinite; display: inline-block; margin-bottom: 20px;">🎲</div>
-            <h2 style="color: #ff8c00; font-size: 28px;">Sorteando o seu Clube...</h2>
-            <p style="color: #aaa; font-size: 16px;">Assinando papéis e buscando o comando de um time na liga...</p>
+        <div style="text-align: center; margin-top: 50px; padding: 40px; background: #1a1a1a; border: 1px dashed #555; border-radius: 8px;">
+            <div style="font-size: 50px; margin-bottom: 20px;">⏳</div>
+            <h2 style="color: #ff8c00; font-size: 28px;">Aguardando a Diretoria</h2>
+            <p style="color: #ccc; font-size: 16px;">O Administrador da liga ainda não realizou o sorteio oficial dos clubes. Por favor, aguarde!</p>
+            <p style="color: #888; font-size: 13px;">O Mercado e a Tática estão bloqueados, mas você já pode explorar as abas <strong>Pro Player</strong> e <strong>Pelada (Sorteio)</strong> no menu lateral.</p>
         </div>
     `;
 
-    try {
-        // 1. Puxa todos os times do banco global
-        const snapTimes = await db.ref('banco_global_times').once('value');
-        const times = snapTimes.val() || {};
-
-        // 2. Puxa os usuários para ver quais times já estão ocupados
-        const snapUsuarios = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
-        const usuarios = snapUsuarios.val() || {};
-
-        let timesOcupados = [];
-        for (let u in usuarios) {
-            if (usuarios[u].timeAtual && usuarios[u].timeAtual !== "Sem Clube") {
-                timesOcupados.push(usuarios[u].timeAtual);
-            }
+    // Como bônus de segurança, trava os botões do menu lateral para abas proibidas!
+    const botoes = document.querySelectorAll('.sidebar button');
+    botoes.forEach(btn => {
+        let txt = btn.innerText.toLowerCase();
+        if (txt.includes('tática') || txt.includes('calendário') || txt.includes('classificação') || txt.includes('mercado') || txt.includes('transmissão') || txt.includes('jogo')) {
+            btn.onclick = () => alert("Acesso bloqueado! Aguarde o sorteio do seu clube para liberar este menu.");
+            btn.style.opacity = "0.5";
+            btn.style.cursor = "not-allowed";
         }
-
-        // 3. Filtra apenas as vagas abertas
-        let timesDisponiveis = [];
-        for (let t in times) {
-            if (t !== "Agentes_Livres" && t !== "Fantasma" && !timesOcupados.includes(t)) {
-                timesDisponiveis.push(t);
-            }
-        }
-
-        if (timesDisponiveis.length === 0) {
-            area.innerHTML = `
-                <div style="text-align: center; margin-top: 80px;">
-                    <h2 style="color: #dc3545; font-size: 28px;">⚠️ Liga Lotada</h2>
-                    <p style="color: #aaa; font-size: 16px;">Infelizmente, todos os clubes já possuem um treinador ativo.</p>
-                </div>`;
-            return;
-        }
-
-        // 4. Sorteia um time para o técnico e o amarra a ele!
-        const timeSorteado = timesDisponiveis[Math.floor(Math.random() * timesDisponiveis.length)];
-
-        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
-            timeAtual: timeSorteado
-        });
-
-        // 5. Recarrega a página para abrir o Dashboard direto!
-        window.location.reload();
-
-    } catch (erro) {
-        console.error("Erro no sorteio:", erro);
-        area.innerHTML = `<p style="text-align:center; color:#dc3545;">Ocorreu um erro no sorteio. Tente atualizar a página com F5.</p>`;
-    }
+    });
 }
 
 function carregarVisaoGeralClube() {
