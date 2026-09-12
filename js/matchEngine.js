@@ -318,6 +318,18 @@ function renderizarPartida() {
                 // TRANSMISSÃO AO VIVO COM RELÓGIO ATIVO
                 if(statusTransmissao) { statusTransmissao.innerText = "Ao Vivo 🔴"; statusTransmissao.style.animation = "piscar 1s infinite"; }
 
+                // 🟢 Injeta os botões de aceleração acima da caixa de narração
+                if(narracao && !document.getElementById('btn-vel-1')) {
+                    narracao.insertAdjacentHTML('beforebegin', `
+                    <div style="display:flex; justify-content:center; align-items:center; gap:5px; margin-bottom:10px; background:#111; padding:5px; border-radius:6px; border:1px solid #333;">
+                        <span style="color:#aaa; font-size:12px; margin-right:5px;">Velocidade:</span>
+                        <button onclick="mudarVelocidadeSimulacao(1)" id="btn-vel-1" style="background:var(--verde-campo); color:#fff; border:none; border-radius:3px; font-size:11px; padding:3px 10px; cursor:pointer;">1x</button>
+                        <button onclick="mudarVelocidadeSimulacao(2)" id="btn-vel-2" style="background:#333; color:#fff; border:none; border-radius:3px; font-size:11px; padding:3px 10px; cursor:pointer;">2x</button>
+                        <button onclick="mudarVelocidadeSimulacao(3)" id="btn-vel-3" style="background:#333; color:#fff; border:none; border-radius:3px; font-size:11px; padding:3px 10px; cursor:pointer;">3x</button>
+                    </div>
+                    `);
+                }
+
                 if (!canalTorcidaM.src || !canalTorcidaM.src.includes(jogoAoVivo.mandante.replace(/_/g, ' '))) {
                     canalTorcidaM.src = getTorcida(jogoAoVivo.mandante);
                     canalTorcidaV.src = getTorcida(jogoAoVivo.visitante);
@@ -500,7 +512,6 @@ function processarNarradorOficial() {
 
     let isMandante = evento.tipo.includes("mandante");
     let escudoID = isMandante ? jogoAtual.mandante : jogoAtual.visitante;
-    let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
 
     let cor = '#ccc';
     if (evento.tipo.includes('ataque_mandante')) cor = 'var(--verde-campo)';
@@ -510,25 +521,25 @@ function processarNarradorOficial() {
     if (evento.tipo === 'penaltis') cor = '#ff8c00';
     if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
 
-    // Removemos o replace do GOOOL antigo, pois a bandeira agora vai no começo da frase!
     adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
 
-    if (evento.tipo === 'inicio') { somApito.play().catch(()=>{}); }
+    let velo = window.velocidadeSimulacao || 1;
+
+    if (velo === 1 && evento.tipo === 'inicio') { somApito.play().catch(()=>{}); }
 
     if (evento.tipo.includes("gol")) {
         if (isMandante) {
             placarNarracaoM++; document.getElementById('gols-mandante').innerText = placarNarracaoM;
-            if(audioLiberado) { canalTorcidaM.volume = 1.0; canalTorcidaV.volume = 0.0; }
+            if (velo === 1 && audioLiberado) { canalTorcidaM.volume = 1.0; canalTorcidaV.volume = 0.0; }
         } else {
             placarNarracaoV++; document.getElementById('gols-visitante').innerText = placarNarracaoV;
-            if(audioLiberado) { canalTorcidaM.volume = 0.0; canalTorcidaV.volume = 1.0; }
+            if (velo === 1 && audioLiberado) { canalTorcidaM.volume = 0.0; canalTorcidaV.volume = 1.0; }
         }
 
-        if(audioLiberado) {
+        if(velo === 1 && audioLiberado) {
             canalEfeitos.src = 'sounds/gol_generico.mp3'; canalEfeitos.play().catch(()=>{});
             setTimeout(() => { canalHino.src = getHino(escudoID); canalHino.volume = 0.4; canalHino.play().catch(()=>{}); }, 1500);
 
-            // Pausa magistral de 12 segundos para o hino e festa no painel
             setTimeout(() => {
                 canalHino.pause(); canalHino.currentTime = 0;
                 atualizarTorcidasOficiais();
@@ -536,40 +547,84 @@ function processarNarradorOficial() {
                 processarNarradorOficial();
             }, 12000);
         } else {
-            setTimeout(() => { narradorOficialOcupado = false; processarNarradorOficial(); }, 2000);
+            setTimeout(() => { narradorOficialOcupado = false; processarNarradorOficial(); }, 400 / velo); // ⚡ Acelerado e Mudo!
         }
     } else {
-        if (audioLiberado && evento.tipo.includes("ataque")) {
+        if (velo === 1 && audioLiberado && evento.tipo.includes("ataque")) {
             if (isMandante) canalTorcidaM.volume = 0.8; else canalTorcidaV.volume = 0.8;
+            setTimeout(() => { atualizarTorcidasOficiais(); narradorOficialOcupado = false; processarNarradorOficial(); }, 3500);
+        } else {
+            setTimeout(() => { narradorOficialOcupado = false; processarNarradorOficial(); }, 400 / velo); // ⚡ Acelerado
         }
-        setTimeout(() => { atualizarTorcidasOficiais(); narradorOficialOcupado = false; processarNarradorOficial(); }, 3500);
     }
 }
 
+let oficialLoopTimeout;
+window.velocidadeSimulacao = 1;
+
 function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFinal) {
-    if (window.transmissaoOficialLoop) clearInterval(window.transmissaoOficialLoop);
+    if (oficialLoopTimeout) clearTimeout(oficialLoopTimeout);
 
-    window.transmissaoOficialLoop = setInterval(() => {
-        if (narradorOficialOcupado) return; // Se estiver tocando Hino, o cronômetro trava para você não perder nada!
+    const diferencaMsInit = Date.now() - horaInicioTstamp;
+    let minutoInicial = Math.max(0, Math.floor(diferencaMsInit / 1333));
 
+    let lancesPassados = linha.filter(l => l.minuto <= minutoInicial);
+    lancesPassados.forEach(evento => {
+        let idEvento = `${evento.minuto}_${evento.tipo}`;
+        if (!eventosJaTocados.has(idEvento)) {
+            eventosJaTocados.add(idEvento);
+            let cor = '#ccc';
+            if (evento.tipo.includes('ataque_mandante')) cor = 'var(--verde-campo)';
+            if (evento.tipo.includes('ataque_visitante')) cor = '#ffc107';
+            if (evento.tipo.includes('gol_mandante')) cor = 'var(--verde-campo)';
+            if (evento.tipo.includes('gol_visitante')) cor = '#dc3545';
+            if (evento.tipo === 'penaltis') cor = '#ff8c00';
+            if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
+
+            let escudoID = evento.tipo.includes("mandante") ? jogoAtual.mandante : jogoAtual.visitante;
+            adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
+
+            if (evento.tipo.includes('gol_mandante')) placarNarracaoM++;
+            if (evento.tipo.includes('gol_visitante')) placarNarracaoV++;
+        }
+    });
+
+    document.getElementById('gols-mandante').innerText = placarNarracaoM;
+    document.getElementById('gols-visitante').innerText = placarNarracaoV;
+    document.getElementById('tempo-jogo').innerText = minutoInicial + "'";
+
+    // ⌚ LOOP DINÂMICO
+    function tickRelogioOficial() {
+        if (narradorOficialOcupado) {
+            oficialLoopTimeout = setTimeout(tickRelogioOficial, 100);
+            return;
+        }
+
+        let velo = window.velocidadeSimulacao || 1;
         const diferencaMs = Date.now() - horaInicioTstamp;
-        let minutoAtualJogo = Math.floor(diferencaMs / 1333); // O Motor Rápido (1 minuto = 1.33s)
+
+        // Se estiver acelerado, simulamos o tempo passando mais rápido internamente
+        let minutoAtualJogo;
+        if (velo > 1) {
+            minutoAtualJogo = parseInt(document.getElementById('tempo-jogo').innerText) || 0;
+            minutoAtualJogo++;
+        } else {
+            minutoAtualJogo = Math.floor(diferencaMs / 1333);
+        }
 
         if (minutoAtualJogo > 95) {
-            clearInterval(window.transmissaoOficialLoop);
             document.getElementById('tempo-jogo').innerText = "FIM";
             document.getElementById('tempo-jogo').style.color = "#dc3545";
             document.getElementById('gols-mandante').innerText = placarMFinal;
             document.getElementById('gols-visitante').innerText = placarVFinal;
 
-            // Desliga a tag "Ao Vivo" quando o cronômetro chega ao fim!
             let statusTransmissao = document.getElementById('status-transmissao');
             if(statusTransmissao) {
                 statusTransmissao.innerText = "Partida Encerrada 🏁";
                 statusTransmissao.style.animation = "none";
             }
 
-            if(!eventosJaTocados.has("fim") && audioLiberado) {
+            if(!eventosJaTocados.has("fim") && audioLiberado && velo === 1) {
                 canalEfeitos.src = 'sounds/final_do_jogo.mp3'; canalEfeitos.play().catch(()=>{});
                 canalTorcidaM.volume = 0.1; canalTorcidaV.volume = 0.1;
 
@@ -595,20 +650,41 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFi
         });
 
         processarNarradorOficial();
-    }, 300); // Roda rápido para injetar os lances na fila instantaneamente!
+        oficialLoopTimeout = setTimeout(tickRelogioOficial, velo === 1 ? 300 : 150 / velo);
+    }
+
+    tickRelogioOficial();
 }
 
-function adicionarNarraçao(tempo, texto, cor = "#ccc") {
+function adicionarNarraçao(tempo, texto, cor = "#ccc", escudoID = null) {
     const narracao = document.getElementById('narracao-container');
     if(!narracao) return;
 
+    let imgHtml = escudoID ? `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" style="width:16px; height:16px; vertical-align:middle; margin-right:6px; border-radius:50%;">` : "";
+
     narracao.innerHTML += `
-        <div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;">
-            <strong style="color: ${cor}; font-size:15px; margin-right: 8px;">${tempo}</strong>
-            <span style="color: ${texto.includes('GOOOL') ? '#fff' : '#ccc'}; font-weight: ${texto.includes('GOOOL') ? 'bold' : 'normal'};">${texto}</span>
+        <div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px; display: flex; align-items: flex-start;">
+            <strong style="color: ${cor}; font-size:15px; margin-right: 8px; flex-shrink:0;">${tempo}</strong>
+            <span style="color: ${texto.includes('GOOOL') ? '#fff' : '#ccc'}; font-weight: ${texto.includes('GOOOL') ? 'bold' : 'normal'}; line-height: 1.4;">
+                ${imgHtml}${texto}
+            </span>
         </div>`;
     narracao.scrollTop = narracao.scrollHeight;
 }
+
+// FUNÇÃO GLOBAL DE VELOCIDADE
+window.mudarVelocidadeSimulacao = function(v) {
+    window.velocidadeSimulacao = v;
+    if(document.getElementById('btn-vel-1')) document.getElementById('btn-vel-1').style.background = v === 1 ? 'var(--verde-campo)' : '#333';
+    if(document.getElementById('btn-vel-2')) document.getElementById('btn-vel-2').style.background = v === 2 ? 'var(--verde-campo)' : '#333';
+    if(document.getElementById('btn-vel-3')) document.getElementById('btn-vel-3').style.background = v === 3 ? 'var(--verde-campo)' : '#333';
+
+    // Muta os audios instantaneamente
+    if (v > 1 && typeof canalTorcidaM !== 'undefined') {
+        canalTorcidaM.volume = 0;
+        canalTorcidaV.volume = 0;
+    }
+};
 
 // CONTROLE DO MENU MOBILE OTIMIZADO
 function toggleMenu() {

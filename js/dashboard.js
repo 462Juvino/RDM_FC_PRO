@@ -1580,8 +1580,15 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                     <div id="x1-placar-m" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
                 </div>
 
-                <div style="width:60px; font-size:22px; color:#aaa; font-weight:bold; background:#222; padding:5px; border-radius:6px; border:1px solid #444; margin: 0 10px; flex-shrink:0;">
-                    <span id="x1-relogio">0'</span>
+                <div style="display:flex; flex-direction:column; align-items:center; margin: 0 10px; flex-shrink:0;">
+                    <div style="width:60px; font-size:22px; color:#aaa; font-weight:bold; background:#222; padding:5px; border-radius:6px; border:1px solid #444; margin-bottom:5px;">
+                        <span id="x1-relogio">0'</span>
+                    </div>
+                    <div style="display:flex; gap:3px;">
+                        <button onclick="mudarVelocidadeSimulacao(1)" id="btn-vel-1" style="background:var(--verde-campo); color:#fff; border:none; border-radius:3px; font-size:10px; cursor:pointer; padding:2px 5px;">1x</button>
+                        <button onclick="mudarVelocidadeSimulacao(2)" id="btn-vel-2" style="background:#333; color:#fff; border:none; border-radius:3px; font-size:10px; cursor:pointer; padding:2px 5px;">2x</button>
+                        <button onclick="mudarVelocidadeSimulacao(3)" id="btn-vel-3" style="background:#333; color:#fff; border:none; border-radius:3px; font-size:10px; cursor:pointer; padding:2px 5px;">3x</button>
+                    </div>
                 </div>
 
                 <div style="flex:1; text-align:left; font-weight:bold; color:#dc3545; font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
@@ -1638,7 +1645,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
     function narrarProximoLance() {
         if (narradorOcupado || filaNarracao.length === 0) return;
         let lance = filaNarracao.shift();
-        narradorOcupado = true; // 🔴 TRANCA O CRONÔMETRO!
+        narradorOcupado = true;
 
         let cor = '#ccc';
         if (lance.tipo.includes('ataque_m')) cor = 'var(--verde-campo)';
@@ -1651,46 +1658,65 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
         divLances.innerHTML += `<div style="margin-top:10px; border-bottom:1px dashed #333; padding-bottom:8px;"><strong style="color:${cor}; font-size:15px;">${lance.minuto}'</strong> <span style="margin-left:5px; color:${lance.tipo.includes('gol') ? '#fff' : '#ccc'}; font-weight:${lance.tipo.includes('gol') ? 'bold' : 'normal'};">${lance.texto}</span></div>`;
         divLances.scrollTop = divLances.scrollHeight;
 
-        if (lance.tipo === 'inicio') somApito.play().catch(()=>{});
+        let velo = window.velocidadeSimulacao || 1;
+
+        if (velo === 1 && lance.tipo === 'inicio') somApito.play().catch(()=>{});
 
         // ⚽ GOL MANDANTE
         if (lance.tipo === 'gol_m') {
             placarM_tela++; document.getElementById('x1-placar-m').innerText = placarM_tela;
-            somTorcidaM.volume = 1.0; somTorcidaV.volume = 0.0; // Torcida explode
-            somGol.play().catch(()=>{});
-            setTimeout(() => { canalHino.src = getHino(mandante); canalHino.volume = 0.4; canalHino.play().catch(()=>{}); }, 1500);
-
-            // ⏳ Espera o show acabar (12s) para soltar a narração
-            setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+            if (velo === 1) {
+                somTorcidaM.volume = 1.0; somTorcidaV.volume = 0.0;
+                somGol.play().catch(()=>{});
+                setTimeout(() => { canalHino.src = getHino(mandante); canalHino.volume = 0.4; canalHino.play().catch(()=>{}); }, 1500);
+                setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+            } else {
+                setTimeout(() => { narradorOcupado = false; }, 400 / velo); // ⚡ Rápido e mudo
+            }
         }
         // ⚽ GOL VISITANTE
         else if (lance.tipo === 'gol_v') {
             placarV_tela++; document.getElementById('x1-placar-v').innerText = placarV_tela;
-            somTorcidaM.volume = 0.0; somTorcidaV.volume = 1.0; // Torcida explode
-            somGol.play().catch(()=>{});
-            setTimeout(() => { canalHino.src = getHino(visitante); canalHino.volume = 0.3; canalHino.play().catch(()=>{}); }, 1500);
-
-            setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+            if (velo === 1) {
+                somTorcidaM.volume = 0.0; somTorcidaV.volume = 1.0;
+                somGol.play().catch(()=>{});
+                setTimeout(() => { canalHino.src = getHino(visitante); canalHino.volume = 0.3; canalHino.play().catch(()=>{}); }, 1500);
+                setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+            } else {
+                setTimeout(() => { narradorOcupado = false; }, 400 / velo); // ⚡ Rápido e mudo
+            }
         }
         // LANCES NORMAIS (Ataque, Pênalti, Fim)
         else {
-            if (lance.tipo === 'ataque_m') { somTorcidaM.volume = 0.8; }
-            if (lance.tipo === 'ataque_v') { somTorcidaV.volume = 0.8; }
-            setTimeout(() => { atualizarTorcidas(); narradorOcupado = false; }, 3500); // Lances normais travam por 3s
+            if (velo === 1) {
+                if (lance.tipo === 'ataque_m') { somTorcidaM.volume = 0.8; }
+                if (lance.tipo === 'ataque_v') { somTorcidaV.volume = 0.8; }
+                setTimeout(() => { atualizarTorcidas(); narradorOcupado = false; }, 3500);
+            } else {
+                setTimeout(() => { narradorOcupado = false; }, 400 / velo); // ⚡ Rápido e mudo
+            }
         }
-    } // 🟢 FALTAVA ESTA CHAVE AQUI PARA FECHAR A FUNÇÃO narrarProximoLance()!
+    }
 
-    // ⌚ LOOP DO CRONÔMETRO (Só avança se o narrador não estiver celebrando gol!)
-    let transmissaoLoop = setInterval(async () => {
+    // ⌚ LOOP DO CRONÔMETRO DINÂMICO
+    window.velocidadeSimulacao = 1;
+
+    async function tickRelogioX1() {
+        if (!document.getElementById('x1-lances')) return; // Aborta se modal fechar
+
         narrarProximoLance();
+        let velo = window.velocidadeSimulacao || 1;
 
-        if (narradorOcupado) return; // 🛑 Se estiver tocando hino/gol, o cronômetro NÃO AVANÇA!
+        if (narradorOcupado) {
+            setTimeout(tickRelogioX1, velo === 1 ? 1000 : 200 / velo);
+            return;
+        }
 
         minutoAtual++;
 
-        if (minutoAtual === 46) { somTorcidaM.volume = 0.1; somTorcidaV.volume = 0.1; }
+        if (minutoAtual === 46 && velo === 1) { somTorcidaM.volume = 0.1; somTorcidaV.volume = 0.1; }
         else if (minutoAtual === 47) {
-            atualizarTorcidas();
+            if (velo === 1) atualizarTorcidas();
             divLances.innerHTML += `<div style="margin-top:8px; border-bottom:1px solid #222; padding-bottom:5px; color:#aaa;">🟢 Rola a bola para o segundo tempo!</div>`;
         }
 
@@ -1698,29 +1724,31 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             if (relogio) relogio.innerText = minutoAtual + "'";
         }
 
-        // Puxa lances novos do minuto e joga na Fila de Narração
         let lancesAgora = linhaTempo.filter(l => l.minuto === minutoAtual);
         if (lancesAgora.length > 0) filaNarracao.push(...lancesAgora);
 
         // 🏁 FIM DE JOGO
         if (minutoAtual > 99 || (minutoAtual >= 90 && golsM_final !== golsV_final && !linhaTempo.some(l => l.minuto > minutoAtual))) {
-            clearInterval(transmissaoLoop);
-            somTorcidaM.pause(); somTorcidaV.pause();
-            canalHino.pause(); canalHino.currentTime = 0;
-            somFim.play().catch(()=>{});
+            if (velo === 1) {
+                somTorcidaM.pause(); somTorcidaV.pause();
+                canalHino.pause(); canalHino.currentTime = 0;
+                somFim.play().catch(()=>{});
+            }
 
             if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
 
-            setTimeout(() => {
-                let campeao = (golsM_final > golsV_final) ? mandante : visitante;
-                if(golsM_final !== golsV_final) {
-                    canalHino.src = getHino(campeao);
-                    canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
-                    canalHino.play().catch(()=>{});
-                }
-            }, 1500);
+            if (velo === 1) {
+                setTimeout(() => {
+                    let campeao = (golsM_final > golsV_final) ? mandante : visitante;
+                    if(golsM_final !== golsV_final) {
+                        canalHino.src = getHino(campeao);
+                        canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
+                        canalHino.play().catch(()=>{});
+                    }
+                }, 1500);
+            }
 
-            // Gravação no Banco (Apenas se for IA que não gravou antes)
+            // Gravação no Banco
             if (isIADuel && apostaValidadaIA) {
                 let updates = {};
                 let v = apostaValidadaIA.valor;
@@ -1731,7 +1759,6 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                     else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v - taxa;
                 } else {
                     updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - taxa;
-
                     if (venci) {
                         updates[`banco_global_times/${visitante}/jogadores/${apostaValidadaIA.id_adv}`] = null;
                         updates[`banco_global_times/${mandante}/jogadores/${apostaValidadaIA.id_adv}`] = apostaValidadaIA.dados_adv;
@@ -1751,6 +1778,25 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                     <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; font-size:16px;">Retornar ao Dashboard</button>
                 </div>
             `);
+            return; // Termina o loop
         }
-    }, 1000); // Relógio bate a cada 1 segundo (se não estiver narrando gol)
+
+        setTimeout(tickRelogioX1, velo === 1 ? 1000 : 200 / velo);
+    }
+
+    tickRelogioX1(); // Dá a partida no relógio!
 }
+
+// FUNÇÃO GLOBAL DE CONTROLE DE VELOCIDADE
+window.mudarVelocidadeSimulacao = function(v) {
+    window.velocidadeSimulacao = v;
+    if(document.getElementById('btn-vel-1')) document.getElementById('btn-vel-1').style.background = v === 1 ? 'var(--verde-campo)' : '#333';
+    if(document.getElementById('btn-vel-2')) document.getElementById('btn-vel-2').style.background = v === 2 ? 'var(--verde-campo)' : '#333';
+    if(document.getElementById('btn-vel-3')) document.getElementById('btn-vel-3').style.background = v === 3 ? 'var(--verde-campo)' : '#333';
+
+    // Corta os audios se o usuário for impaciente
+    if (v > 1 && window.x1Audios) {
+        window.x1Audios.torcidaM.volume = 0;
+        window.x1Audios.torcidaV.volume = 0;
+    }
+};
