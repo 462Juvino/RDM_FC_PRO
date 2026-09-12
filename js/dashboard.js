@@ -527,11 +527,11 @@ window.recolherPatrocinio = async function() {
 window.criarBotaoChatSuperior = function() {
     if (document.getElementById('btn-abrir-chat')) return;
 
-    // Botão pequeno, escuro e posicionado logo abaixo da barra superior (top: 65px)
+    // Botão blindado contra CSS global, fixo à direita e com tamanho exato
     let btn = document.createElement('button');
     btn.id = 'btn-abrir-chat';
     btn.innerHTML = '<span style="font-size:13px;">💬</span> Chat';
-    btn.style.cssText = "position:fixed; top:65px; right:15px; background:rgba(0,0,0,0.6); color:#ccc; border:1px solid #444; padding:4px 10px; border-radius:15px; font-size:11px; cursor:pointer; z-index:9999; box-shadow:0 2px 5px rgba(0,0,0,0.5); backdrop-filter: blur(5px); display:flex; align-items:center; gap:4px; transition: 0.2s;";
+    btn.style.cssText = "position:fixed !important; top:65px !important; right:15px !important; left:auto !important; width:fit-content !important; min-width:60px !important; background:rgba(0,0,0,0.8) !important; color:#fff !important; border:1px solid #555 !important; padding:4px 10px !important; border-radius:15px !important; font-size:11px !important; cursor:pointer !important; z-index:9999 !important; box-shadow:0 2px 5px rgba(0,0,0,0.5) !important; backdrop-filter: blur(5px) !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; gap:4px !important; margin:0 !important; line-height:1 !important;";
     btn.onclick = abrirChatLiga;
     document.body.appendChild(btn);
 };
