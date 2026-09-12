@@ -269,25 +269,29 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 let lanceVencedor = null;
                 let loginVencedor = "";
 
-                // 🧠 NOVA INTELIGÊNCIA: Verifica se o jogador alvo é "Titular" (Top 14 do elenco da IA)
-                let elencoIA = Object.values(times[timeDoAlvo].jogadores || {}).sort((a,b) => (b.valor_mercado || 0) - (a.valor_mercado || 0));
-                let isTitularIA = false;
-                if (elencoIA.length >= 14) {
-                    let indexTop = elencoIA.findIndex(jx => jx.nome === dadosDoAlvo.nome);
-                    if (indexTop !== -1 && indexTop < 14) isTitularIA = true;
-                }
+                // 🧠 NOVA INTELIGÊNCIA: Avalia se o jogador é um dos 5 mais fortes do clube (OVR)
+                let elencoIA = Object.values(times[timeDoAlvo].jogadores || {}).sort((a,b) => {
+                    let ovrA = ((a.atributos?.ataque||0) + (a.atributos?.defesa||0) + (a.atributos?.forca||0) + (a.atributos?.velocidade||0) + (a.atributos?.habilidade||0));
+                    let ovrB = ((b.atributos?.ataque||0) + (b.atributos?.defesa||0) + (b.atributos?.forca||0) + (b.atributos?.velocidade||0) + (b.atributos?.habilidade||0));
+                    return ovrB - ovrA; // Mais forte primeiro
+                });
 
-                let valorMinimoIA = dadosDoAlvo.valor_mercado * 0.9;
+                let isTop5 = false;
+                let indexTop = elencoIA.findIndex(jx => jx.nome === dadosDoAlvo.nome);
+                if (indexTop !== -1 && indexTop < 5) isTop5 = true;
+
+                // Regra de Venda: Top 5 custa 200% (Dobro), resto sai por 95% do passe.
+                let valorMinimoIA = isTop5 ? (dadosDoAlvo.valor_mercado * 2) : (dadosDoAlvo.valor_mercado * 0.95);
 
                 for (let login in lances) {
                     let lance = lances[login];
                     let scoreLance = lance.valor_oferecido || 0;
 
                     if (lance.tipo_negocio === 'emprestimo') {
-                        // 1. A Máquina NUNCA empresta seus craques titulares!
-                        if (isTitularIA) continue;
+                        // 1. A Máquina NUNCA empresta os seus 5 melhores jogadores (Intocáveis)
+                        if (isTop5) continue;
 
-                        // 2. A Máquina exige pelo menos 1.5% do passe por rodada alugada
+                        // 2. A Máquina exige pelo menos 1.5% do passe por rodada alugada para os demais
                         let taxaMinima = (dadosDoAlvo.valor_mercado * 0.015) * lance.duracao_rodadas;
                         if (scoreLance >= taxaMinima && scoreLance > maiorScore) {
                             maiorScore = scoreLance;
@@ -898,10 +902,10 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             dispararNotificacao("Mercado Fechado! 🛒", "As negociações foram encerradas e jogadores foram transferidos.");
         }
 
-        // Verifica se o motor rodou ao vivo (20h) ou se o Trator foi acionado para cobrir o atraso
-        if (horaDeRodar) {
+        // Verifica se o motor rodou ao vivo ou se o Trator foi acionado para cobrir o atraso
+        if (rodarCampHoje || rodarCopaHoje) {
             dispararNotificacao("Fim do Aquecimento! ⚽", "As escalações foram bloqueadas e a bola vai rolar!");
-        } else {
+        } else if (rodarAtrasados) {
             dispararNotificacao("🚜 Trator Acionado!", "O sistema simulou todas as rodadas e transações que estavam atrasadas no calendário.");
         }
 

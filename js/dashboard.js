@@ -1195,6 +1195,8 @@ window.enviarDesafioX1 = async function() {
     }
 
     let apostaValidada = {};
+    let taxaX1 = 5000; // 🟢 Taxa de manutenção da arena
+
     if (tipo === 'dinheiro') {
         let valor = parseInt(document.getElementById('x1-valor-aposta').value);
         if (isNaN(valor) || valor <= 0) return alert("Valor de aposta inválido.");
@@ -1206,14 +1208,24 @@ window.enviarDesafioX1 = async function() {
             if (userAdv) caixaV = userAdv.caixaClube || 0;
         }
 
-        if (caixaM < valor) return alert("Você não tem esse dinheiro em caixa.");
-        if (caixaV < valor) return alert(`O oponente não tem ${formatarDinheiro(valor)} em caixa.`);
+        if (caixaM < (valor + taxaX1)) return alert(`Saldo Insuficiente! Você precisa do valor da aposta + R$ 5.000 da Taxa da Arena.`);
+        if (caixaV < (valor + taxaX1)) return alert(`O oponente não tem caixa para a aposta + R$ 5.000 de Taxa.`);
 
-        apostaValidada = { tipo: 'dinheiro', valor: valor };
+        apostaValidada = { tipo: 'dinheiro', valor: valor, taxa: taxaX1 };
     } else {
         let meuId = document.getElementById('x1-meu-jogador').value;
         let advId = document.getElementById('x1-adv-jogador').value;
         if (!meuId || !advId) return alert("Selecione os dois jogadores da aposta.");
+
+        let caixaM = dadosUsuario.caixaClube || 0;
+        let caixaV = isOponenteIA ? 50000000 : 0;
+        if (!isOponenteIA) {
+            let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente);
+            if (userAdv) caixaV = userAdv.caixaClube || 0;
+        }
+
+        if (caixaM < taxaX1) return alert(`Você precisa ter pelo menos R$ 5.000 em caixa para pagar a Taxa da Arena.`);
+        if (caixaV < taxaX1) return alert(`O oponente não tem R$ 5.000 em caixa para pagar a Taxa da Arena.`);
 
         let meuJog = arenaDadosGlobais.times[meuTime].jogadores[meuId];
         let advJog = arenaDadosGlobais.times[oponente].jogadores[advId];
@@ -1503,17 +1515,22 @@ window.iniciarTransmissaoX1 = async function(id) {
 
         let cxM = arenaDadosGlobais.usuarios[loginM]?.caixaClube || 0;
         let cxV = arenaDadosGlobais.usuarios[loginV]?.caixaClube || 0;
+        let taxaCobrada = 5000;
 
         // Executa o pagamento e as transferências na nuvem apenas 1 vez (Quem gerar o jogo processa)
         if (d.tipo === 'dinheiro') {
             if (vitoriaMandante) {
-                if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM + d.valor;
-                if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV - d.valor;
+                if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM + d.valor - taxaCobrada;
+                if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV - d.valor - taxaCobrada;
             } else {
-                if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM - d.valor;
-                if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV + d.valor;
+                if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM - d.valor - taxaCobrada;
+                if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV + d.valor - taxaCobrada;
             }
         } else {
+            // Em aposta de jogador (Pink Slip), desconta só a taxa da arena
+            if(loginM) updates[`ligas/${ligaLogada}/usuarios/${loginM}/caixaClube`] = cxM - taxaCobrada;
+            if(loginV) updates[`ligas/${ligaLogada}/usuarios/${loginV}/caixaClube`] = cxV - taxaCobrada;
+
             if (vitoriaMandante) {
                 updates[`banco_global_times/${visitante}/jogadores/${d.id_adv}`] = null;
                 updates[`banco_global_times/${mandante}/jogadores/${d.id_adv}`] = d.dados_adv;
@@ -1536,7 +1553,7 @@ window.iniciarTransmissaoX1 = async function(id) {
     }
 
     // Toca a transmissão! (O isIADuel aqui vai como false, pois a DB já foi atualizada acima).
-    reproduzirTransmissaoX1(mandante, visitante, d.linhaDoTempo, d.golsM, d.golsV, isVitoriaMinha, txtFim, false, null);
+    reproduzirTransmissaoX1(mandante, visitante, d.linhaDoTempo, d.golsM, d.golsV, isVitoriaMinha, txtFim, false, {});
 };
 
 function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, golsV_final, venci, txtFim, isIADuel, apostaValidadaIA) {
@@ -1641,19 +1658,29 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             placarM_tela++; document.getElementById('x1-placar-m').innerText = placarM_tela;
             somTorcidaM.volume = 1.0; somTorcidaV.volume = 0.0; // Torcida explode
             somGol.play().catch(()=>{});
-            setTimeout(() => { somHinoM.volume = 0.4; somHinoM.play().catch(()=>{}); }, 1500); // Entra o hino
+
+            setTimeout(() => {
+                canalHino.src = getHino(mandante);
+                canalHino.volume = 0.4;
+                canalHino.play().catch(()=>{});
+            }, 1500);
 
             // ⏳ Espera o show acabar (12s) para soltar a narração
-            setTimeout(() => { somHinoM.pause(); somHinoM.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+            setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
         }
         // ⚽ GOL VISITANTE
         else if (lance.tipo === 'gol_v') {
             placarV_tela++; document.getElementById('x1-placar-v').innerText = placarV_tela;
             somTorcidaM.volume = 0.0; somTorcidaV.volume = 1.0; // Torcida explode
             somGol.play().catch(()=>{});
-            setTimeout(() => { somHinoV.volume = 0.3; somHinoV.play().catch(()=>{}); }, 1500); // Entra o hino
 
-            setTimeout(() => { somHinoV.pause(); somHinoV.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
+            setTimeout(() => {
+                canalHino.src = getHino(visitante);
+                canalHino.volume = 0.3;
+                canalHino.play().catch(()=>{});
+            }, 1500);
+
+            setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
         }
         // LANCES NORMAIS (Ataque, Pênalti, Fim)
         else {
@@ -1695,19 +1722,26 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
 
             setTimeout(() => {
-                let somCampeao = (golsM_final > golsV_final) ? somHinoM : somHinoV;
-                somCampeao.currentTime = 0; somCampeao.volume = 0.2; somCampeao.loop = true;
-                somCampeao.play().catch(()=>{});
+                let campeao = (golsM_final > golsV_final) ? mandante : visitante;
+                if(golsM_final !== golsV_final) {
+                    canalHino.src = getHino(campeao);
+                    canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
+                    canalHino.play().catch(()=>{});
+                }
             }, 1500);
 
             // Gravação no Banco (Apenas se for IA que não gravou antes)
             if (isIADuel && apostaValidadaIA) {
                 let updates = {};
                 let v = apostaValidadaIA.valor;
+                let taxa = apostaValidadaIA.taxa || 5000;
+
                 if (apostaValidadaIA.tipo === 'dinheiro') {
-                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v;
-                    else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v;
+                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v - taxa;
+                    else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v - taxa;
                 } else {
+                    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - taxa;
+
                     if (venci) {
                         updates[`banco_global_times/${visitante}/jogadores/${apostaValidadaIA.id_adv}`] = null;
                         updates[`banco_global_times/${mandante}/jogadores/${apostaValidadaIA.id_adv}`] = apostaValidadaIA.dados_adv;

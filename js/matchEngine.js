@@ -450,9 +450,11 @@ function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFi
                 canalTorcidaM.volume = 0.1; canalTorcidaV.volume = 0.1;
 
                 setTimeout(() => {
-                    let somCampeao = (placarMFinal > placarVFinal) ? getHino(jogoAtual.mandante) : getHino(jogoAtual.visitante);
-                    canalHino.src = somCampeao; canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
-                    canalHino.play().catch(()=>{});
+                    if (placarMFinal !== placarVFinal) { // 🟢 Toca o hino apenas se não for empate!
+                        let somCampeao = (placarMFinal > placarVFinal) ? getHino(jogoAtual.mandante) : getHino(jogoAtual.visitante);
+                        canalHino.src = somCampeao; canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
+                        canalHino.play().catch(()=>{});
+                    }
                 }, 1500);
                 eventosJaTocados.add("fim");
             }
