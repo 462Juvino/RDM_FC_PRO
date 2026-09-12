@@ -455,100 +455,110 @@ function sortearTimesLiga() {
             updates[`ligas/${liga}/usuarios/${login}/moral`] = 50;
         });
 
-        db.ref().update(updates).then(() => {
-            gerarCalendarioOculto(liga);
-            exibirModal("🎲 Sucesso Absoluto!", `<p style='text-align:center;'>Sorteio realizado apenas para os selecionados!</p>`);
+        db.ref().update(updates).then(async () => {
+            try {
+                // AGUARDA a geração completa do calendário na nuvem!
+                await gerarCalendarioOculto(liga);
+                exibirModal("🎲 Sucesso Absoluto!", `<p style='text-align:center; color: var(--verde-campo);'>Sorteio realizado e Calendário Oficial gerado com sucesso!</p>`);
+            } catch (e) {
+                // Se der erro, ele vai te mostrar na hora!
+                exibirModal("❌ Erro no Calendário", `<p style='text-align:center;'>Os times foram sorteados, mas houve um erro ao gerar o calendário: ${e.message}</p>`);
+            }
         });
     });
 }
 
 async function gerarCalendarioOculto(liga) {
-    try {
-        const snapTimes = await db.ref('banco_global_times').once('value');
-        const times = snapTimes.val();
-        if (!times) return;
+    const snapTimes = await db.ref('banco_global_times').once('value');
+    const times = snapTimes.val();
+    if (!times) throw new Error("O Banco de Times Globais está vazio. Injete a base de times primeiro!");
 
-        let serieA = [];
-        let serieB = [];
-        for (let t in times) {
-            if (times[t].divisao === "A") serieA.push(t);
-            else if (times[t].divisao === "B") serieB.push(t);
-        }
-
-        let arrA = serieA.slice();
-        let arrB = serieB.slice();
-
-        const calSerieA = criarTabelaBerger(arrA);
-        const calSerieB = criarTabelaBerger(arrB);
-
-        // ==========================================
-        // LÓGICA DE DATAS INTELIGENTES E MUNDIAL
-        // ==========================================
-        let dataAtual = new Date();
-
-        // 🟢 REGRA DE OURO: O campeonato SEMPRE começa 1 dia após o sorteio!
-        dataAtual.setDate(dataAtual.getDate() + 1);
-        dataAtual.setHours(19, 0, 0, 0);
-
-        // Se o dia seguinte cair no sábado (dia de Copa), pula direto para domingo
-        if (dataAtual.getDay() === 6) {
-             dataAtual.setDate(dataAtual.getDate() + 1);
-        }
-        function obterProximoDia(dataRef, diaSemana, hora) {
-            let d = new Date(dataRef);
-            d.setDate(d.getDate() + 1);
-            while (d.getDay() !== diaSemana) d.setDate(d.getDate() + 1);
-            d.setHours(hora, 0, 0, 0);
-            return d;
-        }
-
-        function formatarData(d) {
-            return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')} às ${d.getHours().toString().padStart(2,'0')}:00`;
-        }
-
-        // Aplica as datas (Campeonato todos os dias, exceto Sábado)
-        let diaLiga = new Date(dataAtual);
-        for(let i = 1; i <= 38; i++) {
-            let strData = formatarData(diaLiga);
-            if(calSerieA[`rodada_${i}`]) for(let j in calSerieA[`rodada_${i}`]) calSerieA[`rodada_${i}`][j].data_jogo = strData;
-            if(calSerieB[`rodada_${i}`]) for(let j in calSerieB[`rodada_${i}`]) calSerieB[`rodada_${i}`][j].data_jogo = strData;
-
-            diaLiga.setDate(diaLiga.getDate() + 1);
-            if (diaLiga.getDay() === 6) diaLiga.setDate(diaLiga.getDate() + 1); // Pula o Sábado
-        }
-
-        let sabado1 = obterProximoDia(dataAtual, 6, 19);
-        let sabado2 = obterProximoDia(sabado1, 6, 19);
-        let sabado3 = obterProximoDia(sabado2, 6, 19);
-        let sabado4 = obterProximoDia(sabado3, 6, 19);
-
-        let serieAOrd = serieA.slice().sort((a,b) => ((times[b] && times[b].forca_base) ? times[b].forca_base : 0) - ((times[a] && times[a].forca_base) ? times[a].forca_base : 0));
-        let serieBOrd = serieB.slice().sort((a,b) => ((times[b] && times[b].forca_base) ? times[b].forca_base : 0) - ((times[a] && times[a].forca_base) ? times[a].forca_base : 0));
-
-        let oitavasCopa = {};
-        for (let i = 0; i < 8; i++) oitavasCopa[`jogo_${i+1}`] = { mandante: serieAOrd[i] || "Fantasma", visitante: serieBOrd[7 - i] || "Fantasma", jogado: false, data_jogo: formatarData(sabado1) };
-
-        let quartasCopa = {};
-        for (let i = 0; i < 4; i++) quartasCopa[`jogo_${i+9}`] = { mandante: `Vencedor Jogo ${i*2 + 1}`, visitante: `Vencedor Jogo ${i*2 + 2}`, jogado: false, data_jogo: formatarData(sabado2) };
-
-        let semisCopa = {};
-        for (let i = 0; i < 2; i++) semisCopa[`jogo_${i+13}`] = { mandante: `Vencedor Jogo ${i*2 + 9}`, visitante: `Vencedor Jogo ${i*2 + 10}`, jogado: false, data_jogo: formatarData(sabado3) };
-
-        let finalCopa = { "jogo_15": { mandante: "Vencedor Jogo 13", visitante: "Vencedor Jogo 14", jogado: false, data_jogo: formatarData(sabado4) } };
-
-        // MUNDIAL: Acontece no Domingo seguinte à última rodada (diaLiga já representa o dia depois da rodada 38)
-        let dataMundial = obterProximoDia(diaLiga, 0, 16);
-        let jogoMundial = { "jogo_mundial": { mandante: "Campeão Nacional", visitante: "Campeão da Copa", jogado: false, data_jogo: formatarData(dataMundial) } };
-
-        await db.ref(`ligas/${liga}/calendario`).set({
-            serieA: calSerieA,
-            serieB: calSerieB,
-            copa: { oitavas: oitavasCopa, quartas: quartasCopa, semis: semisCopa, final: finalCopa, mundial: jogoMundial },
-            rodadaAtual: 1
-        });
-    } catch (e) {
-        console.error("Erro fatal ao gerar calendário: ", e);
+    let serieA = [];
+    let serieB = [];
+    for (let t in times) {
+        if (times[t].divisao === "A") serieA.push(t);
+        else if (times[t].divisao === "B") serieB.push(t);
     }
+
+    let arrA = serieA.slice();
+    let arrB = serieB.slice();
+
+    const calSerieA = criarTabelaBerger(arrA);
+    const calSerieB = criarTabelaBerger(arrB);
+
+    // ==========================================
+    // LÓGICA DE DATAS INTELIGENTES E MUNDIAL
+    // ==========================================
+    let dataAtual = new Date();
+
+    // 🟢 REGRA DE OURO: O campeonato SEMPRE começa no dia SEGUINTE ao sorteio!
+    dataAtual.setDate(dataAtual.getDate() + 1);
+    dataAtual.setHours(19, 0, 0, 0);
+
+    // Se o dia seguinte cair no sábado (dia de Copa), pula direto para domingo
+    if (dataAtual.getDay() === 6) {
+         dataAtual.setDate(dataAtual.getDate() + 1);
+    }
+
+    function obterProximoDia(dataRef, diaSemana, hora) {
+        let d = new Date(dataRef);
+        d.setDate(d.getDate() + 1);
+        while (d.getDay() !== diaSemana) d.setDate(d.getDate() + 1);
+        d.setHours(hora, 0, 0, 0);
+        return d;
+    }
+
+    function formatarData(d) {
+        return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')} às ${d.getHours().toString().padStart(2,'0')}:00`;
+    }
+
+    // Aplica as datas (Campeonato todos os dias, exceto Sábado)
+    let diaLiga = new Date(dataAtual);
+    for(let i = 1; i <= 38; i++) {
+        let strData = formatarData(diaLiga);
+        if(calSerieA[`rodada_${i}`]) {
+            for(let j in calSerieA[`rodada_${i}`]) calSerieA[`rodada_${i}`][j].data_jogo = strData;
+        }
+        if(calSerieB[`rodada_${i}`]) {
+            for(let j in calSerieB[`rodada_${i}`]) calSerieB[`rodada_${i}`][j].data_jogo = strData;
+        }
+
+        diaLiga.setDate(diaLiga.getDate() + 1);
+        if (diaLiga.getDay() === 6) diaLiga.setDate(diaLiga.getDate() + 1); // Pula o Sábado
+    }
+
+    let sabado1 = obterProximoDia(dataAtual, 6, 19);
+    let sabado2 = obterProximoDia(sabado1, 6, 19);
+    let sabado3 = obterProximoDia(sabado2, 6, 19);
+    let sabado4 = obterProximoDia(sabado3, 6, 19);
+
+    let serieAOrd = serieA.slice().sort((a,b) => ((times[b] && times[b].forca_base) ? times[b].forca_base : 0) - ((times[a] && times[a].forca_base) ? times[a].forca_base : 0));
+    let serieBOrd = serieB.slice().sort((a,b) => ((times[b] && times[b].forca_base) ? times[b].forca_base : 0) - ((times[a] && times[a].forca_base) ? times[a].forca_base : 0));
+
+    let oitavasCopa = {};
+    for (let i = 0; i < 8; i++) oitavasCopa[`jogo_${i+1}`] = { mandante: serieAOrd[i] || "Fantasma", visitante: serieBOrd[7 - i] || "Fantasma", jogado: false, data_jogo: formatarData(sabado1) };
+
+    let quartasCopa = {};
+    for (let i = 0; i < 4; i++) quartasCopa[`jogo_${i+9}`] = { mandante: `Vencedor Jogo ${i*2 + 1}`, visitante: `Vencedor Jogo ${i*2 + 2}`, jogado: false, data_jogo: formatarData(sabado2) };
+
+    let semisCopa = {};
+    for (let i = 0; i < 2; i++) semisCopa[`jogo_${i+13}`] = { mandante: `Vencedor Jogo ${i*2 + 9}`, visitante: `Vencedor Jogo ${i*2 + 10}`, jogado: false, data_jogo: formatarData(sabado3) };
+
+    let finalCopa = { "jogo_15": { mandante: "Vencedor Jogo 13", visitante: "Vencedor Jogo 14", jogado: false, data_jogo: formatarData(sabado4) } };
+
+    // MUNDIAL: Acontece no Domingo seguinte à última rodada (diaLiga já representa o dia depois da rodada 38)
+    let dataMundial = obterProximoDia(diaLiga, 0, 16);
+    let jogoMundial = { "jogo_mundial": { mandante: "Campeão Nacional", visitante: "Campeão da Copa", jogado: false, data_jogo: formatarData(dataMundial) } };
+
+    // Sanitiza e envia, prevenindo qualquer rejeição por undefined
+    let payload = JSON.parse(JSON.stringify({
+        serieA: calSerieA,
+        serieB: calSerieB,
+        copa: { oitavas: oitavasCopa, quartas: quartasCopa, semis: semisCopa, final: finalCopa, mundial: jogoMundial },
+        rodadaAtual: 1
+    }));
+
+    await db.ref(`ligas/${liga}/calendario`).set(payload);
 }
 function criarTabelaBerger(times) {
     let rodadasIda = [];
