@@ -537,6 +537,10 @@ function processarNarradorOficial() {
         }
 
         if(velo === 1 && audioLiberado) {
+            // ✨ IMPORTA O LETREIRO DE GOL GIGANTE
+            if (window.parent && window.parent.mostrarLetreiroGol) window.parent.mostrarLetreiroGol(escudoID);
+            else if (window.mostrarLetreiroGol) window.mostrarLetreiroGol(escudoID);
+
             canalEfeitos.src = 'sounds/gol_generico.mp3'; canalEfeitos.play().catch(()=>{});
             setTimeout(() => { canalHino.src = getHino(escudoID); canalHino.volume = 0.4; canalHino.play().catch(()=>{}); }, 1500);
 
@@ -905,4 +909,27 @@ window.gerarPartidaAoVivo = async function() {
         console.error("Erro ao gerar partida:", e);
         alert("Houve um erro ao se conectar com o servidor.");
     }
+};
+
+// ✨ LETREIRO DE GOL ANIMADO NA TV
+window.mostrarLetreiroGol = function(nomeTime) {
+    let div = document.createElement('div');
+    div.style.cssText = "position:fixed; top:25%; left:0; width:100%; text-align:center; z-index:99999; animation: pulsaGol 0.4s infinite alternate; pointer-events:none; text-shadow: 0 0 20px rgba(0,0,0,0.8);";
+    div.innerHTML = `
+        <h1 style="font-size: 80px; color: #fff; margin: 0; text-transform: uppercase; font-style: italic; letter-spacing: 5px;">⚽ GOOOOL!!!</h1>
+        <h2 style="font-size: 45px; color: #ffc107; text-shadow: 3px 3px 5px #000; margin: 0; text-transform: uppercase;">${nomeTime.replace(/_/g, ' ')}</h2>
+    `;
+    document.body.appendChild(div);
+
+    if (!document.getElementById('style-gol-anim')) {
+        let style = document.createElement('style');
+        style.id = 'style-gol-anim';
+        style.innerHTML = `@keyframes pulsaGol { from { transform: scale(0.95); opacity: 0.9; } to { transform: scale(1.05); opacity: 1; } }`;
+        document.head.appendChild(style);
+    }
+    setTimeout(() => {
+        div.style.transition = "opacity 0.5s";
+        div.style.opacity = "0";
+        setTimeout(() => div.remove(), 500);
+    }, 4000);
 };

@@ -196,8 +196,9 @@ function carregarVisaoGeralClube() {
                     <div style="width: ${moral}%; background: ${corMoral}; height: 100%; transition: width 1s ease-in-out; border-radius: 6px;"></div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button onclick="darColetivaImprensa()" style="flex: 1; background: #333; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🎤 Dar Coletiva</button>
-                    <button onclick="pagarBichoExtra()" style="flex: 1; background: #ff8c00; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💰 Pagar Bicho Extra</button>
+                    <button onclick="darColetivaImprensa()" style="flex: 1; background: #333; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🎤 Coletiva</button>
+                    <button onclick="pagarBichoExtra()" style="flex: 1; background: #ff8c00; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💰 Bicho Extra</button>
+                    <button onclick="recolherPatrocinio()" style="flex: 1; background: #007bff; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">📺 Cota de TV</button>
                 </div>
             </div>
         </div>
@@ -277,7 +278,7 @@ function carregarVisaoGeralClube() {
             </div>
 
             <!-- WIDGET 6: CENTRO DE TREINAMENTO (CT) -->
-            <div class="widget-card" style="border: 1px solid #007bff; box-shadow: 0 0 15px rgba(0,123,255,0.1);">
+            <div class="widget-card" style="border: 1px solid #007bff; box-shadow: 0 0 15px rgba(0,123,255,0.1); grid-column: 1 / -1;">
                 <h3 style="color: #007bff; margin-bottom: 5px;">CT Intensivo 🏋️‍♂️</h3>
                 <div id="area-ct" style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 5px;">
                     <p style="color:#666; font-size:12px; text-align:center;">Abrindo portões do CT...</p>
@@ -290,8 +291,9 @@ function carregarVisaoGeralClube() {
     carregarEstatisticasGerais(timeIdBanco);
     carregarMiniTabela(timeIdBanco);
     carregarRadarMercado();
-    carregarCentralDeAvisos(timeIdBanco); // 🚨 Inicia a busca por pendências!
-    carregarCentroDeTreinamento(timeIdBanco); // 🏋️ Inicia a lógica do CT!
+    carregarCentralDeAvisos(timeIdBanco);
+    carregarCentroDeTreinamento(timeIdBanco);
+    criarBotaoChatSuperior(); // 💬 Cria o botão de Chat no topo!
 
     if(window.loopNoticias) clearInterval(window.loopNoticias);
     gerarNoticia(meuTime);
@@ -507,6 +509,150 @@ window.pagarBichoExtra = async function() {
     alert("💸 O vestiário virou uma festa! Jogadores ultra motivados (+25% Moral). R$ 500.000 foram descontados do caixa.");
 };
 
+// 📺 SISTEMA DE RETENÇÃO 2 (COTA DE TV / DAILY LOGIN)
+window.recolherPatrocinio = async function() {
+    let hoje = new Date().toLocaleDateString('pt-BR');
+    if (dadosUsuario.ultimo_patrocinio === hoje) return alert("Você já resgatou sua Cota de TV diária! Volte amanhã.");
+
+    let caixa = (dadosUsuario.caixaClube || 0) + 2000000; // Injeta R$ 2.000.000
+
+    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+        caixaClube: caixa,
+        ultimo_patrocinio: hoje
+    });
+    alert("📺 Patrocinador Master depositou R$ 2.000.000 na conta do clube! Volte todos os dias para não perder dinheiro.");
+};
+
+// 💬 SISTEMA DE CHAT GLOBAL (OTIMIZADO PARA MOBILE)
+window.criarBotaoChatSuperior = function() {
+    if (document.getElementById('btn-abrir-chat')) return;
+
+    // Injeta um botão fixo no topo da tela (Centralizado e Elegante)
+    let btn = document.createElement('button');
+    btn.id = 'btn-abrir-chat';
+    btn.innerHTML = '💬 Resenha da Liga';
+    btn.style.cssText = "position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(255, 140, 0, 0.9); color:#fff; border:1px solid #ff8c00; padding:6px 15px; border-radius:20px; font-weight:bold; font-size:12px; cursor:pointer; z-index:1000; box-shadow:0 4px 10px rgba(0,0,0,0.5); backdrop-filter: blur(5px);";
+    btn.onclick = abrirChatLiga;
+    document.body.appendChild(btn);
+};
+
+window.abrirChatLiga = function() {
+    let modal = document.getElementById('modal-chat-liga');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-chat-liga';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+
+        modal.innerHTML = `
+            <div style="background:#1a1a1a; width:95%; max-width:450px; height:85vh; border-radius:12px; border:1px solid #444; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.8); overflow:hidden;">
+
+                <!-- Cabeçalho do Chat -->
+                <div style="padding:15px; border-bottom:1px solid #333; background:#111; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:20px;">💬</span>
+                        <h2 style="color:#ff8c00; margin:0; font-size:16px;">Resenha da Liga</h2>
+                    </div>
+                    <button onclick="document.getElementById('modal-chat-liga').style.display='none'" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer; line-height:1;">&times;</button>
+                </div>
+
+                <!-- Área de Mensagens (Estilo WhatsApp) -->
+                <div id="chat-messages-modal" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:12px; background: #0a0a0a;">
+                    <span style="color:#666; text-align:center; font-size:12px;">Conectando ao satélite...</span>
+                </div>
+
+                <!-- Input Moderno -->
+                <div style="padding:12px; background:#111; border-top:1px solid #333; display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="chat-input-modal" placeholder="Mande uma provocação..." maxlength="100" style="flex:1; padding:12px 15px; border-radius:25px; border:1px solid #444; background:#222; color:#fff; font-size:14px; outline:none;" onkeypress="if(event.key === 'Enter') enviarMensagemChat()">
+                    <button onclick="enviarMensagemChat()" style="background:var(--verde-campo); color:#fff; border:none; border-radius:50%; width:45px; height:45px; display:flex; justify-content:center; align-items:center; cursor:pointer; flex-shrink:0; box-shadow:0 2px 5px rgba(0,0,0,0.3);">
+                        <span style="font-size:18px; margin-left:3px;">➤</span>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Ouve o Firebase apenas uma vez quando o modal é criado
+        db.ref(`ligas/${ligaLogada}/chat`).limitToLast(30).on('value', snap => {
+            const chatContainer = document.getElementById('chat-messages-modal');
+            if(!chatContainer) return;
+
+            const msgs = snap.val();
+            if (!msgs) {
+                chatContainer.innerHTML = `<span style="color:#666; text-align:center; font-size:12px; margin-top:20px;">Nenhuma mensagem. Seja o primeiro a puxar assunto!</span>`;
+                return;
+            }
+
+            let html = "";
+            for (let m in msgs) {
+                let info = msgs[m];
+                let isMe = info.time === dadosUsuario.timeAtual;
+                let timeClean = info.time.replace(/_/g, ' ');
+
+                // Estilo dos Balões (Direita para Você, Esquerda para os Outros)
+                let alinhamento = isMe ? 'align-self: flex-end;' : 'align-self: flex-start;';
+                let fundo = isMe ? 'background: #0056b3;' : 'background: #2a2a2a;';
+                let borda = isMe ? 'border-radius: 12px 12px 0 12px;' : 'border-radius: 12px 12px 12px 0;';
+                let escudoHtml = isMe ? '' : `<img src="${getEscudo(info.time)}" onerror="this.src='esculdos/default.png'" style="width:14px; height:14px; margin-bottom:-2px; margin-right:4px;">`;
+
+                html += `
+                    <div style="max-width:85%; ${alinhamento} ${fundo} ${borda} padding:8px 12px; box-shadow:0 2px 4px rgba(0,0,0,0.3);">
+                        ${isMe ? '' : `<div style="font-size:10px; color:#aaa; margin-bottom:4px; font-weight:bold;">${escudoHtml}${info.autor} <span style="font-weight:normal;">(${timeClean})</span></div>`}
+                        <div style="color:#fff; font-size:13px; word-break: break-word; line-height:1.4;">${info.texto}</div>
+                    </div>
+                `;
+            }
+            chatContainer.innerHTML = html;
+            chatContainer.scrollTop = chatContainer.scrollHeight; // Desce o scroll pro final
+        });
+    }
+
+    modal.style.display = 'flex';
+    // Garante que o scroll vá pro fundo ao abrir a janela
+    setTimeout(() => {
+        let ct = document.getElementById('chat-messages-modal');
+        if(ct) ct.scrollTop = ct.scrollHeight;
+    }, 100);
+};
+
+window.enviarMensagemChat = function() {
+    let input = document.getElementById('chat-input-modal');
+    if(!input) return;
+    let txt = input.value.trim();
+    if(!txt) return;
+
+    db.ref(`ligas/${ligaLogada}/chat`).push({
+        autor: dadosUsuario.nome,
+        time: dadosUsuario.timeAtual,
+        texto: txt,
+        ts: Date.now()
+    });
+    input.value = "";
+    input.focus();
+};
+
+// ✨ LETREIRO DE GOL ANIMADO (X1 e Oficial)
+window.mostrarLetreiroGol = function(nomeTime) {
+    let div = document.createElement('div');
+    div.style.cssText = "position:fixed; top:25%; left:0; width:100%; text-align:center; z-index:99999; animation: pulsaGol 0.4s infinite alternate; pointer-events:none; text-shadow: 0 0 20px rgba(0,0,0,0.8);";
+    div.innerHTML = `
+        <h1 style="font-size: 80px; color: #fff; margin: 0; text-transform: uppercase; font-style: italic; letter-spacing: 5px;">⚽ GOOOOL!!!</h1>
+        <h2 style="font-size: 45px; color: #ffc107; text-shadow: 3px 3px 5px #000; margin: 0; text-transform: uppercase;">${nomeTime.replace(/_/g, ' ')}</h2>
+    `;
+    document.body.appendChild(div);
+
+    if (!document.getElementById('style-gol-anim')) {
+        let style = document.createElement('style');
+        style.id = 'style-gol-anim';
+        style.innerHTML = `@keyframes pulsaGol { from { transform: scale(0.95); opacity: 0.9; } to { transform: scale(1.05); opacity: 1; } }`;
+        document.head.appendChild(style);
+    }
+    setTimeout(() => {
+        div.style.transition = "opacity 0.5s";
+        div.style.opacity = "0";
+        setTimeout(() => div.remove(), 500);
+    }, 4000);
+};
+
 async function carregarCentralDeAvisos(meuTimeId) {
     const ul = document.getElementById('lista-avisos');
     const widget = document.getElementById('widget-avisos');
@@ -692,6 +838,8 @@ async function buscarMeuProximoJogo(timeIdBanco) {
     }
 }
 
+let ultimaNoticia = ""; // Guarda a última notícia para não repetir
+
 async function gerarNoticia(meuTime) {
     const elem = document.getElementById('texto-noticia');
     if(!elem) return;
@@ -700,6 +848,24 @@ async function gerarNoticia(meuTime) {
         `"Especulações fortíssimas indicam que a diretoria do ${meuTime} prepara um bote no mercado!"`,
         `"A torcida não para de cantar! Expectativa de casa cheia para os próximos compromissos."`
     ];
+
+    let hoje = new Date().toLocaleDateString('pt-BR');
+
+    // 🚨 1. PENDÊNCIAS DO SEU CLUBE (Alertas de Ação)
+    if (dadosUsuario.ultimo_patrocinio !== hoje) {
+        noticias.push(`"💰 ALERTA FINANCEIRO: A Cota de TV está disponível na mesa do presidente! Não se esqueça de recolher o patrocínio de hoje."`);
+    }
+    if (dadosUsuario.ultima_coletiva !== hoje) {
+        noticias.push(`"🎤 IMPRENSA NO AGUARDO: Os jornalistas estão na sala de imprensa cobrando a sua Coletiva Diária. Corra para melhorar a moral da torcida!"`);
+    }
+    if ((dadosUsuario.moral || 50) < 50 && dadosUsuario.ultimo_bicho !== hoje) {
+        noticias.push(`"⚠️ CRISE NO VESTIÁRIO? Com a moral em baixa, a diretoria liberou o 'Bicho Extra'. Pague os jogadores para evitar um desastre em campo!"`);
+    }
+
+    let escalados = dadosUsuario.titulares ? dadosUsuario.titulares.filter(id => id) : [];
+    if (escalados.length < 11) {
+        noticias.push(`"🚨 URGENTE: Faltam jogadores na sua escalação titular! O ${meuTime} corre o sério risco de perder por W.O. Vá até a prancheta tática imediatamente."`);
+    }
 
     try {
         const [snapCal, snapMerc, snapPro, snapX1, snapUsers, snapTimes, snapInv] = await Promise.all([
@@ -720,6 +886,20 @@ async function gerarNoticia(meuTime) {
         const times = snapTimes.val() || {};
         const investidores = snapInv.val() || {};
 
+        // 🚨 2. AVALIAÇÕES DA COMUNIDADE PENDENTES
+        if (proPlayers) {
+            let avalFaltando = 0;
+            for (let dono in proPlayers) {
+                if (dono !== userLogado && proPlayers[dono].status === "avaliando") {
+                    if (!proPlayers[dono].avaliacoes || !proPlayers[dono].avaliacoes[userLogado]) avalFaltando++;
+                }
+            }
+            if (avalFaltando > 0) {
+                noticias.push(`"⭐ OLHEIRO CHAMADO: Existem ${avalFaltando} Pro Player(s) na base aguardando sua nota de avaliação. O futuro da liga depende da sua análise!"`);
+            }
+        }
+
+        // 📰 3. FOFOCAS DA LIGA (Jogos, X1, Mercado)
         if (cal) {
             let rAtual = cal.rodadaAtual || 1;
             let rodadaChave = `rodada_${rAtual}`;
@@ -776,7 +956,7 @@ async function gerarNoticia(meuTime) {
         let ricaços = Object.keys(investidores).filter(k => !investidores[k].is_ia && investidores[k].saldo > 10000000);
         if (ricaços.length > 0) {
             let agiota = ricaços[Math.floor(Math.random() * ricaços.length)];
-            noticias.push(`"🏦 AGIOTA OU GÊNIO? O clube ${agiota.replace(/_/g,' ')} virou o Banco da liga e está emprestando fortunas a juros altos!"`);
+            noticias.push(`"🏦 AGIOTA OU GÊNIO? O clube ${agiota.replace(/_/g,' ')} virou o Banco Central da liga e está emprestando fortunas a juros altos!"`);
         }
 
     } catch(e) { console.error("Erro na IA do Jornal:", e); }
@@ -1893,6 +2073,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             if (velo === 1) {
                 somTorcidaM.volume = 1.0; somTorcidaV.volume = 0.0;
                 somGol.play().catch(()=>{});
+                window.mostrarLetreiroGol(mandante); // ✨ Chama o Letreiro Gigante!
                 setTimeout(() => { canalHino.src = getHino(mandante); canalHino.volume = 0.4; canalHino.play().catch(()=>{}); }, 1500);
                 setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
             } else {
@@ -1905,6 +2086,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             if (velo === 1) {
                 somTorcidaM.volume = 0.0; somTorcidaV.volume = 1.0;
                 somGol.play().catch(()=>{});
+                window.mostrarLetreiroGol(visitante); // ✨ Chama o Letreiro Gigante!
                 setTimeout(() => { canalHino.src = getHino(visitante); canalHino.volume = 0.3; canalHino.play().catch(()=>{}); }, 1500);
                 setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
             } else {
