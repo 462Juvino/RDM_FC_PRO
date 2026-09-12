@@ -527,11 +527,11 @@ window.recolherPatrocinio = async function() {
 window.criarBotaoChatSuperior = function() {
     if (document.getElementById('btn-abrir-chat')) return;
 
-    // Injeta um botão fixo no topo da tela (Centralizado e Elegante)
+    // Botão pequeno, escuro e posicionado logo abaixo da barra superior (top: 65px)
     let btn = document.createElement('button');
     btn.id = 'btn-abrir-chat';
-    btn.innerHTML = '💬 Resenha da Liga';
-    btn.style.cssText = "position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(255, 140, 0, 0.9); color:#fff; border:1px solid #ff8c00; padding:6px 15px; border-radius:20px; font-weight:bold; font-size:12px; cursor:pointer; z-index:1000; box-shadow:0 4px 10px rgba(0,0,0,0.5); backdrop-filter: blur(5px);";
+    btn.innerHTML = '<span style="font-size:13px;">💬</span> Chat';
+    btn.style.cssText = "position:fixed; top:65px; right:15px; background:rgba(0,0,0,0.6); color:#ccc; border:1px solid #444; padding:4px 10px; border-radius:15px; font-size:11px; cursor:pointer; z-index:9999; box-shadow:0 2px 5px rgba(0,0,0,0.5); backdrop-filter: blur(5px); display:flex; align-items:center; gap:4px; transition: 0.2s;";
     btn.onclick = abrirChatLiga;
     document.body.appendChild(btn);
 };
