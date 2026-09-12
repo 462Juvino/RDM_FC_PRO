@@ -659,11 +659,13 @@ async function carregarCentralDeAvisos(meuTimeId) {
     let avisos = [];
 
     try {
-        const [snapMsgs, snapMercado, snapPros, snapTime] = await Promise.all([
+        // 🟢 Adicionado a busca da Arena X1 na lista de promessas
+        const [snapMsgs, snapMercado, snapPros, snapTime, snapX1] = await Promise.all([
             db.ref(`ligas/${ligaLogada}/caixa_mensagens/${userLogado}`).once('value'),
             db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value'),
             db.ref(`ligas/${ligaLogada}/pro_players`).once('value'),
-            db.ref(`banco_global_times/${meuTimeId}`).once('value')
+            db.ref(`banco_global_times/${meuTimeId}`).once('value'),
+            db.ref(`ligas/${ligaLogada}/x1_desafios`).once('value')
         ]);
 
         // Estilo blindado para os botões da central (Evita herdar botões gigantes do layout principal)
@@ -725,6 +727,38 @@ async function carregarCentralDeAvisos(meuTimeId) {
                     <button onclick="window.location.href='perfil.html'" style="${btnStyle} background:#00b853; color:#fff;">Avaliar</button>
                 </li>
             `);
+        }
+
+        // 3.5 Arena X1 (Desafios)
+        const desafios = snapX1.val();
+        if (desafios) {
+            let desafiosPendentes = 0;
+            let desafiosAceitos = 0;
+            for (let id in desafios) {
+                let d = desafios[id];
+                if (d.desafiado === meuTimeId && d.status === 'pendente') desafiosPendentes++;
+                if ((d.desafiante === meuTimeId || d.desafiado === meuTimeId) && d.status === 'aceito') desafiosAceitos++;
+            }
+            if (desafiosPendentes > 0) {
+                avisos.push(`
+                    <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding-right: 10px;">
+                            <strong style="color:#dc3545;">⚔️ Arena X1:</strong> <span style="color:#ccc;">Você recebeu ${desafiosPendentes} novo(s) desafio(s)! Defenda a honra do clube.</span>
+                        </div>
+                        <button onclick="abrirModalX1(); setTimeout(() => renderAbaX1('rec'), 500);" style="${btnStyle} background:#dc3545; color:#fff;">Ver Desafios</button>
+                    </li>
+                `);
+            }
+            if (desafiosAceitos > 0) {
+                avisos.push(`
+                    <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding-right: 10px;">
+                            <strong style="color:#ff8c00;">📺 Transmissão X1:</strong> <span style="color:#ccc;">Temos ${desafiosAceitos} partida(s) da Arena prontas para iniciar.</span>
+                        </div>
+                        <button onclick="abrirModalX1()" style="${btnStyle} background:#ff8c00; color:#fff;">Ir para Arena</button>
+                    </li>
+                `);
+            }
         }
 
         // 4. Plantel Curto (Crítico!)
@@ -1705,19 +1739,21 @@ window.enviarDesafioX1 = async function() {
             linhaTempoX1.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo!` });
         }
 
-        if (golsM === golsV) {
-            linhaTempoX1.push({ minuto: 95, tipo: 'penaltis', texto: `⚖️ Fim do tempo normal! O duelo vai para os PÊNALTIS!` });
-            if (Math.random() > 0.5) { golsM++; linhaTempoX1.push({ minuto: 99, tipo: 'gol_m', texto: `🏆 O MANDANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
-            else { golsV++; linhaTempoX1.push({ minuto: 99, tipo: 'gol_v', texto: `💀 O VISITANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
-        }
         linhaTempoX1.sort((a,b) => a.minuto - b.minuto);
         // --- FIM DA GERAÇÃO DE LANCES ---
 
+        let empate = (golsM === golsV);
         let venci = golsM > golsV;
+        let txtFim = "";
 
-        let txtFim = (tipo === 'dinheiro')
-            ? (venci ? `Você faturou ${formatarDinheiro(apostaValidada.valor)} em cima da máquina!` : `A máquina limpou ${formatarDinheiro(apostaValidada.valor)} do seu caixa.`)
-            : (venci ? `O passe de ${apostaValidada.dados_adv.nome} agora é seu!` : `Adeus! O seu jogador ${apostaValidada.dados_meu.nome} fez as malas.`);
+        if (empate) {
+            txtFim = `EMPATE! Ninguém venceu a aposta e a Arena cobrou taxa dupla de R$ 10.000 do seu caixa!`;
+            apostaValidada.empate = true;
+        } else if (tipo === 'dinheiro') {
+            txtFim = (venci ? `Você faturou ${formatarDinheiro(apostaValidada.valor)} da máquina! (Taxa da Arena: R$ 5.000)` : `A máquina levou ${formatarDinheiro(apostaValidada.valor)}! (Taxa da Arena: R$ 5.000)`);
+        } else {
+            txtFim = (venci ? `O passe de ${apostaValidada.dados_adv.nome} agora é seu! (Taxa da Arena: R$ 5.000)` : `Adeus! O seu jogador ${apostaValidada.dados_meu.nome} fez as malas. (Taxa da Arena: R$ 5.000)`);
+        }
 
         reproduzirTransmissaoX1(meuTime, oponente, linhaTempoX1, golsM, golsV, venci, txtFim, true, apostaValidada);
     } else {
@@ -1947,14 +1983,18 @@ window.iniciarTransmissaoX1 = async function(id) {
         await db.ref().update(updates);
     }
 
+    let empate = (d.golsM === d.golsV);
     let isVitoriaMinha = isDesafiante ? (d.golsM > d.golsV) : (d.golsV > d.golsM);
     let txtFim = "";
-    if (d.tipo === 'dinheiro') {
-        txtFim = isVitoriaMinha ? `Você faturou ${formatarDinheiro(d.valor)} do oponente!` : `Você perdeu ${formatarDinheiro(d.valor)} do caixa.`;
+
+    if (empate) {
+        txtFim = `EMPATE! A aposta foi anulada, mas a Arena cobrou R$ 10.000 de taxa dupla do seu caixa.`;
+    } else if (d.tipo === 'dinheiro') {
+        txtFim = isVitoriaMinha ? `Você faturou ${formatarDinheiro(d.valor)} do oponente! (Taxa da Arena: R$ 5.000)` : `Você perdeu ${formatarDinheiro(d.valor)} na aposta. (Taxa da Arena: R$ 5.000)`;
     } else {
         let nomeGanho = isDesafiante ? d.dados_adv.nome : d.dados_meu.nome;
         let nomePerdido = isDesafiante ? d.dados_meu.nome : d.dados_adv.nome;
-        txtFim = isVitoriaMinha ? `O passe de ${nomeGanho} agora é seu!` : `Adeus! Seu jogador ${nomePerdido} fez as malas.`;
+        txtFim = isVitoriaMinha ? `O passe de ${nomeGanho} agora é seu! (Taxa da Arena: R$ 5.000)` : `Adeus! Seu jogador ${nomePerdido} fez as malas. (Taxa da Arena: R$ 5.000)`;
     }
 
     // Toca a transmissão! (O isIADuel aqui vai como false, pois a DB já foi atualizada acima).
@@ -2144,28 +2184,30 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
 
             if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }
 
-            if (velo === 1) {
+            let empateFim = (golsM_final === golsV_final);
+
+            if (velo === 1 && !empateFim) {
                 setTimeout(() => {
                     let campeao = (golsM_final > golsV_final) ? mandante : visitante;
-                    if(golsM_final !== golsV_final) {
-                        canalHino.src = getHino(campeao);
-                        canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
-                        canalHino.play().catch(()=>{});
-                    }
+                    canalHino.src = getHino(campeao);
+                    canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
+                    canalHino.play().catch(()=>{});
                 }, 1500);
             }
 
-            // Gravação no Banco
+            // Gravação no Banco (Para combates contra IA)
             if (isIADuel && apostaValidadaIA) {
                 let updates = {};
-                let v = apostaValidadaIA.valor;
-                let taxa = apostaValidadaIA.taxa || 5000;
+                let taxaFinal = empateFim ? 10000 : (apostaValidadaIA.taxa || 5000);
 
-                if (apostaValidadaIA.tipo === 'dinheiro') {
-                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v - taxa;
-                    else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v - taxa;
+                if (empateFim) {
+                    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - taxaFinal;
+                } else if (apostaValidadaIA.tipo === 'dinheiro') {
+                    let v = apostaValidadaIA.valor;
+                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v - taxaFinal;
+                    else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v - taxaFinal;
                 } else {
-                    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - taxa;
+                    updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - taxaFinal;
                     if (venci) {
                         updates[`banco_global_times/${visitante}/jogadores/${apostaValidadaIA.id_adv}`] = null;
                         updates[`banco_global_times/${mandante}/jogadores/${apostaValidadaIA.id_adv}`] = apostaValidadaIA.dados_adv;
@@ -2177,10 +2219,14 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                 await db.ref().update(updates);
             }
 
+            let corBg = empateFim ? 'rgba(255,140,0,0.3)' : (venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)');
+            let corBorda = empateFim ? '#ff8c00' : (venci ? 'var(--verde-campo)' : '#dc3545');
+            let tituloFim = empateFim ? '⚖️ EMPATE!' : (venci ? '🏆 VITÓRIA!' : '💀 DERROTA!');
+
             modal.style.flexDirection = "column";
             modal.insertAdjacentHTML('beforeend', `
-                <div style="width:90%; max-width:600px; margin-top:15px; padding:15px; background:${venci ? 'rgba(0,184,83,0.3)' : 'rgba(220,53,69,0.3)'}; border:2px solid ${venci ? 'var(--verde-campo)' : '#dc3545'}; border-radius:8px; box-shadow: 0 0 20px ${venci ? 'rgba(0,184,83,0.5)' : 'rgba(220,53,69,0.5)'}; backdrop-filter: blur(10px); text-align:center;">
-                    <h3 style="color:#fff; margin:0; text-shadow: 1px 1px 3px #000;">${venci ? '🏆 VITÓRIA!' : '💀 DERROTA!'}</h3>
+                <div style="width:90%; max-width:600px; margin-top:15px; padding:15px; background:${corBg}; border:2px solid ${corBorda}; border-radius:8px; box-shadow: 0 0 20px ${corBg.replace('0.3', '0.5')}; backdrop-filter: blur(10px); text-align:center;">
+                    <h3 style="color:#fff; margin:0; text-shadow: 1px 1px 3px #000;">${tituloFim}</h3>
                     <p style="color:#ddd; font-size:15px; font-weight:bold;">${txtFim}</p>
                     <button onclick="window.location.reload()" style="padding:12px 25px; background:#fff; color:#000; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; font-size:16px;">Retornar ao Dashboard</button>
                 </div>
