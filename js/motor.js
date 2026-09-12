@@ -750,6 +750,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 if(j.atributos) {
                     j.atributos.ataque = Math.max(1, (j.atributos.ataque || 0) - (j.bonus_ranking_ativo.ataque || 0));
                     j.atributos.habilidade = Math.max(1, (j.atributos.habilidade || 0) - (j.bonus_ranking_ativo.habilidade || 0));
+                    j.atributos.defesa = Math.max(1, (j.atributos.defesa || 0) - (j.bonus_ranking_ativo.defesa || 0));
                 }
                 j.bonus_ranking_ativo = null;
             }
@@ -762,19 +763,29 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         let topAsts = [...todosParaRanking].filter(j => j.dados.estatisticas && j.dados.estatisticas.assistencias > 0)
             .sort((a,b) => b.dados.estatisticas.assistencias - a.dados.estatisticas.assistencias).slice(0, 10);
 
+        let topGks = [...todosParaRanking].filter(j => j.dados.posicoes && j.dados.posicoes.p === "Goleiro" && j.dados.estatisticas && j.dados.estatisticas.jogos > 0)
+            .sort((a,b) => (a.dados.estatisticas.gols_sofridos || 0) - (b.dados.estatisticas.gols_sofridos || 0)).slice(0, 10);
+
         // 3. Injeta a Bonificação (1º ganha 5.0, caindo 0.5 até o 10º ganhar 0.5)
         topGols.forEach((jog, i) => {
             let bonus = 5.0 - (i * 0.5);
-            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0 };
+            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0, defesa: 0 };
             jog.dados.bonus_ranking_ativo.ataque = bonus;
             jog.dados.atributos.ataque = (jog.dados.atributos.ataque || 0) + bonus;
         });
 
         topAsts.forEach((jog, i) => {
             let bonus = 5.0 - (i * 0.5);
-            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0 };
+            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0, defesa: 0 };
             jog.dados.bonus_ranking_ativo.habilidade = bonus;
             jog.dados.atributos.habilidade = (jog.dados.atributos.habilidade || 0) + bonus;
+        });
+
+        topGks.forEach((jog, i) => {
+            let bonus = 5.0 - (i * 0.5);
+            jog.dados.bonus_ranking_ativo = jog.dados.bonus_ranking_ativo || { ataque: 0, habilidade: 0, defesa: 0 };
+            jog.dados.bonus_ranking_ativo.defesa = bonus;
+            jog.dados.atributos.defesa = (jog.dados.atributos.defesa || 0) + bonus;
         });
 
         // 4. A Regra de Ouro: O Valor de Mercado obedece ao OVR Dinâmico

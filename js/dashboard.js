@@ -243,14 +243,18 @@ function carregarVisaoGeralClube() {
             <!-- WIDGET 3: ESTATÍSTICAS INTEGRADAS -->
             <div class="widget-card">
                 <h3>Destaques da Liga <span>🔥</span></h3>
-                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-                    <div style="flex: 1; min-width: 150px; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333;">
-                        <div style="font-size: 11px; color: #ff8c00; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Top Gols ⚽</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+                    <div style="flex: 1; min-width: 100px; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333;">
+                        <div style="font-size: 11px; color: #ff8c00; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Gols ⚽</div>
                         <ul id="lista-top-gols" class="lista-info" style="font-size: 12px;"></ul>
                     </div>
-                    <div style="flex: 1; min-width: 150px; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333;">
-                        <div style="font-size: 11px; color: var(--verde-campo); font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Top Assist. 👟</div>
+                    <div style="flex: 1; min-width: 100px; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333;">
+                        <div style="font-size: 11px; color: var(--verde-campo); font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Asts 👟</div>
                         <ul id="lista-top-asts" class="lista-info" style="font-size: 12px;"></ul>
+                    </div>
+                    <div style="flex: 1; min-width: 100px; background: #1a1a1a; padding: 10px; border-radius: 6px; border: 1px solid #333;">
+                        <div style="font-size: 11px; color: #007bff; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Goleiros 🧤</div>
+                        <ul id="lista-top-gks" class="lista-info" style="font-size: 12px;"></ul>
                     </div>
                 </div>
             </div>
@@ -688,110 +692,100 @@ async function buscarMeuProximoJogo(timeIdBanco) {
     }
 }
 
-// ========================================================
-// 6. O JORNAL DINÂMICO (IA DE NOTÍCIAS)
-// ========================================================
-let ultimaNoticia = ""; // Guarda a última notícia para não repetir
-
 async function gerarNoticia(meuTime) {
     const elem = document.getElementById('texto-noticia');
     if(!elem) return;
 
     let noticias = [
-        `"Especulações fortíssimas indicam que a diretoria do ${meuTime} está preparando um bote no mercado!"`,
-        `"O campeonato esquenta e a imprensa já questiona as táticas escolhidas para a próxima rodada."`,
-        `"Fofoca de corredor: Treinadores adversários estão passando a madrugada estudando o esquema tático do ${meuTime}."`,
-        `"Preparador físico em alerta: A maratona insana de jogos vai testar a resistência e o fôlego dos elencos."`,
-        `"Clima tenso? Fontes anônimas dizem que a cobrança por resultados está aumentando nos bastidores."`,
-        `"A torcida não para de cantar! Há uma expectativa de quebra de recorde de público para os próximos compromissos da liga."`,
-        `"Olho no cofre! Especialistas financeiros alertam para a inflação e pedem cautela nos leilões do mercado da bola."`,
-        `"Fim da linha para os veteranos? As novas promessas da base (Pro Players) estão pedindo passagem nos treinos desta semana."`
+        `"Especulações fortíssimas indicam que a diretoria do ${meuTime} prepara um bote no mercado!"`,
+        `"A torcida não para de cantar! Expectativa de casa cheia para os próximos compromissos."`
     ];
 
     try {
-        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
-        const cal = snapCal.val();
+        const [snapCal, snapMerc, snapPro, snapX1, snapUsers, snapTimes, snapInv] = await Promise.all([
+            db.ref(`ligas/${ligaLogada}/calendario`).once('value'),
+            db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value'),
+            db.ref(`ligas/${ligaLogada}/pro_players`).once('value'),
+            db.ref(`ligas/${ligaLogada}/x1_desafios`).once('value'),
+            db.ref(`ligas/${ligaLogada}/usuarios`).once('value'),
+            db.ref('banco_global_times').once('value'),
+            db.ref(`ligas/${ligaLogada}/banco_investidores`).once('value')
+        ]);
 
-        // 1. FOFOCA SOBRE RESULTADOS (Goleadas e Seu Time)
-        if (cal && cal.rodadaAtual > 1) {
-            let rodadaAnterior = `rodada_${cal.rodadaAtual - 1}`;
-            let jogosA = cal.serieA ? cal.serieA[rodadaAnterior] : {};
-            let jogosB = cal.serieB ? cal.serieB[rodadaAnterior] : {};
-            let jogos = {...jogosA, ...jogosB};
+        const cal = snapCal.val();
+        const propostas = snapMerc.val();
+        const proPlayers = snapPro.val();
+        const desafios = snapX1.val();
+        const usuarios = snapUsers.val() || {};
+        const times = snapTimes.val() || {};
+        const investidores = snapInv.val() || {};
+
+        if (cal) {
+            let rAtual = cal.rodadaAtual || 1;
+            let rodadaChave = `rodada_${rAtual}`;
+            let jogos = {...(cal.serieA?.[rodadaChave]||{}), ...(cal.serieB?.[rodadaChave]||{})};
 
             for (let j in jogos) {
                 let jogo = jogos[j];
-                if (jogo.jogado || jogo.linhaDoTempo) {
-                    let m = jogo.mandante.replace(/_/g,' ');
-                    let v = jogo.visitante.replace(/_/g,' ');
-                    let dif = Math.abs(jogo.placarMandante - jogo.placarVisitante);
-
-                    // Notícias de Goleada (3 gols ou mais de diferença)
-                    if (dif >= 3) {
-                        let humilhado = jogo.placarMandante < jogo.placarVisitante ? m : v;
-                        let carrasco = jogo.placarMandante > jogo.placarVisitante ? m : v;
-                        noticias.push(`"VEXAME! O time do ${humilhado} foi atropelado e humilhado pelo ${carrasco} na última rodada. Clima tenso no vestiário!"`);
-                        noticias.push(`"Máquina de gols! A torcida do ${carrasco} está em êxtase após a goleada brutal de ontem."`);
+                if (!jogo.jogado) {
+                    let isHumanoM = Object.values(usuarios).some(u => u.timeAtual === jogo.mandante);
+                    let isHumanoV = Object.values(usuarios).some(u => u.timeAtual === jogo.visitante);
+                    if (isHumanoM && isHumanoV) {
+                        noticias.push(`"🔥 CLÁSSICO À VISTA! O duelo de gigantes entre ${jogo.mandante.replace(/_/g,' ')} e ${jogo.visitante.replace(/_/g,' ')} promete parar a liga nesta rodada!"`);
                     }
+                }
+            }
 
-                    // Notícias sobre o SEU TIME especificamente
-                    if (jogo.mandante === dadosUsuario.timeAtual || jogo.visitante === dadosUsuario.timeAtual) {
-                        let meusGols = jogo.mandante === dadosUsuario.timeAtual ? jogo.placarMandante : jogo.placarVisitante;
-                        let advGols = jogo.mandante === dadosUsuario.timeAtual ? jogo.placarVisitante : jogo.placarMandante;
-
-                        if (meusGols > advGols) {
-                            noticias.push(`"Embalou! A cidade está em festa após a bela vitória do ${meuTime} na última rodada!"`);
-                            noticias.push(`"A tática funcionou perfeitamente e o ${meuTime} garantiu +3 pontos importantes no campeonato."`);
-                        } else if (meusGols < advGols) {
-                            noticias.push(`"Sinal de alerta! A dura derrota na última rodada colocou o treinador do ${meuTime} sob pressão da diretoria."`);
-                            noticias.push(`"Reunião a portas fechadas: O elenco do ${meuTime} tenta entender os erros cometidos na última partida."`);
-                        } else {
-                            noticias.push(`"Jogo truncado! O empate na última rodada deixou um gosto amargo para os torcedores do ${meuTime}."`);
-                        }
+            if (rAtual > 1) {
+                let rAnt = `rodada_${rAtual - 1}`;
+                let jogosAnt = {...(cal.serieA?.[rAnt]||{}), ...(cal.serieB?.[rAnt]||{})};
+                for (let j in jogosAnt) {
+                    let jogo = jogosAnt[j];
+                    if (jogo.jogado && Math.abs(jogo.placarMandante - jogo.placarVisitante) >= 3) {
+                        let humilhado = jogo.placarMandante < jogo.placarVisitante ? jogo.mandante : jogo.visitante;
+                        let carrasco = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
+                        noticias.push(`"🛑 VEXAME! A imprensa não perdoa a surra que o ${humilhado.replace(/_/g,' ')} tomou do ${carrasco.replace(/_/g,' ')} na rodada anterior."`);
                     }
                 }
             }
         }
 
-        // 2. FOFOCAS SOBRE JOGADORES PRO E AVALIAÇÕES
-        const snapPro = await db.ref(`ligas/${ligaLogada}/pro_players`).once('value');
-        const proPlayers = snapPro.val();
-        if (proPlayers) {
-            for(let key in proPlayers) {
-                let p = proPlayers[key];
-                if (p.nota_comunidade) {
-                    let nota = parseFloat(p.nota_comunidade);
-                    if (nota >= 4.0) noticias.push(`"Craque isolado! O atleta ${p.nome} vem encantando o país. A comunidade o avaliou com nota ${nota}⭐ e os gigantes já abrem o cofre!"`);
-                    else if (nota <= 2.5) noticias.push(`"Decepção da base? O jovem ${p.nome} foi chamado de 'perna de pau' pelos treinadores da liga (Média ${nota}⭐). Será que ele dá a volta por cima?"`);
-                } else if (p.status === "avaliando") {
-                    noticias.push(`"Olho vivo: A promessa ${p.nome} acabou de se formar na base e aguarda a impiedosa avaliação dos técnicos da liga!"`);
+        if (desafios) {
+            for (let id in desafios) {
+                let d = desafios[id];
+                if (d.status === 'finalizado') {
+                    let v = d.golsM > d.golsV ? d.desafiante : d.desafiado;
+                    let p = d.golsM > d.golsV ? d.desafiado : d.desafiante;
+                    let txtAposta = d.tipo === 'dinheiro' ? `limpou o caixa` : `roubou o passe do atleta`;
+                    noticias.push(`"⚔️ ARENA X1: O bicho pegou! O ${v.replace(/_/g,' ')} deu uma aula, amassou o ${p.replace(/_/g,' ')} e ${txtAposta}!"`);
                 }
             }
         }
 
-        // 3. FOFOCAS DE MERCADO
-        const snapMercado = await db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value');
-        const propostas = snapMercado.val();
         if (propostas) {
-            for(let idAlvo in propostas) {
+            for (let idAlvo in propostas) {
                 let lances = Object.keys(propostas[idAlvo]).length;
-                if(lances > 1) {
-                    noticias.push(`"LEILÃO ABERTO! Um jogador misterioso está sendo disputado a tapa por ${lances} clubes diferentes neste exato momento!"`);
-                } else {
-                    noticias.push(`"Rumores quentes: Maletas de dinheiro circulam nos bastidores. Uma transferência bombástica pode estourar a qualquer momento."`);
+                if (lances > 1) {
+                    let nomeAlvo = "Um craque misterioso";
+                    for(let t in times) { if(times[t].jogadores && times[t].jogadores[idAlvo]) { nomeAlvo = times[t].jogadores[idAlvo].nome; break; } }
+                    noticias.push(`"💼 LEILÃO PEGANDO FOGO! O telefone não para. ${nomeAlvo} já tem ${lances} clubes brigando a tapa pela sua contratação!"`);
                 }
             }
         }
+
+        let ricaços = Object.keys(investidores).filter(k => !investidores[k].is_ia && investidores[k].saldo > 10000000);
+        if (ricaços.length > 0) {
+            let agiota = ricaços[Math.floor(Math.random() * ricaços.length)];
+            noticias.push(`"🏦 AGIOTA OU GÊNIO? O clube ${agiota.replace(/_/g,' ')} virou o Banco da liga e está emprestando fortunas a juros altos!"`);
+        }
+
     } catch(e) { console.error("Erro na IA do Jornal:", e); }
 
     let noticiaSorteada;
-    // Sorteia até achar uma diferente da última que apareceu na tela
-    do {
-        noticiaSorteada = noticias[Math.floor(Math.random() * noticias.length)];
+    do { noticiaSorteada = noticias[Math.floor(Math.random() * noticias.length)];
     } while (noticiaSorteada === ultimaNoticia && noticias.length > 1);
 
     ultimaNoticia = noticiaSorteada;
-
     elem.style.opacity = 0;
     setTimeout(() => {
         elem.innerText = noticiaSorteada;
@@ -837,6 +831,15 @@ async function carregarEstatisticasGerais(meuTimeId) {
             htmlAsts += `<li style="padding: 4px 0;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.estatisticas.assistencias}</span></li>`;
         });
         document.getElementById('lista-top-asts').innerHTML = htmlAsts;
+
+        // GOLEIROS (Muralhas)
+        let goleiros = [...todosJogadores].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos > 0).sort((a, b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)).slice(0, 5);
+        let htmlGks = goleiros.length === 0 ? '<li><span style="color:#666;">Aguardando...</span></li>' : '';
+        goleiros.forEach(j => {
+            let nomeCurto = j.nome.split(" ")[0];
+            htmlGks += `<li style="padding: 4px 0;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#007bff; font-weight:bold;">${j.estatisticas.gols_sofridos} GS</span></li>`;
+        });
+        document.getElementById('lista-top-gks').innerHTML = htmlGks;
 
     } catch (e) { console.error(e); }
 }
