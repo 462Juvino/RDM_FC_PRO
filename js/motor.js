@@ -52,10 +52,12 @@ async function checarRotinas(liga) {
         // Separa as checagens: A liga tem que rodar as 19h e a Copa às 20h!
         let ultCamp = sis.ultima_simulacao_camp;
         let ultCopa = sis.ultima_simulacao_copa;
+        let ultMoral = sis.ultima_queda_moral; // 🟢 NOVO: Checagem da Moral
 
         let rodarCampHoje = (hora >= HORA_CAMP && ultCamp !== dataAtualStr);
         let rodarCopaHoje = (hora >= HORA_COPA && ultCopa !== dataAtualStr);
         let rodarAtrasados = (!ultCamp || ultCamp < ontemStr);
+        let rodarQuedaMoral = (hora >= 6 && ultMoral !== dataAtualStr); // 🟢 NOVO: 6h da manhã derruba a moral
 
         // 🔍 OLHEIRO DO MERCADO: Verifica se há propostas pendentes que já passaram das 19h ou são de ontem
         const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
@@ -84,7 +86,7 @@ async function checarRotinas(liga) {
         }
 
         // Se já rodou tudo na hora certa, ele descansa.
-        if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados && !temMercadoPendente) return;
+        if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados && !temMercadoPendente && !rodarQuedaMoral) return;
 
         const lockRef = db.ref(`ligas/${liga}/sistema/lock_simulacao`);
         lockRef.transaction((currentLock) => {
@@ -94,14 +96,14 @@ async function checarRotinas(liga) {
             if (committed) {
                 console.log("🔥 MOTOR P2P: Iniciando varredura Oficial!");
                 // Aqui nós CHAMAMOS a função, e não criamos ela!
-                processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados);
+                processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados, rodarQuedaMoral);
             }
         });
     } catch (e) { console.error("Falha no Motor P2P:", e); }
 }
 
 // A função que faz a mágica acontecer!
-async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados) {
+async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoje, rodarCopaHoje, rodarAtrasados, rodarQuedaMoral) {
     try {
         const snapTimesGlobais = await db.ref('banco_global_times').once('value');
         const times = snapTimesGlobais.val() || {};
@@ -889,6 +891,18 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         // --- PASSO D: FINALIZAR E AVISAR ---
         if (rodarCampHoje) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = dataAtualStr;
         if (rodarCopaHoje) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = dataAtualStr;
+
+        // 🟢 Aplica a queda de moral matinal (10% a menos APENAS para HUMANOS)
+        if (rodarQuedaMoral) {
+            for (let u in usuarios) {
+                // A trava mágica: ignora quem tiver "IA_" no login!
+                if (!u.startsWith('IA_') && usuarios[u].timeAtual && usuarios[u].timeAtual !== "Sem Clube") {
+                    let moralAtual = usuarios[u].moral || 50;
+                    updates[`ligas/${liga}/usuarios/${u}/moral`] = Math.max(0, moralAtual - 10);
+                }
+            }
+            updates[`ligas/${liga}/sistema/ultima_queda_moral`] = dataAtualStr;
+        }
         if (rodarAtrasados) {
             if (!updates[`ligas/${liga}/sistema/ultima_simulacao_camp`]) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = ontemStr;
             if (!updates[`ligas/${liga}/sistema/ultima_simulacao_copa`]) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = ontemStr;

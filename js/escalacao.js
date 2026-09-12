@@ -48,10 +48,13 @@ function carregarElenco(nomeTime) {
         // --- LÓGICA INTELIGENTE DE ESCALAÇÃO E VENDAS ---
         let precisaSalvar = false;
 
-        // 1. Limpa os jogadores que foram vendidos ou devolveram empréstimo (Não estão mais no elenco)
+        // 1. Limpa os jogadores que foram vendidos, devolvidos ou estão suando a camisa no CT
         for (let i = 0; i < titulares.length; i++) {
-            if (titulares[i] && !elencoCompleto[titulares[i]]) {
-                titulares[i] = null; // O jogador foi vendido/saiu, a vaga abre!
+            let idT = titulares[i];
+            let taNoCT = dadosUsuario.ct_ativo && dadosUsuario.ct_ativo.id_jogador === idT;
+
+            if (idT && (!elencoCompleto[idT] || taNoCT)) {
+                titulares[i] = null; // O jogador saiu ou foi treinar, a vaga abre!
                 precisaSalvar = true;
             }
         }
@@ -299,15 +302,22 @@ function renderizarTabela() {
         }
 
         temAlguemNaLista = true;
+        temAlguemNaLista = true;
         let estaEscalado = titulares.includes(id);
+        let estaNoCT = (dadosUsuario.ct_ativo && dadosUsuario.ct_ativo.id_jogador === id);
 
-        let btnHtml = estaEscalado
-            ? `<button class="btn-remover" onclick="removerJogador('${id}')">Remover</button>`
-            : `<button class="btn-escalar" onclick="escalarJogador('${id}')">Escalar</button>`;
+        let btnHtml = "";
+        if (estaNoCT) {
+            btnHtml = `<span style="background: #007bff; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 65px; text-align: center;">No CT 🏋️</span>`;
+        } else if (estaEscalado) {
+            btnHtml = `<button class="btn-remover" onclick="removerJogador('${id}')" style="width: 65px;">Remover</button>`;
+        } else {
+            btnHtml = `<button class="btn-escalar" onclick="escalarJogador('${id}')" style="width: 65px;">Escalar</button>`;
+        }
 
         tbody.innerHTML += `
-            <tr style="${estaEscalado ? 'opacity: 0.5;' : ''}">
-                <td style="text-align: left; font-weight: bold; color: white;">
+            <tr style="${estaEscalado ? 'opacity: 0.5;' : (estaNoCT ? 'opacity: 0.6; background: rgba(0, 123, 255, 0.15);' : '')}">
+                <td style="text-align: left; font-weight: bold; color: ${estaNoCT ? '#007bff' : 'white'};">
                     ${btnHtml} <span style="margin-left:5px; font-size: 13px;">${j.nome || 'Desconhecido'}</span>
                 </td>
                 <td style="font-size: 12px;">${pos.p}</td>

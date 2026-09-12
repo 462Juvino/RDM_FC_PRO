@@ -192,8 +192,12 @@ function carregarVisaoGeralClube() {
                     <span>Aprovação da Diretoria e Torcida</span>
                     <span style="color: ${corMoral}; font-weight: bold; font-size: 15px;">${moral}%</span>
                 </div>
-                <div style="width: 100%; background: #333; height: 12px; border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+                <div style="width: 100%; background: #333; height: 12px; border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); margin-bottom: 10px;">
                     <div style="width: ${moral}%; background: ${corMoral}; height: 100%; transition: width 1s ease-in-out; border-radius: 6px;"></div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button onclick="darColetivaImprensa()" style="flex: 1; background: #333; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🎤 Dar Coletiva</button>
+                    <button onclick="pagarBichoExtra()" style="flex: 1; background: #ff8c00; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💰 Pagar Bicho Extra</button>
                 </div>
             </div>
         </div>
@@ -267,6 +271,14 @@ function carregarVisaoGeralClube() {
                 <div style="flex: 1;"></div>
                 <button class="widget-btn" onclick="abrirModalX1()" style="background: #dc3545; color: white; border: none; font-weight: bold; width: 100%;">Entrar na Arena</button>
             </div>
+
+            <!-- WIDGET 6: CENTRO DE TREINAMENTO (CT) -->
+            <div class="widget-card" style="border: 1px solid #007bff; box-shadow: 0 0 15px rgba(0,123,255,0.1);">
+                <h3 style="color: #007bff; margin-bottom: 5px;">CT Intensivo 🏋️‍♂️</h3>
+                <div id="area-ct" style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 5px;">
+                    <p style="color:#666; font-size:12px; text-align:center;">Abrindo portões do CT...</p>
+                </div>
+            </div>
         </div>
     `;
 
@@ -275,11 +287,221 @@ function carregarVisaoGeralClube() {
     carregarMiniTabela(timeIdBanco);
     carregarRadarMercado();
     carregarCentralDeAvisos(timeIdBanco); // 🚨 Inicia a busca por pendências!
+    carregarCentroDeTreinamento(timeIdBanco); // 🏋️ Inicia a lógica do CT!
 
     if(window.loopNoticias) clearInterval(window.loopNoticias);
     gerarNoticia(meuTime);
     window.loopNoticias = setInterval(() => gerarNoticia(meuTime), 10000);
 }
+
+// ==========================================
+// 🏋️ CENTRO DE TREINAMENTO (CT) TEMPORIZADO
+// ==========================================
+let timerCT = null;
+
+async function carregarCentroDeTreinamento(meuTimeId) {
+    const areaCT = document.getElementById('area-ct');
+    if (!areaCT) return;
+
+    try {
+        const [snapUser, snapTime] = await Promise.all([
+            db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value'),
+            db.ref(`banco_global_times/${meuTimeId}`).once('value')
+        ]);
+
+        let u = snapUser.val();
+        let elenco = snapTime.val()?.jogadores || {};
+        let ct = u.ct_ativo; // { id_jogador, nome, atributo, fim_ts }
+
+        if (timerCT) clearInterval(timerCT);
+
+        if (ct) {
+            let agora = Date.now();
+            if (agora >= ct.fim_ts) {
+                // 🟢 FINALIZADO
+                areaCT.innerHTML = `
+                    <div style="text-align:center; padding: 10px; background: rgba(0,184,83,0.1); border: 1px dashed var(--verde-campo); border-radius: 6px;">
+                        <strong style="color:var(--verde-campo); font-size:14px;">Treino Concluído! ✅</strong>
+                        <p style="font-size:12px; color:#ccc; margin:5px 0;">${ct.nome} finalizou o treino de <strong>${ct.atributo.toUpperCase()}</strong> e está liberado.</p>
+                        <button onclick="concluirTreinoCT('${ct.id_jogador}', '${ct.atributo}', '${meuTimeId}')" style="width:100%; padding:8px; background:var(--verde-campo); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-top:5px;">Resgatar +1 de Atributo</button>
+                    </div>
+                `;
+            } else {
+                // ⏳ ROLANDO (Apenas Visual)
+                const atualizarRelogio = () => {
+                    let f = ct.fim_ts - Date.now();
+                    if (f <= 0) {
+                        carregarCentroDeTreinamento(meuTimeId);
+                        return;
+                    }
+                    let h = Math.floor((f % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    let m = Math.floor((f % (1000 * 60 * 60)) / (1000 * 60));
+                    let s = Math.floor((f % (1000 * 60)) / 1000);
+                    let tempoRestante = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+
+                    if(document.getElementById('ct-relogio')) {
+                        document.getElementById('ct-relogio').innerText = tempoRestante;
+                    }
+                };
+
+                areaCT.innerHTML = `
+                    <div style="text-align:center; padding: 10px; background: #111; border: 1px dashed #444; border-radius: 6px;">
+                        <span style="color:#007bff; font-size:12px; font-weight:bold;">Treinando: ${ct.atributo.toUpperCase()} 🏃‍♂️</span>
+                        <div style="color:#fff; font-size:14px; margin:5px 0;">${ct.nome}</div>
+                        <div id="ct-relogio" style="font-size:22px; color:#ff8c00; font-family:monospace; font-weight:bold;">00:00:00</div>
+                        <span style="color:#666; font-size:10px;">Atleta indisponível para os jogos oficiais.</span>
+                    </div>
+                `;
+                atualizarRelogio();
+                timerCT = setInterval(atualizarRelogio, 1000);
+            }
+        } else {
+            // 🔓 LIVRE
+            let optionsJ = `<option value="">Selecione o Atleta...</option>`;
+            let arrayElenco = Object.keys(elenco).map(k => ({
+                id: k,
+                nome: elenco[k].nome,
+                pos: elenco[k].posicoes ? elenco[k].posicoes.p : 'IND'
+            })).sort((a,b) => a.nome.localeCompare(b.nome));
+
+            for(let jog of arrayElenco) {
+                optionsJ += `<option value="${jog.id}">[${jog.pos}] ${jog.nome}</option>`;
+            }
+
+            areaCT.innerHTML = `
+                <div id="msg-ct-info" style="color:#aaa; font-size:11px; margin-top:0; margin-bottom: 8px; text-align:center;">Duração: 8h. O jogador será desescalado e não jogará partidas oficiais neste período!</div>
+                <select id="ct-select-jog" style="width:100%; padding:8px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-bottom:5px; font-size:12px;">
+                    ${optionsJ}
+                </select>
+                <select id="ct-select-atr" style="width:100%; padding:8px; background:#111; border:1px solid #333; color:#fff; border-radius:4px; margin-bottom:10px; font-size:12px;">
+                    <option value="">Qual Atributo?</option>
+                    <option value="ataque">Ataque</option>
+                    <option value="defesa">Defesa</option>
+                    <option value="forca">Força Física</option>
+                    <option value="velocidade">Velocidade</option>
+                    <option value="habilidade">Habilidade</option>
+                </select>
+                <button onclick="iniciarTreinoCT()" style="width:100%; padding:8px; background:#007bff; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:12px;">Iniciar Treinamento</button>
+            `;
+        }
+    } catch (e) { console.error("Erro no CT:", e); }
+}
+
+window.iniciarTreinoCT = async function() {
+    let idJog = document.getElementById('ct-select-jog').value;
+    let atr = document.getElementById('ct-select-atr').value;
+    let areaCT = document.getElementById('area-ct');
+
+    if (!idJog || !atr) {
+        let msgInfo = document.getElementById('msg-ct-info');
+        if(msgInfo) msgInfo.innerHTML = `<span style="color:#dc3545; font-weight:bold;">Selecione o jogador e o atributo primeiro!</span>`;
+        return;
+    }
+
+    let selectEl = document.getElementById('ct-select-jog');
+    let nomeCompletoTxt = selectEl.options[selectEl.selectedIndex].text;
+    let nomeJog = nomeCompletoTxt.includes(']') ? nomeCompletoTxt.substring(nomeCompletoTxt.indexOf(']') + 2) : nomeCompletoTxt;
+
+    let fimTs = Date.now() + (8 * 60 * 60 * 1000);
+
+    // Efeito Visual de Carregamento sem alerts
+    areaCT.innerHTML = `<div style="text-align:center; padding: 20px; color:#007bff; font-weight:bold;">Equipando CT... 🏃‍♂️💨</div>`;
+
+    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/ct_ativo`).set({
+        id_jogador: idJog,
+        nome: nomeJog,
+        atributo: atr,
+        fim_ts: fimTs
+    });
+
+    // Remove imediatamente da escalação!
+    if (dadosUsuario.titulares) {
+        let novosTitulares = {};
+        for(let pos in dadosUsuario.titulares) {
+            if(dadosUsuario.titulares[pos] !== idJog) {
+                novosTitulares[pos] = dadosUsuario.titulares[pos];
+            }
+        }
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/titulares`).set(novosTitulares);
+    }
+};
+
+window.concluirTreinoCT = async function(idJog, atributo, meuTimeId) {
+    const areaCT = document.getElementById('area-ct');
+    areaCT.innerHTML = `<div style="text-align:center; padding: 20px; color:var(--verde-campo); font-weight:bold;">Avaliando resultados... 📊</div>`;
+
+    try {
+        const snapJ = await db.ref(`banco_global_times/${meuTimeId}/jogadores/${idJog}`).once('value');
+        let j = snapJ.val();
+
+        if (!j) {
+            await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/ct_ativo`).remove();
+            areaCT.innerHTML = `<div style="text-align:center; padding: 15px; color:#dc3545;"><strong>Atleta não encontrado!</strong><br>O treino foi perdido.</div>`;
+            setTimeout(() => carregarCentroDeTreinamento(meuTimeId), 2500);
+            return;
+        }
+
+        if (!j.atributos) j.atributos = {ataque:60, defesa:60, forca:60, velocidade:60, habilidade:60};
+
+        let valAtual = j.atributos[atributo] || 60;
+        if (valAtual < 99) j.atributos[atributo] = valAtual + 1;
+
+        j.valor_mercado = (j.valor_mercado || 1000000) + 500000;
+
+        let updates = {};
+        updates[`banco_global_times/${meuTimeId}/jogadores/${idJog}`] = j;
+        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/ct_ativo`] = null;
+
+        await db.ref().update(updates);
+
+        areaCT.innerHTML = `
+            <div style="text-align:center; padding: 15px; background: rgba(0, 184, 83, 0.1); border: 1px solid var(--verde-campo); border-radius: 6px;">
+                <div style="font-size:30px;">⭐</div>
+                <div style="color:var(--verde-campo); font-weight:bold; margin-top:5px;">Evolução Concluída!</div>
+                <div style="color:#fff; font-size:12px; margin-top:5px;">${j.nome} ganhou +1 em ${atributo.toUpperCase()}.</div>
+            </div>
+        `;
+
+        setTimeout(() => carregarCentroDeTreinamento(meuTimeId), 3500);
+
+    } catch(e) { console.error("Erro ao concluir CT:", e); }
+};
+
+// 🎤 SISTEMA DE RETENÇÃO DIÁRIA (MANUTENÇÃO DA MORAL)
+window.darColetivaImprensa = async function() {
+    let hoje = new Date().toLocaleDateString('pt-BR');
+    if (dadosUsuario.ultima_coletiva === hoje) return alert("Você já deu uma coletiva hoje! A mídia e a torcida estão cansadas da sua voz por hoje.");
+
+    let sucesso = Math.random() > 0.4; // 60% chance de sucesso
+    let moralAtual = dadosUsuario.moral || 50;
+    let novaMoral = sucesso ? Math.min(100, moralAtual + 15) : Math.max(0, moralAtual - 10);
+
+    let msg = sucesso ? "✅ A coletiva foi um sucesso! Você animou os torcedores (+15% Moral)." : "❌ Desastre na coletiva! Você falou besteira e irritou a torcida (-10% Moral).";
+
+    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+        moral: novaMoral,
+        ultima_coletiva: hoje
+    });
+    alert(msg);
+};
+
+window.pagarBichoExtra = async function() {
+    let hoje = new Date().toLocaleDateString('pt-BR');
+    if (dadosUsuario.ultimo_bicho === hoje) return alert("A diretoria vetou! O Bicho Extra só pode ser pago uma vez ao dia.");
+
+    let caixa = dadosUsuario.caixaClube || 0;
+    if (caixa < 500000) return alert("Você não tem R$ 500.000 em caixa para pagar essa premiação!");
+
+    let moralAtual = dadosUsuario.moral || 50;
+    let novaMoral = Math.min(100, moralAtual + 25);
+
+    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+        moral: novaMoral,
+        caixaClube: caixa - 500000,
+        ultimo_bicho: hoje
+    });
+    alert("💸 O vestiário virou uma festa! Jogadores ultra motivados (+25% Moral). R$ 500.000 foram descontados do caixa.");
+};
 
 async function carregarCentralDeAvisos(meuTimeId) {
     const ul = document.getElementById('lista-avisos');
