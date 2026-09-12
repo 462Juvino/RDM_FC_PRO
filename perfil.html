@@ -111,11 +111,11 @@
     <script src="js/perfil.js"></script>
     <script src="js/midia.js"></script>
 
-    <!-- MODAL DE AVALIAÇÃO COMUNITÁRIA -->
-    <div id="modal-avaliacao" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
-        <div style="background: var(--card-bg); width: 100%; max-width: 450px; border-radius: 12px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; overflow: hidden;">
-            <div style="background: #2a2a2a; padding: 15px 20px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0; color: #00b853; font-size: 18px;">🔎 Olheiro Comunitário</h3>
+    <div id="modal-avaliacao" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center;">
+    <!-- 🟢 CORREÇÃO DA ROLAGEM NO CELULAR (max-height e overflow-y auto adicionados) -->
+    <div style="background: #1a1a1a; width: 90%; max-width: 500px; border-radius: 8px; border: 1px solid #444; padding: 20px; max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
+            <h3 style="color: var(--verde-campo); margin: 0;">Olheiro Comunitário</h3>
                 <button onclick="fecharModalAvaliacao()" style="background: transparent; color: #aaa; border: none; font-size: 24px; cursor: pointer; padding: 0; margin: 0; width: auto;">&times;</button>
             </div>
             <div style="padding: 20px; color: #ccc; font-size: 14px;">
