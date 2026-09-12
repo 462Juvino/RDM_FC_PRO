@@ -42,12 +42,97 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('saldo-treinador').innerText = formatarDinheiro(dadosUsuario.caixaClube);
 
         if (dadosUsuario.timeAtual === "Sem Clube" || !dadosUsuario.timeAtual) {
-           mostrarTelaAguardandoSorteio();
+           tentarAssumirTimeIA(); // 🟢 Chama a nova inteligência em vez de travar direto!
         } else {
             carregarVisaoGeralClube();
         }
     });
 });
+
+async function tentarAssumirTimeIA() {
+    try {
+        // 1. Verifica se a liga já foi sorteada (Se já existe calendário)
+        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+        if (!snapCal.exists()) {
+            // A liga ainda não começou, então ele deve aguardar o ADM sortear.
+            mostrarTelaAguardandoSorteio();
+            return;
+        }
+
+        // 2. Se a liga já começou, vamos procurar uma vaga de IA!
+        document.getElementById('area-trabalho').innerHTML = `
+            <div style="text-align: center; margin-top: 50px; padding: 40px;">
+                <div style="font-size: 50px; margin-bottom: 20px; animation: spin 2s linear infinite;">⏳</div>
+                <h2 style="color:#ff8c00;">Procurando clube disponível... 🕵️‍♂️</h2>
+            </div>
+        `;
+
+        const [snapUsers, snapTimes] = await Promise.all([
+            db.ref(`ligas/${ligaLogada}/usuarios`).once('value'),
+            db.ref('banco_global_times').once('value')
+        ]);
+
+        const usuarios = snapUsers.val() || {};
+        const times = snapTimes.val() || {};
+
+        let timesHumanos = [];
+        for (let u in usuarios) {
+            if (!u.startsWith('IA_') && usuarios[u].timeAtual && usuarios[u].timeAtual !== "Sem Clube") {
+                timesHumanos.push(usuarios[u].timeAtual);
+            }
+        }
+
+        // Filtra os times que não são de humanos e não são "fantasmas"
+        let timesIA = Object.keys(times).filter(t => !t.startsWith("Agentes_Livres") && t !== "Fantasma" && !timesHumanos.includes(t));
+
+        if (timesIA.length > 0) {
+            // Sorteia um time da IA para o novato assumir
+            let timeSorteado = timesIA[Math.floor(Math.random() * timesIA.length)];
+            let loginIA = `IA_${timeSorteado}`;
+
+            // Tenta herdar o dinheiro que a IA já tinha, ou cria o caixa base caso ela fosse muito pobre
+            let caixaInicial = 15000000;
+            if (usuarios[loginIA] && usuarios[loginIA].caixaClube) {
+                caixaInicial = usuarios[loginIA].caixaClube;
+            } else {
+                let forcaTotal = 0;
+                if (times[timeSorteado] && times[timeSorteado].jogadores) {
+                    for (let j in times[timeSorteado].jogadores) {
+                        let at = times[timeSorteado].jogadores[j].atributos;
+                        forcaTotal += (at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade);
+                    }
+                }
+                let calcCaixa = 150000000 - (forcaTotal * 100000);
+                caixaInicial = calcCaixa < 15000000 ? 15000000 : calcCaixa;
+            }
+
+            let updates = {};
+            updates[`ligas/${ligaLogada}/usuarios/${userLogado}/timeAtual`] = timeSorteado;
+            updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = caixaInicial;
+            updates[`ligas/${ligaLogada}/usuarios/${userLogado}/moral`] = 50;
+            updates[`ligas/${ligaLogada}/usuarios/${loginIA}`] = null; // Extermina a IA desse clube!
+
+            await db.ref().update(updates);
+
+            alert(`🎉 Sorte grande! Você acaba de assumir o comando do ${timeSorteado.replace(/_/g, ' ')}!`);
+            window.location.reload();
+
+        } else {
+            // A liga está com as 40 vagas ocupadas por jogadores reais
+            document.getElementById('area-trabalho').innerHTML = `
+                <div style="text-align: center; margin-top: 50px; padding: 40px; background: #1a1a1a; border: 1px dashed #dc3545; border-radius: 8px;">
+                    <div style="font-size: 50px; margin-bottom: 20px;">🚫</div>
+                    <h2 style="color: #dc3545; font-size: 28px;">Liga Lotada!</h2>
+                    <p style="color: #ccc; font-size: 16px;">Todos os clubes desta liga já possuem treinadores humanos. Não há vagas disponíveis no momento.</p>
+                </div>
+            `;
+        }
+
+    } catch (e) {
+        console.error("Erro ao assumir time:", e);
+        mostrarTelaAguardandoSorteio();
+    }
+}
 
 function mostrarTelaAguardandoSorteio() {
     const area = document.getElementById('area-trabalho');
