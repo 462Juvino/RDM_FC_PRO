@@ -1658,12 +1658,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             placarM_tela++; document.getElementById('x1-placar-m').innerText = placarM_tela;
             somTorcidaM.volume = 1.0; somTorcidaV.volume = 0.0; // Torcida explode
             somGol.play().catch(()=>{});
-
-            setTimeout(() => {
-                canalHino.src = getHino(mandante);
-                canalHino.volume = 0.4;
-                canalHino.play().catch(()=>{});
-            }, 1500);
+            setTimeout(() => { canalHino.src = getHino(mandante); canalHino.volume = 0.4; canalHino.play().catch(()=>{}); }, 1500);
 
             // ⏳ Espera o show acabar (12s) para soltar a narração
             setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
@@ -1673,12 +1668,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             placarV_tela++; document.getElementById('x1-placar-v').innerText = placarV_tela;
             somTorcidaM.volume = 0.0; somTorcidaV.volume = 1.0; // Torcida explode
             somGol.play().catch(()=>{});
-
-            setTimeout(() => {
-                canalHino.src = getHino(visitante);
-                canalHino.volume = 0.3;
-                canalHino.play().catch(()=>{});
-            }, 1500);
+            setTimeout(() => { canalHino.src = getHino(visitante); canalHino.volume = 0.3; canalHino.play().catch(()=>{}); }, 1500);
 
             setTimeout(() => { canalHino.pause(); canalHino.currentTime = 0; atualizarTorcidas(); narradorOcupado = false; }, 12000);
         }
@@ -1688,7 +1678,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             if (lance.tipo === 'ataque_v') { somTorcidaV.volume = 0.8; }
             setTimeout(() => { atualizarTorcidas(); narradorOcupado = false; }, 3500); // Lances normais travam por 3s
         }
-    }
+    } // 🟢 FALTAVA ESTA CHAVE AQUI PARA FECHAR A FUNÇÃO narrarProximoLance()!
 
     // ⌚ LOOP DO CRONÔMETRO (Só avança se o narrador não estiver celebrando gol!)
     let transmissaoLoop = setInterval(async () => {
@@ -1716,7 +1706,7 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
         if (minutoAtual > 99 || (minutoAtual >= 90 && golsM_final !== golsV_final && !linhaTempo.some(l => l.minuto > minutoAtual))) {
             clearInterval(transmissaoLoop);
             somTorcidaM.pause(); somTorcidaV.pause();
-            somHinoM.pause(); somHinoV.pause();
+            canalHino.pause(); canalHino.currentTime = 0;
             somFim.play().catch(()=>{});
 
             if (relogio) { relogio.innerText = "FIM"; relogio.style.color = "#ff8c00"; }

@@ -461,9 +461,6 @@ function sortearTimesLiga() {
 
         const updates = {};
         treinadoresSorteio.forEach((login, index) => {
-
-        const updates = {};
-        treinadoresSorteio.forEach((login, index) => {
             const timeSorteado = vagasSorteio[index];
             updates[`ligas/${liga}/usuarios/${login}/timeAtual`] = timeSorteado;
 
