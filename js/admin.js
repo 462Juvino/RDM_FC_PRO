@@ -431,11 +431,36 @@ function sortearTimesLiga() {
         const timesOcupados = Object.values(usuarios).map(u => u.timeAtual).filter(t => t && t !== "Sem Clube");
         const timesDisponiveis = Object.keys(times).filter(t => !timesOcupados.includes(t));
 
-        let livresSerieA = timesDisponiveis.filter(t => times[t].divisao === "A").sort(() => Math.random() - 0.5);
-        let livresSerieB = timesDisponiveis.filter(t => times[t].divisao === "B").sort(() => Math.random() - 0.5);
+        // 🟢 NOVA LÓGICA DE SORTEIO: Calcula a força real do elenco para priorizar os mais fortes
+        const getForcaTime = (tId) => {
+            let forcaTotal = 0;
+            if (times[tId] && times[tId].jogadores) {
+                for (let j in times[tId].jogadores) {
+                    let at = times[tId].jogadores[j].atributos;
+                    forcaTotal += (at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade);
+                }
+            }
+            return forcaTotal;
+        };
 
+        // Filtra e ordena Série A do mais forte para o mais fraco
+        let livresSerieA = timesDisponiveis
+            .filter(t => times[t].divisao === "A")
+            .sort((a, b) => getForcaTime(b) - getForcaTime(a));
+
+        // Filtra e ordena Série B do mais forte para o mais fraco
+        let livresSerieB = timesDisponiveis
+            .filter(t => times[t].divisao === "B")
+            .sort((a, b) => getForcaTime(b) - getForcaTime(a));
+
+        // Junta as vagas (A prioridade final será: 1º Série A fortes -> Série A fracos -> Série B fortes -> Série B fracos)
         let vagasSorteio = livresSerieA.concat(livresSerieB);
+
+        // Mistura apenas a ordem dos treinadores (A sorte de quem pega o primeiro da lista)
         treinadoresSorteio.sort(() => Math.random() - 0.5);
+
+        const updates = {};
+        treinadoresSorteio.forEach((login, index) => {
 
         const updates = {};
         treinadoresSorteio.forEach((login, index) => {
