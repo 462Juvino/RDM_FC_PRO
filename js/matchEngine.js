@@ -10,6 +10,7 @@ let divisaoAtual = "A";
 let rodadaSistema = 1;
 let meuJogoId = null;
 let jogoAtual = null;
+window.treinadoresGlobais = {}; // 🟢 Mapeamento global de quem controla quem
 
 // ==========================================
 // MÁQUINA DE ÁUDIO DINÂMICO (P2P QUEUE)
@@ -34,6 +35,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const narracao = document.getElementById('narracao-container');
         if(narracao) narracao.innerHTML = `<div style="color: #aaa; text-align: center; padding: 20px;">Buscando sinal do satélite...</div>`;
+
+        // Busca a lista de treinadores para exibir os nomes na tela de transmissão
+        const snapAllUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        const allUsers = snapAllUsers.val() || {};
+        for(let k in allUsers) {
+            if(allUsers[k].timeAtual && allUsers[k].timeAtual !== "Sem Clube") {
+                window.treinadoresGlobais[allUsers[k].timeAtual] = allUsers[k].nome;
+            }
+        }
 
         const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
         dadosUsuario = snapUser.val();
@@ -192,17 +202,25 @@ function renderizarPartida() {
             document.body.style.backgroundAttachment = "fixed";
         } catch(e) {}
 
-        // 3️⃣ MÁGICA DOS ESCUDOS: Injeção de CSS embutido para crescer a foto e alinhar o texto
+        // 3️⃣ MÁGICA DOS ESCUDOS E NOMES DOS PLAYERS:
         if (lblMandante) {
+            let donoM = window.treinadoresGlobais[jogoAoVivo.mandante] ? `👤 ${window.treinadoresGlobais[jogoAoVivo.mandante]}` : `🤖 IA`;
             lblMandante.innerHTML = `
-                <span style="vertical-align: middle; font-size: 22px;">${jogoAoVivo.mandante.replace(/_/g, ' ')}</span>
+                <div style="display:inline-flex; flex-direction:column; align-items:flex-end; vertical-align: middle;">
+                    <span style="font-size: 22px; line-height:1;">${jogoAoVivo.mandante.replace(/_/g, ' ')}</span>
+                    <span style="font-size: 11px; color:#ff8c00; margin-top:2px;">${donoM}</span>
+                </div>
                 <img src="${getEscudo(jogoAoVivo.mandante)}" onerror="this.src='esculdos/default.png'" style="width: 40px; height: 40px; object-fit: contain; vertical-align: middle; margin-left: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
             `;
         }
         if (lblVisitante) {
+            let donoV = window.treinadoresGlobais[jogoAoVivo.visitante] ? `👤 ${window.treinadoresGlobais[jogoAoVivo.visitante]}` : `🤖 IA`;
             lblVisitante.innerHTML = `
                 <img src="${getEscudo(jogoAoVivo.visitante)}" onerror="this.src='esculdos/default.png'" style="width: 40px; height: 40px; object-fit: contain; vertical-align: middle; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
-                <span style="vertical-align: middle; font-size: 22px;">${jogoAoVivo.visitante.replace(/_/g, ' ')}</span>
+                <div style="display:inline-flex; flex-direction:column; align-items:flex-start; vertical-align: middle;">
+                    <span style="font-size: 22px; line-height:1;">${jogoAoVivo.visitante.replace(/_/g, ' ')}</span>
+                    <span style="font-size: 11px; color:#ff8c00; margin-top:2px;">${donoV}</span>
+                </div>
             `;
         }
 

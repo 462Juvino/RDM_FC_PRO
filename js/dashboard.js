@@ -11,14 +11,26 @@ if (!ligaLogada || !userLogado) {
 }
 
 let dadosUsuario = {};
+window.treinadoresGlobais = {}; // 🟢 Mapeamento global de quem controla quem
 
 // 2. INICIALIZAÇÃO
 window.addEventListener('DOMContentLoaded', () => {
+    // Escuta independente para manter a lista de treinadores sempre atualizada sem bloquear a tela
+    db.ref(`ligas/${ligaLogada}/usuarios`).on('value', snap => {
+        const users = snap.val() || {};
+        window.treinadoresGlobais = {};
+        for(let key in users) {
+            if(users[key].timeAtual && users[key].timeAtual !== "Sem Clube") {
+                window.treinadoresGlobais[users[key].timeAtual] = users[key].nome;
+            }
+        }
+    });
+
+    // Escuta principal do seu usuário logado
     db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).on('value', (snapshot) => {
         dadosUsuario = snapshot.val();
 
         if(!dadosUsuario) {
-            // Se não achar o usuário, vamos usar o nosso padrão elegante e não o alert()
             localStorage.removeItem('treinadorLiga');
             localStorage.removeItem('treinadorUsuario');
             window.location.href = "index.html";
@@ -331,8 +343,11 @@ async function buscarMeuProximoJogo(timeIdBanco) {
         }
 
         if (meuJogo) {
-            const mandante = meuJogo.mandante.replace(/_/g, ' ');
-            const visitante = meuJogo.visitante.replace(/_/g, ' ');
+            let donoM = window.treinadoresGlobais[meuJogo.mandante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[meuJogo.mandante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+            let donoV = window.treinadoresGlobais[meuJogo.visitante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[meuJogo.visitante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+
+            const mandante = meuJogo.mandante.replace(/_/g, ' ') + donoM;
+            const visitante = meuJogo.visitante.replace(/_/g, ' ') + donoV;
             const isMandante = (meuJogo.mandante === timeIdBanco);
 
             let dataHora = meuJogo.data_jogo || "Data a definir";
@@ -583,12 +598,20 @@ async function carregarMiniTabela(meuTimeId) {
             if (i < 4 || ehMeu) {
                 let cor = ehMeu ? "#ff8c00" : "#fff";
                 let peso = ehMeu ? "bold" : "normal";
+                let nomeDono = window.treinadoresGlobais[t.id] ? `<span style="font-size:9px; color:#aaa; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 ${window.treinadoresGlobais[t.id]}</span>` : "";
+
                 html += `
                     <tr style="border-bottom: 1px solid #333; background: ${ehMeu ? 'rgba(255,140,0,0.1)' : 'transparent'};">
                         <td style="padding: 8px 0; color: #aaa;">${i+1}º</td>
-                        <td style="text-align: left; color: ${cor}; font-weight: ${peso};">
-                            <img src="${getEscudo(t.id)}" onerror="this.src='esculdos/default.png'" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 5px;">
-                            ${t.id.replace(/_/g, ' ')}
+                        <td style="text-align: left; color: ${cor}; font-weight: ${peso}; line-height:1.1; padding: 4px 0;">
+                            <div style="display:flex; align-items:center;">
+                                <img src="${getEscudo(t.id)}" onerror="this.src='esculdos/default.png'" style="width: 16px; height: 16px; margin-right: 6px;">
+                                <div style="display:flex; flex-direction:column;">
+                                    <span>${t.id.replace(/_/g, ' ')}</span>
+                                    ${nomeDono}
+                                </div>
+                            </div>
+                        </td>
                         </td>
                         <td>${t.J}</td>
                         <td style="color: ${t.SG > 0 ? 'var(--verde-campo)' : (t.SG < 0 ? '#dc3545' : '#888')};">${t.SG > 0 ? '+' : ''}${t.SG}</td>
@@ -698,7 +721,10 @@ window.abrirDetalhesRadar = function(idAlvo, nomeAlvo, donoAlvo) {
         htmlLances += `
             <div style="background:#111; border:1px solid #333; padding:15px; border-radius:8px; margin-bottom:12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; padding-bottom:8px; margin-bottom:8px;">
-                    <strong style="color:#fff; font-size:15px;">🏢 ${lance.time_comprador.replace(/_/g, ' ')}</strong>
+                    <div style="display:flex; flex-direction:column;">
+                        <strong style="color:#fff; font-size:15px;">🏢 ${lance.time_comprador.replace(/_/g, ' ')}</strong>
+                        <span style="font-size:11px; color:#aaa; margin-top:2px;">👤 ${window.treinadoresGlobais[lance.time_comprador] || "Diretoria (IA)"}</span>
+                    </div>
                     <strong style="color:var(--verde-campo); font-size:16px;">${formatarDinheiro(lance.valor_oferecido)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -937,12 +963,20 @@ window.renderAbaX1 = function(aba) {
 
     if (aba === 'novo') {
         let optionsAdversarios = `<option value="">Selecione um oponente...</option>`;
-        let timesHumanos = Object.values(arenaDadosGlobais.usuarios).map(u => u.timeAtual);
 
         for (let t in arenaDadosGlobais.times) {
             if (t === meuTime || t.startsWith("Agentes_Livres") || t === "Fantasma") continue;
-            let tipo = timesHumanos.includes(t) ? "👤 Player" : "🤖 IA";
-            optionsAdversarios += `<option value="${t}">${t.replace(/_/g, ' ')} (${tipo})</option>`;
+
+            // Busca se tem alguém controlando esse time
+            let donoNome = "🤖 IA";
+            for (let k in arenaDadosGlobais.usuarios) {
+                if (arenaDadosGlobais.usuarios[k].timeAtual === t) {
+                    donoNome = `👤 ${arenaDadosGlobais.usuarios[k].nome}`;
+                    break;
+                }
+            }
+
+            optionsAdversarios += `<option value="${t}">${t.replace(/_/g, ' ')} - ${donoNome}</option>`;
         }
 
         div.innerHTML = `
@@ -993,18 +1027,30 @@ window.renderAbaX1 = function(aba) {
                     botoes = `<button onclick="iniciarTransmissaoX1('${id}')" style="padding:6px 12px; background:#333; color:#aaa; border:1px solid #555; border-radius:4px; cursor:pointer; font-size:11px; width:100%;">Ver Reprise da Partida</button>`;
                 }
 
+                // Descobre o nome do adversário do desafio
+                let nomeAdv = "🤖 IA";
+                for (let k in arenaDadosGlobais.usuarios) {
+                    if (arenaDadosGlobais.usuarios[k].timeAtual === adv) {
+                        nomeAdv = `👤 ${arenaDadosGlobais.usuarios[k].nome}`;
+                        break;
+                    }
+                }
+
                 html += `
                     <div style="background:#111; border:1px solid #333; padding:12px; border-radius:8px; margin-bottom:10px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <strong style="color:#fff; font-size:14px;">${adv.replace(/_/g, ' ')}</strong>
+                            <div style="display:flex; flex-direction:column;">
+                                <strong style="color:#fff; font-size:14px;">${adv.replace(/_/g, ' ')}</strong>
+                                <span style="font-size:10px; color:#ff8c00; margin-top:2px;">${nomeAdv}</span>
+                            </div>
                             <span style="background:rgba(0,0,0,0.5); padding:3px 8px; border-radius:10px; font-size:10px; color:${corStatus}; border:1px solid ${corStatus}; font-weight:bold;">${lblStatus}</span>
                         </div>
                         <div style="font-size:12px; color:#aaa; margin-bottom:12px;">${txtAposta}</div>
                         <div style="text-align:right;">${botoes}</div>
                     </div>
                 `;
-            }
-        }
+            } // Fecha o IF
+        } // 🟢 Fecha o FOR (Esta é a chave mágica que ressucitará o seu painel!)
         div.innerHTML = html || `<p style="text-align:center; color:#666; margin-top:30px;">Nenhum desafio nesta aba.</p>`;
     }
 };
@@ -1099,14 +1145,79 @@ window.enviarDesafioX1 = async function() {
 
     if (isOponenteIA) {
         // IA SIMULATION INSTANT (Fica pronto na hora)
-        let linhaTempoObj = gerarLinhaTempoX1(forcaM, forcaV, meuTime, oponente);
-        let venci = linhaTempoObj.golsM > linhaTempoObj.golsV;
+
+        // --- INÍCIO DA GERAÇÃO DE LANCES DO X1 ---
+        let linhaTempoX1 = [];
+        let golsM = 0; let golsV = 0;
+
+        const sortearX1 = (tId, posicoes = null) => {
+            let el = arenaDadosGlobais.times[tId]?.jogadores ? Object.values(arenaDadosGlobais.times[tId].jogadores) : [];
+            if(posicoes) {
+                let filt = el.filter(j => posicoes.includes(j.posicoes?.p));
+                if(filt.length > 0) return filt[Math.floor(Math.random() * filt.length)];
+            }
+            return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
+        };
+
+        for(let i=0; i<5; i++) {
+            if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
+                let nA = sortearX1(meuTime, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+                linhaTempoX1.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
+                golsM++;
+            }
+            if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
+                let nA = sortearX1(oponente, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+                linhaTempoX1.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
+                golsV++;
+            }
+        }
+
+        for(let i=0; i<16; i++) {
+            let minAleatorio = Math.floor(Math.random()*89)+1;
+            if (minAleatorio === 45) minAleatorio = 46;
+
+            let isM = Math.random() > 0.5;
+            let tAtq = isM ? meuTime : oponente;
+            let tDef = isM ? oponente : meuTime;
+
+            let atk = sortearX1(tAtq, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
+            let mei = sortearX1(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
+            let zag = sortearX1(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
+            let gol = sortearX1(tDef, ["Goleiro"]).nome.split(" ")[0];
+
+            let frases = [
+                `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,
+                `Bela jogada! ${atk} tentou a finta, mas ${zag} fez um desarme cirúrgico!`,
+                `Troca de passes envolvente. ${mei} dita o ritmo.`,
+                `Cruzamento venenoso na área, ${atk} cabeceia e o goleiro ${gol} salva!`,
+                `PERIGO! ${atk} arranca com velocidade, mas o chute vai para fora.`,
+                `MILAGRE! ${atk} finaliza à queima-roupa e ${gol} salva com as pontas dos dedos!`,
+                `Chuteira calibrada! ${mei} arrisca de longe, a bola passa assustando!`,
+                `Falta de ${zag} em cima de ${atk}. O juiz marca a infração.`
+            ];
+            linhaTempoX1.push({ minuto: minAleatorio, tipo: isM ? 'ataque_m' : 'ataque_v', texto: frases[Math.floor(Math.random()*frases.length)] });
+        }
+
+        linhaTempoX1.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Começa o duelo na Arena X1!` });
+        if (!linhaTempoX1.some(l => l.minuto === 45 && (l.tipo === 'gol_m' || l.tipo === 'gol_v'))) {
+            linhaTempoX1.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo!` });
+        }
+
+        if (golsM === golsV) {
+            linhaTempoX1.push({ minuto: 95, tipo: 'penaltis', texto: `⚖️ Fim do tempo normal! O duelo vai para os PÊNALTIS!` });
+            if (Math.random() > 0.5) { golsM++; linhaTempoX1.push({ minuto: 99, tipo: 'gol_m', texto: `🏆 O MANDANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
+            else { golsV++; linhaTempoX1.push({ minuto: 99, tipo: 'gol_v', texto: `💀 O VISITANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
+        }
+        linhaTempoX1.sort((a,b) => a.minuto - b.minuto);
+        // --- FIM DA GERAÇÃO DE LANCES ---
+
+        let venci = golsM > golsV;
 
         let txtFim = (tipo === 'dinheiro')
             ? (venci ? `Você faturou ${formatarDinheiro(apostaValidada.valor)} em cima da máquina!` : `A máquina limpou ${formatarDinheiro(apostaValidada.valor)} do seu caixa.`)
             : (venci ? `O passe de ${apostaValidada.dados_adv.nome} agora é seu!` : `Adeus! O seu jogador ${apostaValidada.dados_meu.nome} fez as malas.`);
 
-        reproduzirTransmissaoX1(meuTime, oponente, linhaTempoObj.eventos, linhaTempoObj.golsM, linhaTempoObj.golsV, venci, txtFim, true, apostaValidada);
+        reproduzirTransmissaoX1(meuTime, oponente, linhaTempoX1, golsM, golsV, venci, txtFim, true, apostaValidada);
     } else {
         // P2P HUMAN - Salva a solicitação na Nuvem
         let idDesafio = `x1_${Date.now()}_${Math.floor(Math.random()*1000)}`;
@@ -1228,11 +1339,74 @@ window.iniciarTransmissaoX1 = async function(id) {
         let forcaM = arenaDadosGlobais.times[mandante]?.forca_base || 500;
         let forcaV = arenaDadosGlobais.times[visitante]?.forca_base || 500;
 
-        let linhaObj = gerarLinhaTempoX1(forcaM, forcaV);
+        // --- INÍCIO DA GERAÇÃO DE LANCES DO X1 (Humano vs Humano) ---
+        let linhaTempoX1 = [];
+        let golsM = 0; let golsV = 0;
 
-        d.linhaDoTempo = linhaObj.eventos;
-        d.golsM = linhaObj.golsM;
-        d.golsV = linhaObj.golsV;
+        const sortearX1 = (tId, posicoes = null) => {
+            let el = arenaDadosGlobais.times[tId]?.jogadores ? Object.values(arenaDadosGlobais.times[tId].jogadores) : [];
+            if(posicoes) {
+                let filt = el.filter(j => posicoes.includes(j.posicoes?.p));
+                if(filt.length > 0) return filt[Math.floor(Math.random() * filt.length)];
+            }
+            return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
+        };
+
+        for(let i=0; i<5; i++) {
+            if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
+                let nA = sortearX1(mandante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+                linhaTempoX1.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
+                golsM++;
+            }
+            if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
+                let nA = sortearX1(visitante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+                linhaTempoX1.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
+                golsV++;
+            }
+        }
+
+        for(let i=0; i<16; i++) {
+            let minAleatorio = Math.floor(Math.random()*89)+1;
+            if (minAleatorio === 45) minAleatorio = 46;
+
+            let isM = Math.random() > 0.5;
+            let tAtq = isM ? mandante : visitante;
+            let tDef = isM ? visitante : mandante;
+
+            let atk = sortearX1(tAtq, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
+            let mei = sortearX1(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
+            let zag = sortearX1(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
+            let gol = sortearX1(tDef, ["Goleiro"]).nome.split(" ")[0];
+
+            let frases = [
+                `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,
+                `Bela jogada! ${atk} tentou a finta, mas ${zag} fez um desarme cirúrgico!`,
+                `Troca de passes envolvente. ${mei} dita o ritmo.`,
+                `Cruzamento venenoso na área, ${atk} cabeceia e o goleiro ${gol} salva!`,
+                `PERIGO! ${atk} arranca com velocidade, mas o chute vai para fora.`,
+                `MILAGRE! ${atk} finaliza à queima-roupa e ${gol} salva com as pontas dos dedos!`,
+                `Chuteira calibrada! ${mei} arrisca de longe, a bola passa assustando!`,
+                `Falta de ${zag} em cima de ${atk}. O juiz marca a infração.`
+            ];
+            linhaTempoX1.push({ minuto: minAleatorio, tipo: isM ? 'ataque_m' : 'ataque_v', texto: frases[Math.floor(Math.random()*frases.length)] });
+        }
+
+        linhaTempoX1.push({ minuto: 1, tipo: 'inicio', texto: `🟢 APITA O ÁRBITRO! Começa o duelo na Arena X1!` });
+        if (!linhaTempoX1.some(l => l.minuto === 45 && (l.tipo === 'gol_m' || l.tipo === 'gol_v'))) {
+            linhaTempoX1.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo!` });
+        }
+
+        if (golsM === golsV) {
+            linhaTempoX1.push({ minuto: 95, tipo: 'penaltis', texto: `⚖️ Fim do tempo normal! O duelo vai para os PÊNALTIS!` });
+            if (Math.random() > 0.5) { golsM++; linhaTempoX1.push({ minuto: 99, tipo: 'gol_m', texto: `🏆 O MANDANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
+            else { golsV++; linhaTempoX1.push({ minuto: 99, tipo: 'gol_v', texto: `💀 O VISITANTE VENCE A DISPUTA DE PÊNALTIS!` }); }
+        }
+        linhaTempoX1.sort((a,b) => a.minuto - b.minuto);
+        // --- FIM DA GERAÇÃO DE LANCES ---
+
+        d.linhaDoTempo = linhaTempoX1;
+        d.golsM = golsM;
+        d.golsV = golsV;
         d.status = 'finalizado';
 
         let updates = {};
@@ -1295,8 +1469,11 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
             <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg, #111, #000); padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:15px; box-shadow: inset 0 2px 10px rgba(255,255,255,0.05);">
                 <div style="flex:1; text-align:right; font-weight:bold; color:var(--verde-campo); font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
                     <div style="display:flex; justify-content:flex-end; align-items:center; gap:6px;">
-                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${mandante.replace(/_/g, ' ')}</span>
-                        <img src="${getEscudo(mandante)}" onerror="this.src='esculdos/default.png'" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">
+                        <div style="display:flex; flex-direction:column; line-height:1.2;">
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${mandante.replace(/_/g, ' ')}</span>
+                            <span style="font-size:10px; color:#ff8c00; margin-top:2px;">${window.treinadoresGlobais && window.treinadoresGlobais[mandante] ? '👤 ' + window.treinadoresGlobais[mandante] : '🤖 IA'}</span>
+                        </div>
+                        <img src="${getEscudo(mandante)}" onerror="this.src='esculdos/default.png'" style="width:30px; height:30px; object-fit:contain; flex-shrink:0;">
                     </div>
                     <div id="x1-placar-m" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
                 </div>
@@ -1307,8 +1484,11 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
 
                 <div style="flex:1; text-align:left; font-weight:bold; color:#dc3545; font-size:15px; text-shadow: 1px 1px 2px #000; min-width: 0;">
                     <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px;">
-                        <img src="${getEscudo(visitante)}" onerror="this.src='esculdos/default.png'" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">
-                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${visitante.replace(/_/g, ' ')}</span>
+                        <img src="${getEscudo(visitante)}" onerror="this.src='esculdos/default.png'" style="width:30px; height:30px; object-fit:contain; flex-shrink:0;">
+                        <div style="display:flex; flex-direction:column; line-height:1.2;">
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${visitante.replace(/_/g, ' ')}</span>
+                            <span style="font-size:10px; color:#ff8c00; margin-top:2px;">${window.treinadoresGlobais && window.treinadoresGlobais[visitante] ? '👤 ' + window.treinadoresGlobais[visitante] : '🤖 IA'}</span>
+                        </div>
                     </div>
                     <div id="x1-placar-v" style="font-size:36px; margin-top:5px; line-height:1;">0</div>
                 </div>

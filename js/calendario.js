@@ -12,10 +12,21 @@ let calendarioCompleto = {}; // Guarda Série A ou B
 let calendarioCopa = {};     // Guarda a Copa
 let rodadaAtualSistema = 1;
 let modoAtual = "camp";      // 'camp' ou 'copa'
+window.treinadoresGlobais = {}; // 🟢 Mapeamento global de quem controla quem
 
 window.addEventListener('DOMContentLoaded', () => {
-    db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value').then(snapshot => {
-        dadosUsuario = snapshot.val();
+    // 1º: Primeiro baixa a lista de todos os técnicos
+    db.ref(`ligas/${ligaLogada}/usuarios`).once('value', snap => {
+        const users = snap.val() || {};
+        window.treinadoresGlobais = {};
+        for(let key in users) {
+            if(users[key].timeAtual && users[key].timeAtual !== "Sem Clube") {
+                window.treinadoresGlobais[users[key].timeAtual] = users[key].nome;
+            }
+        }
+
+        // 2º: Depois carrega o seu usuário
+        dadosUsuario = users[userLogado];
 
         if(!dadosUsuario || dadosUsuario.timeAtual === "Sem Clube") {
             return window.location.href = "dashboard.html";
@@ -172,6 +183,9 @@ function renderizarRodada() {
 
         let subTitulo = modoAtual === "camp" ? "Campeonato Nacional" : "Copa Nacional";
 
+        let donoM = window.treinadoresGlobais[jogo.mandante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.mandante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+        let donoV = window.treinadoresGlobais[jogo.visitante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.visitante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+
         container.innerHTML += `
             <div style="${destaqueBackground} border: 1px solid ${corBorda}; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
 
@@ -181,14 +195,14 @@ function renderizarRodada() {
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
-                    <div style="flex: 1; text-align: right; font-weight: bold; color: ${jogo.mandante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px;">
-                        ${timeMandante} <img src="${getEscudo(jogo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">
+                    <div style="flex: 1; text-align: right; font-weight: bold; color: ${jogo.mandante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px; line-height:1.2;">
+                        ${timeMandante} ${donoM} <img src="${getEscudo(jogo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini" style="vertical-align:top;">
                     </div>
 
                     <div style="background: #111; padding: 5px 12px; border-radius: 6px; font-weight: bold; color: #555; border: 1px solid #333;">X</div>
 
-                    <div style="flex: 1; text-align: left; font-weight: bold; color: ${jogo.visitante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px;">
-                        <img src="${getEscudo(jogo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini"> ${timeVisitante}
+                    <div style="flex: 1; text-align: left; font-weight: bold; color: ${jogo.visitante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px; line-height:1.2;">
+                        <img src="${getEscudo(jogo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini" style="vertical-align:top;"> ${timeVisitante} ${donoV}
                     </div>
                 </div>
 

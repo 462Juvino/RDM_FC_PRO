@@ -9,11 +9,22 @@ let dadosUsuario = {};
 let timesGlobais = {};
 let calendarioLiga = null;
 let divisaoAtiva = "A";
+window.treinadoresGlobais = {}; // 🟢 Mapeamento global de quem controla quem
 
 window.addEventListener('DOMContentLoaded', async () => {
     try {
-        const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
-        dadosUsuario = snapUser.val();
+        // 1º: Primeiro baixa a lista de todos os técnicos
+        const snapAllUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        const allUsers = snapAllUsers.val() || {};
+        window.treinadoresGlobais = {};
+        for(let key in allUsers) {
+            if(allUsers[key].timeAtual && allUsers[key].timeAtual !== "Sem Clube") {
+                window.treinadoresGlobais[allUsers[key].timeAtual] = allUsers[key].nome;
+            }
+        }
+
+        // 2º: Depois carrega o seu usuário
+        dadosUsuario = allUsers[userLogado];
 
         if(!dadosUsuario || dadosUsuario.timeAtual === "Sem Clube") return window.location.href = "dashboard.html";
 
@@ -133,12 +144,19 @@ function renderizarTabela() {
 
         let corNome = time.id === dadosUsuario.timeAtual ? "#ff8c00" : "#fff";
         let pesoNome = time.id === dadosUsuario.timeAtual ? "bold" : "normal";
+        let nomeDono = window.treinadoresGlobais[time.id] ? `<span style="font-size:10px; color:#aaa; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 ${window.treinadoresGlobais[time.id]}</span>` : "";
 
         tbody.innerHTML += `
             <tr class="${classeCSS}">
                 <td>${pos}</td>
-                <td style="text-align: left; color: ${corNome}; font-weight: ${pesoNome}; display: flex; align-items: center;">
-                    <img src="${getEscudo(time.id)}" onerror="this.src='esculdos/default.png'" class="escudo-mini"> ${time.nome}
+                <td style="text-align: left; color: ${corNome}; font-weight: ${pesoNome}; line-height:1.1; padding: 6px 0;">
+                    <div style="display:flex; align-items:center;">
+                        <img src="${getEscudo(time.id)}" onerror="this.src='esculdos/default.png'" class="escudo-mini" style="margin-right: 6px;">
+                        <div style="display:flex; flex-direction:column;">
+                            <span>${time.nome}</span>
+                            ${nomeDono}
+                        </div>
+                    </div>
                 </td>
                 <td class="col-pts">${time.Pts}</td>
                 <td>${time.J}</td>
