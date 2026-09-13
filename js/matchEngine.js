@@ -200,16 +200,50 @@ function renderizarPartida() {
     const narracao = document.getElementById('narracao-container');
 
     if (jogoAoVivo) {
-        jogoAtual = jogoAoVivo;
+            jogoAtual = jogoAoVivo;
 
-        // 2️⃣ MÁGICA DA IMERSÃO: Background Absoluto para o Estádio não falhar!
-        try {
-            document.body.style.background = "transparent";
-            document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.98)), url('${getEstadio(jogoAoVivo.mandante)}')`;
-            document.body.style.backgroundPosition = "center";
-            document.body.style.backgroundSize = "cover";
-            document.body.style.backgroundAttachment = "fixed";
-        } catch(e) {}
+            // 2️⃣ MÁGICA DA IMERSÃO: Background Absoluto para o Estádio não falhar!
+            try {
+                document.body.style.backgroundColor = "#000";
+                document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.40), rgba(18, 18, 18, 0.70)), url('${getEstadio(jogoAoVivo.mandante)}')`;
+                document.body.style.backgroundPosition = "center";
+                document.body.style.backgroundSize = "cover";
+                document.body.style.backgroundAttachment = "fixed";
+
+                // Removemos os fundos pretos da tela principal
+                let containers = document.querySelectorAll('.main-content, .container, main, #app');
+                containers.forEach(div => {
+                    div.style.setProperty('background', 'transparent', 'important');
+                    div.style.setProperty('background-color', 'transparent', 'important');
+                });
+
+                // 🟢 CAÇADOR DE JANELAS (Aplica o Efeito Vidro nas caixas da partida)
+                let aplicarVidro = (elId) => {
+                    let el = document.getElementById(elId);
+                    if (!el) return;
+
+                    // Busca a caixa principal em volta do texto/placar
+                    let pai = el.closest('div[style*="background"], div[style*="border"]');
+                    if (!pai) pai = el.parentElement; // Fallback
+
+                    if (pai) {
+                        pai.style.setProperty('background', 'rgba(18, 18, 18, 0.6)', 'important');
+                        pai.style.setProperty('background-color', 'rgba(18, 18, 18, 0.6)', 'important');
+                        pai.style.setProperty('backdrop-filter', 'blur(5px)', 'important');
+                        pai.style.setProperty('-webkit-backdrop-filter', 'blur(5px)', 'important');
+                        pai.style.setProperty('box-shadow', '0 8px 32px 0 rgba(0,0,0,0.5)', 'important');
+                    }
+                };
+
+                // Executa a caçada exatamente onde o Placar e a Narração estão
+                aplicarVidro('placar-nome-mandante');
+                aplicarVidro('narracao-container');
+
+                // Garante que o interior da lista de texto fique 100% transparente
+                let boxNarracao = document.getElementById('narracao-container');
+                if (boxNarracao) boxNarracao.style.setProperty('background', 'transparent', 'important');
+
+            } catch(e) {}
 
         // 3️⃣ MÁGICA DOS ESCUDOS E NOMES DOS PLAYERS:
         if (lblMandante) {
@@ -376,6 +410,7 @@ function processarNarradorOficial() {
     if (evento.tipo.includes('gol_visitante')) cor = '#dc3545';
     if (evento.tipo === 'penaltis') cor = '#ff8c00';
     if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
+    if (evento.tipo === 'fim') cor = '#dc3545';
 
     let textoFinal = evento.texto;
     if (escudoID) {
@@ -869,6 +904,11 @@ window.gerarPartidaAoVivo = async function() {
             if (!linhaTempo.some(l => l.minuto === 45 && l.tipo.includes('gol'))) {
                 linhaTempo.push({ minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo! Os jogadores vão para o vestiário.` });
             }
+
+            // 🟢 Injeta o Rola a Bola do Segundo Tempo
+            linhaTempo.push({ minuto: 46, tipo: 'inicio', texto: `🟢 Rola a bola para a etapa complementar!` });
+            // 🏁 Injeta o Apito Final (Sempre aparece na TV do celular)
+            linhaTempo.push({ minuto: 94, tipo: 'fim', texto: `🏁 APITO FINAL! O árbitro encerra a partida.` });
 
             if (isMataMata && golsM === golsV && jogo.mandante !== "Fantasma" && jogo.visitante !== "Fantasma") {
                 linhaTempo.push({ minuto: 95, tipo: "penaltis", texto: `⚖️ Fim de Jogo Empatado! A decisão vai para os PÊNALTIS!` });
