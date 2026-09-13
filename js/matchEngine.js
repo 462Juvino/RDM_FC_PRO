@@ -790,13 +790,18 @@ window.gerarPartidaAoVivo = async function() {
             if (fadigaV === 1.0) linhaTempo.push({ minuto: Math.floor(Math.random() * 10) + 60, tipo: "sub", texto: `🔄 Substituição no ${jogo.visitante.replace(/_/g,' ')}: Alteração tática!`, cor: "#aaa" });
 
             // NOVA INTELIGÊNCIA DE NOMES E POSIÇÕES
-                const sortearAtleta = (tId, posicoes = null) => {
-                    let el = times[tId]?.jogadores ? Object.values(times[tId].jogadores) : [];
-                    if(posicoes) {
-                        let filtrados = el.filter(j => posicoes.includes(j.posicoes?.p));
+                const sortearAtletaID = (tId, posicoes = null) => {
+                    let chaves = times[tId]?.jogadores ? Object.keys(times[tId].jogadores) : [];
+                    if(posicoes && chaves.length > 0) {
+                        let filtrados = chaves.filter(k => posicoes.includes(times[tId].jogadores[k].posicoes?.p));
                         if(filtrados.length > 0) return filtrados[Math.floor(Math.random() * filtrados.length)];
                     }
-                    return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
+                    return chaves.length ? chaves[Math.floor(Math.random() * chaves.length)] : null;
+                };
+
+                const getNome = (tId, idJog) => {
+                    if (!idJog || !times[tId]?.jogadores?.[idJog]) return "Jogador";
+                    return times[tId].jogadores[idJog].nome.split(" ")[0];
                 };
 
                 for(let i=0; i<16; i++) {
@@ -804,15 +809,15 @@ window.gerarPartidaAoVivo = async function() {
                     if (minAleatorio === 45) minAleatorio = 46;
 
                     let isM = Math.random() > 0.5;
-                    let tAtq = isM ? jogoReal.mandante : jogoReal.visitante;
-                    let tDef = isM ? jogoReal.visitante : jogoReal.mandante;
+                    let tAtq = isM ? jogo.mandante : jogo.visitante;
+                    let tDef = isM ? jogo.visitante : jogo.mandante;
                     let tipoLance = isM ? 'ataque_mandante' : 'ataque_visitante';
 
                     // Seleciona os protagonistas do lance
-                    let atk = sortearAtleta(tAtq, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
-                    let mei = sortearAtleta(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
-                    let zag = sortearAtleta(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
-                    let gol = sortearAtleta(tDef, ["Goleiro"]).nome.split(" ")[0];
+                    let atk = getNome(tAtq, sortearAtletaID(tAtq, ["Atacante", "Centroavante", "Ponta"]));
+                    let mei = getNome(tAtq, sortearAtletaID(tAtq, ["Meia", "Volante"]));
+                    let zag = getNome(tDef, sortearAtletaID(tDef, ["Zagueiro", "Lateral", "Volante"]));
+                    let gol = getNome(tDef, sortearAtletaID(tDef, ["Goleiro"]));
 
                     let frases = [
                         `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,
@@ -838,23 +843,25 @@ window.gerarPartidaAoVivo = async function() {
                 if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
                     golsM++;
                     if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
-                    let idA = sortearAtleta(jogo.mandante); let nA = idA ? times[jogo.mandante].jogadores[idA].nome.split(" ")[0] : "Jogador";
+                    let idA = sortearAtletaID(jogo.mandante);
+                    let nA = getNome(jogo.mandante, idA);
                     if(idA) {
                         let jg = times[jogo.mandante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-                        if (Math.random() > 0.4) { let idAst = sortearAtleta(jogo.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
+                        if (Math.random() > 0.4) { let idAst = sortearAtletaID(jogo.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
                         updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
                     }
-                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL! ${nA} estufa as redes e corre para os braços da torcida!` });
+                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})` });
                 }
                 if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
                     golsV++;
-                    let idA = sortearAtleta(jogo.visitante); let nA = idA ? times[jogo.visitante].jogadores[idA].nome.split(" ")[0] : "Jogador";
+                    let idA = sortearAtletaID(jogo.visitante);
+                    let nA = getNome(jogo.visitante, idA);
                     if(idA) {
                         let jg = times[jogo.visitante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-                        if (Math.random() > 0.4) { let idAst = sortearAtleta(jogo.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
+                        if (Math.random() > 0.4) { let idAst = sortearAtletaID(jogo.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
                         updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                     }
-                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL! ${nA} estufa as redes e corre para os braços da torcida!` });
+                    linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})` });
                 }
                 if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
             }
