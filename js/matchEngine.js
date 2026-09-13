@@ -113,6 +113,14 @@ function iniciarTransmissao() {
 
         renderizarPartida();
     });
+
+    // 🟢 GATILHO AUTOMÁTICO: Atualiza a tela sozinho a cada 5 segundos.
+    // Assim, quando der 19:00 exatas, o botão aparece sem precisar dar F5!
+    if (!window.loopDestravaTV) {
+        window.loopDestravaTV = setInterval(() => {
+            if (calGlobal) renderizarPartida();
+        }, 5000);
+    }
 }
 
 window.mudarRodadaTransmissao = function(novaRodada) {
@@ -180,7 +188,8 @@ function renderizarPartida() {
             tempoPassadoMs = Date.now() - jogoAoVivo.horaInicio;
         }
 
-        let rodandoAoVivo = (jogoAoVivo.jogado && tempoPassadoMs >= 0 && tempoPassadoMs <= 130000);
+        // 🟢 Correção de Sincronismo: Ignora tempos negativos para evitar que jogadores com relógio atrasado percam a TV
+        let rodandoAoVivo = (jogoAoVivo.jogado && tempoPassadoMs <= 135000);
         jaTerminouDeVerdade = jogoAoVivo.jogado && !rodandoAoVivo;
     }
 
@@ -270,8 +279,6 @@ function renderizarPartida() {
             }
         }
         else {
-            let isAntesDaHora = (isHoje && new Date().getHours() < HORA_JOGO);
-
             // Variáveis injetadas para decidir o texto da tela
             let dataHoje = new Date();
             let [diaJ, mesJ] = (jogoAoVivo.data_jogo || "01/01").split(' ')[0].split('/');
@@ -280,7 +287,10 @@ function renderizarPartida() {
             let hojeDT = new Date(dataHoje.getFullYear(), dataHoje.getMonth(), dataHoje.getDate());
 
             let isAtrasado = jogoDT < hojeDT;
+            let isHoje = jogoDT.getTime() === hojeDT.getTime();
             let isFuturo = jogoDT > hojeDT;
+
+            let isAntesDaHora = (isHoje && new Date().getHours() < HORA_JOGO);
 
             if (isFuturo) {
                 if(statusTransmissao) statusTransmissao.innerText = "Em Breve 📅";
@@ -734,21 +744,20 @@ window.gerarPartidaAoVivo = async function() {
 
         let chave = rodadaExibicao.replace("camp_", "").replace("copa_", "");
         let isMataMata = rodadaExibicao.startsWith("copa_");
-        let caminhoDivisao = isMataMata ? `copa/${chave}` : (divisaoAtual === "A" ? `serieA/${chave}` : `serieB/${chave}`);
 
-        let rodadaObj = null;
-        if (isMataMata && cal.copa) rodadaObj = cal.copa[chave];
-        else if (!isMataMata && divisaoAtual === "A" && cal.serieA) rodadaObj = cal.serieA[chave];
-        else if (!isMataMata && divisaoAtual === "B" && cal.serieB) rodadaObj = cal.serieB[chave];
+        let meuJogoSeguro = null;
+        if (isMataMata && cal.copa && cal.copa[chave]) meuJogoSeguro = cal.copa[chave][meuJogoId];
+        else if (!isMataMata && divisaoAtual === "A" && cal.serieA && cal.serieA[chave]) meuJogoSeguro = cal.serieA[chave][meuJogoId];
+        else if (!isMataMata && divisaoAtual === "B" && cal.serieB && cal.serieB[chave]) meuJogoSeguro = cal.serieB[chave][meuJogoId];
 
-        if (!rodadaObj || !rodadaObj[meuJogoId]) return alert("Erro ao encontrar a partida no calendário.");
-        if (rodadaObj[meuJogoId].jogado) return alert("Alguém já iniciou esta rodada! A transmissão vai começar em instantes.");
+        if (!meuJogoSeguro) return alert("Erro ao encontrar a partida no calendário.");
+        if (meuJogoSeguro.jogado) return alert("Alguém já iniciou esta rodada! A transmissão vai começar em instantes.");
 
         let updates = {};
         let tsAgora = Date.now(); // Grava a hora do clique para TODAS as partidas do servidor começarem simultaneamente!
 
         // Função interna inteligente para processar JOGO por JOGO da rodada
-        const simularJogo = (jogo, idJ) => {
+        const simularJogo = (jogo, idJ, caminhoDivisao) => {
             if (jogo.jogado) return;
 
             let donoM = null; let donoV = null;
@@ -897,9 +906,25 @@ window.gerarPartidaAoVivo = async function() {
             }
         };
 
-        // 🚜 TRATOR ATIVADO PELA TV: Simula todos os jogos da rodada que estão faltando!
-        for (let idJ in rodadaObj) {
-            if (!rodadaObj[idJ].jogado) simularJogo(rodadaObj[idJ], idJ);
+        // 🚜 TRATOR GLOBAL ATIVADO PELA TV: Simula a rodada inteira (Série A e B simultaneamente)
+        if (isMataMata && cal.copa && cal.copa[chave]) {
+            let rodadaCopa = cal.copa[chave];
+            for (let idJ in rodadaCopa) {
+                if (!rodadaCopa[idJ].jogado && !rodadaCopa[idJ].mandante.includes("Vencedor")) simularJogo(rodadaCopa[idJ], idJ, `copa/${chave}`);
+            }
+        } else {
+            if (cal.serieA && cal.serieA[chave]) {
+                let rA = cal.serieA[chave];
+                for (let idJ in rA) {
+                    if (!rA[idJ].jogado) simularJogo(rA[idJ], idJ, `serieA/${chave}`);
+                }
+            }
+            if (cal.serieB && cal.serieB[chave]) {
+                let rB = cal.serieB[chave];
+                for (let idJ in rB) {
+                    if (!rB[idJ].jogado) simularJogo(rB[idJ], idJ, `serieB/${chave}`);
+                }
+            }
         }
 
         await db.ref().update(updates);
