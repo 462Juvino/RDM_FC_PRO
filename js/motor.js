@@ -28,8 +28,11 @@ function dispararNotificacao(titulo, mensagem) {
 // 1. LOOP DO MOTOR P2P (GATILHO DE TEMPO)
 // ========================================================
 function iniciarMotorDescentralizado(liga) {
-    checarRotinas(liga);
-    setInterval(() => checarRotinas(liga), 180000); // Checa a cada 3 minutos
+    // 🟢 DESTRAVA O SISTEMA: Quebra o cadeado de segurança no Firebase caso o motor tenha travado em erros anteriores!
+    db.ref(`ligas/${liga}/sistema/lock_simulacao`).set(false).then(() => {
+        checarRotinas(liga);
+        setInterval(() => checarRotinas(liga), 180000); // Checa a cada 3 minutos
+    });
 }
 
 async function checarRotinas(liga) {
@@ -113,6 +116,10 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
         const snapCal = await db.ref(`ligas/${liga}/calendario`).once('value');
         const cal = snapCal.val();
+
+        // 🟢 BUSCA AS PROPOSTAS NA NUVEM ANTES DE AVALIÁ-LAS! (Isso corrige o Crash)
+        const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
+        let propostas = snapPropostas.val() || {};
 
         let updates = {};
 
@@ -214,6 +221,11 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
         // Se o mercado tiver propostas de Humanos ou IAs, resolve a briga
         if (Object.keys(propostas).length > 0) {
+
+            // Variáveis de Relógio Globais da Rodada de Mercado
+            let horaExecucao = new Date().getHours();
+            let dataExecucaoFormatada = `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+
             for (let idAlvo in propostas) {
                 let lances = propostas[idAlvo];
                 let timeDoAlvo = null;
@@ -227,147 +239,190 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
                 }
 
-                // Se o jogador foi apagado do banco, cancela a oferta
-                if (!dadosDoAlvo) {
-                    updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
+                if (!dadosDoAlvo || !timeDoAlvo) {
+                    // 🟢 APAGA CIRURGICAMENTE: Evita o erro 'Ancestor' no Firebase
+                    Object.keys(lances).forEach(l => updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
                     continue;
                 }
 
                 // ============================================
-                // ⏰ REGRAS TEMPORAIS DO MERCADO
+                // ⏰ REGRA DE GATILHO (AVALIAÇÃO DA DATA/HORA)
                 // ============================================
-                let primeiraDataStr = Object.values(lances)[0].data_proposta;
-                let dataProp = primeiraDataStr ? new Date(primeiraDataStr) : new Date(0);
-                let agora = new Date();
-
-                let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
-                let horaAtual = agora.getHours();
-
-                // 🔴 Se a proposta é de HOJE e ainda NÃO deu 19h: PULA A AVALIAÇÃO!
-                if (isHoje && horaAtual < 19) {
+                let arrayDeLances = Object.values(lances);
+                if (arrayDeLances.length === 0) {
+                    Object.keys(lances).forEach(l => updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
                     continue;
                 }
 
-                // 🛡️ PROTEÇÃO: O dono deste clube é um Player Humano?
+                let dataLanceISO = arrayDeLances[0].data_proposta;
+                let isVelho = true;
+
+                if (dataLanceISO) {
+                    let d = new Date(dataLanceISO);
+                    let dataLanceStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+                    if (dataLanceStr === dataExecucaoFormatada) {
+                        isVelho = false; // Foi feito HOJE
+                    }
+                }
+
+                // 🚦 LÓGICA DE BARREIRA: Se a proposta é de hoje e AINDA NÃO SÃO 19h (e não foi forçado o trator), DEIXA NA MESA!
+                if (!isVelho && horaExecucao < HORA_CAMP && !rodarAtrasados) {
+                    console.log(`⏳ A proposta por ${dadosDoAlvo.nome} ainda está no prazo. Aguardando 19h.`);
+                    continue;
+                }
+
+                // ============================================
+                // 🛡️ O DONO DO CLUBE É HUMANO OU IA?
+                // ============================================
                 let isDonoHumano = false;
                 for (let u in usuarios) {
                     if (usuarios[u].timeAtual === timeDoAlvo) { isDonoHumano = true; break; }
                 }
 
                 if (isDonoHumano) {
-                    // Se for humano e o prazo (19h) já passou, a proposta expira!
+                    // Humano que ignora propostas até 19h as perde automaticamente!
                     for (let login in lances) {
                         if (!login.startsWith('IA_')) {
-                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_expirou_${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
-                                tipo: 'recusa', texto: `Sua oferta por ${dadosDoAlvo.nome} EXPIROU. O treinador do ${timeDoAlvo.replace(/_/g,' ')} não respondeu a tempo.`, data: new Date().toISOString()
+                            let rnd = Math.floor(Math.random()*1000);
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_expirou_${Date.now()}_${rnd}`] = {
+                                tipo: 'recusa',
+                                texto: `Sua oferta por ${dadosDoAlvo.nome} EXPIROU. O treinador humano do ${timeDoAlvo.replace(/_/g,' ')} não respondeu a tempo.`,
+                                data: new Date().toISOString()
                             };
                         }
                     }
-                    updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
+                    // 🟢 APAGA CIRURGICAMENTE
+                    Object.keys(lances).forEach(l => updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
                     continue;
                 }
 
+                // ============================================
+                // 🤖 IA AVALIANDO AS PROPOSTAS (A BRIGA)
+                // ============================================
                 let maiorScore = 0;
                 let lanceVencedor = null;
                 let loginVencedor = "";
 
-                // 🧠 NOVA INTELIGÊNCIA: Avalia se o jogador é um dos 5 mais fortes do clube (OVR)
-                let elencoIA = Object.values(times[timeDoAlvo].jogadores || {}).sort((a,b) => {
-                    let ovrA = ((a.atributos?.ataque||0) + (a.atributos?.defesa||0) + (a.atributos?.forca||0) + (a.atributos?.velocidade||0) + (a.atributos?.habilidade||0));
-                    let ovrB = ((b.atributos?.ataque||0) + (b.atributos?.defesa||0) + (b.atributos?.forca||0) + (b.atributos?.velocidade||0) + (b.atributos?.habilidade||0));
-                    return ovrB - ovrA; // Mais forte primeiro
+                // Verifica se o jogador alvo é intocável (Top 5 Força do clube da IA)
+                let elencoOVRList = Object.values(times[timeDoAlvo].jogadores).map(j => {
+                    let at = j.atributos || {ataque:0, defesa:0, forca:0, velocidade:0, habilidade:0};
+                    return { nome: j.nome, ovr: at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade };
                 });
 
-                let isTop5 = false;
-                let indexTop = elencoIA.findIndex(jx => jx.nome === dadosDoAlvo.nome);
-                if (indexTop !== -1 && indexTop < 5) isTop5 = true;
+                elencoOVRList.sort((a,b) => b.ovr - a.ovr); // Top do maior pro menor
 
-                // Regra de Venda: Top 5 custa 200% (Dobro), resto sai por 95% do passe.
-                let valorMinimoIA = isTop5 ? (dadosDoAlvo.valor_mercado * 2) : (dadosDoAlvo.valor_mercado * 0.95);
+                let isTop5 = false;
+                for (let idx = 0; idx < Math.min(5, elencoOVRList.length); idx++) {
+                    if (elencoOVRList[idx].nome === dadosDoAlvo.nome) {
+                        isTop5 = true; break;
+                    }
+                }
+
+                let precoMercado = dadosDoAlvo.valor_mercado || 1000000;
+                let precoMinimoAceitavel = isTop5 ? (precoMercado * 2) : (precoMercado * 0.95);
 
                 for (let login in lances) {
                     let lance = lances[login];
                     let scoreLance = lance.valor_oferecido || 0;
 
                     if (lance.tipo_negocio === 'emprestimo') {
-                        // 1. A Máquina NUNCA empresta os seus 5 melhores jogadores (Intocáveis)
-                        if (isTop5) continue;
+                        if (isTop5) continue; // IA não aluga titular absoluto!
 
-                        // 2. A Máquina exige pelo menos 1.5% do passe por rodada alugada para os demais
-                        let taxaMinima = (dadosDoAlvo.valor_mercado * 0.015) * lance.duracao_rodadas;
-                        if (scoreLance >= taxaMinima && scoreLance > maiorScore) {
+                        let taxaIdeal = (precoMercado * 0.015) * (lance.duracao_rodadas || 5);
+                        if (scoreLance >= taxaIdeal && scoreLance > maiorScore) {
                             maiorScore = scoreLance;
                             lanceVencedor = lance;
                             loginVencedor = login;
                         }
                     } else {
-                        // Lógica Original de Compra Definitiva
-                        let dadosJogadorOferecido = null;
+                        // Compra Definitiva
+                        let dadosJogTroca = null;
                         if (lance.id_jogador_oferecido) {
-                            dadosJogadorOferecido = times[lance.time_comprador]?.jogadores?.[lance.id_jogador_oferecido];
-                            if (dadosJogadorOferecido) scoreLance += dadosJogadorOferecido.valor_mercado;
+                            dadosJogTroca = times[lance.time_comprador]?.jogadores?.[lance.id_jogador_oferecido];
+                            if (dadosJogTroca) scoreLance += (dadosJogTroca.valor_mercado || 0);
                         }
 
-                        if (scoreLance > maiorScore && scoreLance >= valorMinimoIA) {
+                        if (scoreLance > maiorScore && scoreLance >= precoMinimoAceitavel) {
                             maiorScore = scoreLance;
                             lanceVencedor = lance;
                             loginVencedor = login;
-                            lanceVencedor.dados_jogador_oferecido = dadosJogadorOferecido;
+                            lanceVencedor.dados_jogador_oferecido = dadosJogTroca; // Guarda o jogador pra trocar na nuvem
                         }
                     }
                 }
 
-                if (lanceVencedor && usuarios[loginVencedor] && usuarios[loginVencedor].caixaClube >= lanceVencedor.valor_oferecido) {
-                    let timeNovo = lanceVencedor.time_comprador;
+                // ============================================
+                // 🏆 RESOLVE A NEGOCIAÇÃO E NOTIFICA O POVO
+                // ============================================
+                if (lanceVencedor && usuarios[loginVencedor] && (usuarios[loginVencedor].caixaClube || 0) >= lanceVencedor.valor_oferecido) {
+
+                    let timeQueComprou = lanceVencedor.time_comprador;
                     transferenciasRealizadas++;
 
+                    // 1. Tira do Caixa do Comprador
                     usuarios[loginVencedor].caixaClube -= lanceVencedor.valor_oferecido;
                     updates[`ligas/${liga}/usuarios/${loginVencedor}/caixaClube`] = usuarios[loginVencedor].caixaClube;
 
-                    let loginVendedor = `IA_${timeDoAlvo}`;
-                    if (usuarios[loginVendedor]) {
-                        usuarios[loginVendedor].caixaClube += lanceVencedor.valor_oferecido;
-                        updates[`ligas/${liga}/usuarios/${loginVendedor}/caixaClube`] = usuarios[loginVendedor].caixaClube;
+                    // 2. Poe no Caixa da IA (Vendedora)
+                    let loginIAVendedora = `IA_${timeDoAlvo}`;
+                    if (usuarios[loginIAVendedora]) {
+                        usuarios[loginIAVendedora].caixaClube += lanceVencedor.valor_oferecido;
+                        updates[`ligas/${liga}/usuarios/${loginIAVendedora}/caixaClube`] = usuarios[loginIAVendedora].caixaClube;
                     }
 
+                    // 3. Papelada dos Jogadores
                     if (lanceVencedor.tipo_negocio === 'emprestimo') {
                         dadosDoAlvo.status_emprestimo = { time_origem: timeDoAlvo, rodadas_restantes: lanceVencedor.duracao_rodadas };
                         updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
-                        updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
-                        updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = { jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeNovo, rodadas_restantes: lanceVencedor.duracao_rodadas };
+                        updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = dadosDoAlvo;
+                        updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = { jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeQueComprou, rodadas_restantes: lanceVencedor.duracao_rodadas };
                     } else {
+                        // Venda definitiva
                         updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
-                        updates[`banco_global_times/${timeNovo}/jogadores/${idAlvo}`] = dadosDoAlvo;
+                        updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = dadosDoAlvo;
+
+                        // Executa a Troca se houver o jogador na mala
                         if (lanceVencedor.id_jogador_oferecido && lanceVencedor.dados_jogador_oferecido) {
-                            updates[`banco_global_times/${timeNovo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = null;
+                            updates[`banco_global_times/${timeQueComprou}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = null;
                             updates[`banco_global_times/${timeDoAlvo}/jogadores/${lanceVencedor.id_jogador_oferecido}`] = lanceVencedor.dados_jogador_oferecido;
                         }
                     }
 
+                    // Manda Carta de Vitória
                     if (!loginVencedor.startsWith('IA_')) {
                         updates[`ligas/${liga}/caixa_mensagens/${loginVencedor}/msg_compra_${Date.now()}`] = {
-                            tipo: 'sucesso', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} ACEITOU sua oferta. ${dadosDoAlvo.nome} se juntou ao elenco!`, data: new Date().toISOString()
+                            tipo: 'sucesso',
+                            texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} ACEITOU sua oferta. ${dadosDoAlvo.nome} se juntou ao elenco!`,
+                            data: new Date().toISOString()
                         };
                     }
+
+                    // Manda Carta de Derrota pra quem perdeu
                     for (let login in lances) {
                         if (login !== loginVencedor && !login.startsWith('IA_')) {
-                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_perda_${Date.now()}_${Math.floor(Math.random() * 1000)}`] = {
-                                tipo: 'recusa', texto: `Você perdeu o leilão por ${dadosDoAlvo.nome}. Outro clube cobriu sua oferta final.`, data: new Date().toISOString()
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_perda_${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
+                                tipo: 'recusa',
+                                texto: `Você perdeu o leilão por ${dadosDoAlvo.nome}. Outro clube cobriu sua oferta final.`,
+                                data: new Date().toISOString()
                             };
                         }
                     }
 
                 } else {
+                    // ❌ NINGUÉM ATINGIU O PREÇO DE RESERVA DA IA
                     for (let login in lances) {
                         if (!login.startsWith('IA_')) {
-                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_recusa_${Date.now()}_${Math.floor(Math.random() * 1000)}`] = {
-                                tipo: 'recusa', texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} RECUSOU sua proposta por ${dadosDoAlvo.nome}. Os valores ficaram abaixo da pedida.`, data: new Date().toISOString()
+                            updates[`ligas/${liga}/caixa_mensagens/${login}/msg_recusa_${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
+                                tipo: 'recusa',
+                                texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} RECUSOU sua proposta por ${dadosDoAlvo.nome}. Os valores não agradaram.`,
+                                data: new Date().toISOString()
                             };
                         }
                     }
                 }
 
-                updates[`ligas/${liga}/mercado_propostas/${idAlvo}`] = null;
+                // 🧹 🟢 APAGA CIRURGICAMENTE APENAS AS PROPOSTAS VELHAS DO RADAR!
+                Object.keys(lances).forEach(l => updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
             }
         }
 
