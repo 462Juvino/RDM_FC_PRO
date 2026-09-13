@@ -575,3 +575,27 @@ div[style*="background-color: #1a1a1a; padding: 20px; border-radius: 8px; border
     background-color: rgba(18, 18, 18, 0.6) !important;
     backdrop-filter: blur(5px) !important;
 }
+
+/* ======================================================== */
+/* 🖥️ MENU LATERAL OCULTÁVEL NO PC (DESKTOP) */
+/* ======================================================== */
+@media (min-width: 769px) {
+    .sidebar {
+        /* Adiciona uma transição suave para não fechar de forma brusca */
+        transition: width 0.3s ease-in-out, opacity 0.2s ease-in-out;
+        overflow-x: hidden;
+        white-space: nowrap; /* Impede que os botões "quebrem" de linha enquanto o menu encolhe */
+    }
+
+    /* No PC, a mesma ação do botão inverte a lógica e ESCONDE o menu */
+    .sidebar.aberta {
+        width: 0 !important;
+        border-right: none !important;
+        opacity: 0;
+    }
+
+    /* Garante que o véu preto (overlay) do celular NÃO apareça na tela do PC */
+    body.menu-aberto::after {
+        display: none !important;
+    }
+}
