@@ -79,18 +79,21 @@ button:hover {
     display: flex;
     width: 100vw;
     height: 100vh;
-    background-color: var(--fundo-escuro);
+    /* 🟢 Removemos a cor de fundo sólida para deixar o Estádio do BODY aparecer! */
+    background-color: transparent;
 }
 
 /* Menu Lateral */
 .sidebar {
     width: 250px;
-    background-color: var(--card-bg);
+    /* 🟢 Deixamos o menu levemente transparente (85%) para o estádio aparecer borrado atrás dele também! */
+    background-color: rgba(30, 30, 30, 0.85);
     border-right: 1px solid #333;
     display: flex;
     flex-direction: column;
     padding: 20px 0;
-    overflow-y: auto; /* Permite rolar a barra lateral em telas pequenas */
+    overflow-y: auto;
+    backdrop-filter: blur(10px); /* Deixa chique igual vidro! */
 }
 
 /* Deixa a barra de rolagem do menu lateral fina e elegante */
@@ -107,6 +110,7 @@ button:hover {
     text-align: center;
     margin-bottom: 30px;
     font-size: 22px;
+    text-shadow: 1px 1px 3px #000;
 }
 
 .sidebar button {
@@ -123,7 +127,7 @@ button:hover {
 }
 
 .sidebar button:hover, .sidebar button.ativo {
-    background-color: #2a2a2a;
+    background-color: rgba(0, 0, 0, 0.5);
     color: white;
     border-left: 4px solid var(--verde-campo);
 }
@@ -143,6 +147,7 @@ button:hover {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    background-color: transparent; /* 🟢 Garante que a área principal não bloqueia a visão */
 }
 
 /* Barra Superior */
@@ -546,4 +551,27 @@ body {
     vertical-align: middle;
     margin: 0 15px;
     filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+}
+
+/* ======================================================== */
+/* 🏟️ EFEITO VIDRO (TRANSPARÊNCIA) NAS JANELAS DO JOGO */
+/* ======================================================== */
+
+/* Aplica 50% de transparência e desfoque no Placar, Narração e Painéis do Dashboard */
+.main-content > div,
+#narracao-container,
+.widget-card,
+.card-time,
+div[style*="background: #1a1a1a"], /* 🟢 Força transparência nas caixas escuras do HTML */
+div[style*="background:#1a1a1a"] {
+    background-color: rgba(18, 18, 18, 0.6) !important; /* 60% de transparência para não ficar tão escuro */
+    backdrop-filter: blur(5px) !important; /* Efeito de vidro jateado (blur) */
+    -webkit-backdrop-filter: blur(5px) !important; /* Suporte para celulares iOS */
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important; /* Sombra mais elegante */
+}
+
+/* Deixa o Placar Verde da transmissão transparente também! */
+div[style*="background-color: #1a1a1a; padding: 20px; border-radius: 8px; border: 2px solid var(--verde-campo);"] {
+    background-color: rgba(18, 18, 18, 0.6) !important;
+    backdrop-filter: blur(5px) !important;
 }
