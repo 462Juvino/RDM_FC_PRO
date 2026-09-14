@@ -878,27 +878,33 @@ window.gerarPartidaAoVivo = async function() {
                 if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
                     golsM++;
                     if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
-                    let idA = sortearAtletaID(jogo.mandante);
+
+                    // Goleiro não faz gol!
+                    let posValidas = ["Atacante", "Centroavante", "Ponta", "Meia", "Volante", "Lateral", "Zagueiro"];
+                    let idA = sortearAtletaID(jogo.mandante, posValidas);
                     let nA = getNome(jogo.mandante, idA);
                     if(idA) {
                         let jg = times[jogo.mandante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-                        if (Math.random() > 0.4) { let idAst = sortearAtletaID(jogo.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
+                        if (Math.random() > 0.4) { let idAst = sortearAtletaID(jogo.mandante, posValidas); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
                         updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
                     }
                     linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})` });
                 }
                 if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
                     golsV++;
-                    let idA = sortearAtletaID(jogo.visitante);
+                    // 🟢 CORREÇÃO CRÍTICA: Goleiro mandante leva o gol corretamente aqui
+                    if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
+
+                    let posValidas = ["Atacante", "Centroavante", "Ponta", "Meia", "Volante", "Lateral", "Zagueiro"];
+                    let idA = sortearAtletaID(jogo.visitante, posValidas);
                     let nA = getNome(jogo.visitante, idA);
                     if(idA) {
                         let jg = times[jogo.visitante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-                        if (Math.random() > 0.4) { let idAst = sortearAtletaID(jogo.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
+                        if (Math.random() > 0.4) { let idAst = sortearAtletaID(jogo.visitante, posValidas); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
                         updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                     }
                     linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})` });
                 }
-                if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
             }
 
             if (!linhaTempo.some(l => l.minuto === 45 && l.tipo.includes('gol'))) {
