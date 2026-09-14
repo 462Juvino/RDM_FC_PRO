@@ -2575,7 +2575,6 @@ window.espionarAdversario = async function(timeAlvoId) {
 // 📖 MANUAL DO JOGO (INJEÇÃO NO MENU)
 // ========================================================
 window.addEventListener('DOMContentLoaded', () => {
-    // Injeta o botão do Manual na barra lateral
     let sidebar = document.querySelector('.sidebar');
     if (sidebar) {
         let btnSair = sidebar.querySelector('.btn-sair');
@@ -2594,49 +2593,89 @@ window.abrirManualDoJogo = function() {
     modal.id = 'modal-manual-jogo';
     modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
 
-    modal.innerHTML = `
+    let style = `<style>
+        .accordion-btn { background-color: #222; color: #fff; cursor: pointer; padding: 15px; width: 100%; text-align: left; border: none; outline: none; transition: 0.3s; font-size: 15px; font-weight: bold; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .accordion-btn:hover { background-color: #333; }
+        .accordion-btn:after { content: '\\002B'; color: var(--verde-campo); font-weight: bold; margin-left: 5px; font-size: 18px; }
+        .accordion-btn.active:after { content: '\\2212'; color: #ff8c00; }
+        .accordion-panel { padding: 0 15px; background-color: #111; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; color: #ccc; font-size: 14px; line-height: 1.6; }
+        .accordion-panel p { margin: 15px 0; }
+    </style>`;
+
+    modal.innerHTML = style + `
         <div style="background:#1a1a1a; width:95%; max-width:700px; height:85vh; border-radius:12px; border:1px solid #444; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
 
             <div style="padding:15px 20px; border-bottom:1px solid #333; background:#111; display:flex; justify-content:space-between; align-items:center; border-radius: 12px 12px 0 0;">
-                <h2 style="color:#007bff; margin:0; font-size:18px;">📖 Bíblia do Treinador RDM</h2>
+                <h2 style="color:#007bff; margin:0; font-size:18px;">📖 Manual do Treinador RDM</h2>
                 <button onclick="document.getElementById('modal-manual-jogo').remove()" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer;">&times;</button>
             </div>
 
-            <div style="flex:1; overflow-y:auto; padding:20px; color:#ccc; font-size:14px; line-height:1.6;">
+            <div style="flex:1; overflow-y:auto; padding-bottom: 20px;">
 
-                <h3 style="color:var(--verde-campo); border-bottom:1px solid #333; padding-bottom:5px; margin-top:0;">⚙️ 1. O Motor P2P e os Horários</h3>
-                <p>Todas as partidas da Liga acontecem de forma simulada. O gatilho diário é ativado exatamente às <strong>19h00</strong>. Ao bater a hora, o primeiro treinador a entrar na aba "Transmissão" ativa a nuvem e os jogos começam para todos ao mesmo tempo. As Copas acontecem às 20h00.</p>
+                <button class="accordion-btn">🏟️ 1. Visão Geral & Horários</button>
+                <div class="accordion-panel">
+                    <p>Todas as partidas oficiais acontecem de forma simulada no servidor. O gatilho diário de transferências e dos jogos do Campeonato bate exatamente às <strong>19h00</strong>. As Copas ocorrem às <strong>20h00</strong>.<br><br>Certifique-se de ajustar sua equipe, gerenciar táticas e despachar suas propostas antes do fechamento dos portões. Aja rápido e se programe!</p>
+                </div>
 
-                <h3 style="color:var(--verde-campo); border-bottom:1px solid #333; padding-bottom:5px;">📋 2. Escalação e Fadiga</h3>
-                <p>Escalar seus melhores jogadores (OVR Alto) aumenta matematicamente suas chances de fazer gols.<br>
-                <strong style="color:#dc3545;">🚨 Regra de Ouro:</strong> Nunca tenha 11 jogadores ou menos no seu elenco total! Se o Motor P2P rodar e o seu time não tiver banco de reservas, ele assumirá que seus atletas estão fadigados e você sofrerá uma <strong>penalidade de 15%</strong> na sua Força Total.</p>
+                <button class="accordion-btn">📋 2. Escalação e Gestão de Elenco</button>
+                <div class="accordion-panel">
+                    <p>A força combinada (OVR) dos seus 11 titulares é o que dita sua probabilidade de marcar e evitar gols.<br><br>
+                    <strong>Cuidado com a Exaustão:</strong> Mantenha sempre um elenco saudável e numérico. Times que abrem mão do banco de reservas e operam com plantéis curtos demais sofrem penalidades massivas de fadiga na hora do jogo.</p>
+                </div>
 
-                <h3 style="color:var(--verde-campo); border-bottom:1px solid #333; padding-bottom:5px;">🧠 3. Tática e Mentalidade</h3>
-                <ul>
-                    <li><strong>Ofensivo:</strong> Você ganha +30% de bônus no ataque, mas deixa a defesa exposta, dando +20% de bônus ao adversário. Ideal contra times muito fracos.</li>
-                    <li><strong>Retranca:</strong> Você corta a chance de gol do adversário pela metade (-50%), mas abdica de atacar (-30% da sua força e você nunca fará mais que 1 gol no jogo). Ideal para segurar um empate contra os gigantes.</li>
-                    <li><strong>Moderado:</strong> Sem bônus ou penalidades. Jogo jogado.</li>
-                </ul>
+                <button class="accordion-btn">🧠 3. Mentalidade Tática</button>
+                <div class="accordion-panel">
+                    <p>No vestiário (Aba Escalação), sua instrução final muda tudo:<br>
+                    ⚔️ <strong>Ofensivo:</strong> Aumenta seu ímpeto de ataque brutalmente, mas deixa o corredor aberto para os contra-ataques adversários. Ideal contra times muito fracos que jogam fechados.<br>
+                    🛡️ <strong>Retranca:</strong> Você "estaciona o ônibus". Corta as chances de ataque do oponente drasticamente, mas suas chances de marcar caem na mesma moeda (times na retranca sofrem para fazer mais de um gol).<br>
+                    ⚖️ <strong>Moderado:</strong> Uma abordagem balanceada e previsível. Jogo jogado.</p>
+                </div>
 
-                <h3 style="color:#ff8c00; border-bottom:1px solid #333; padding-bottom:5px;">🕵️‍♂️ 4. Olheiros e Treino Sigiloso (Mind Games)</h3>
-                <p>Na aba 'Dashboard', o botão 👁️ permite que você <strong>Espione</strong> o adversário antes das 19h, revelando os 11 titulares que ele escolheu e a tática. O primeiro uso no dia custa R$ 50 mil, o segundo custa R$ 100 mil, depois R$ 200 mil, etc.</p>
-                <p>Para se defender, use o botão <strong>Treino Secreto</strong> (R$ 100.000). Ele fecha os portões do seu CT. Qualquer olheiro que tentar lhe espionar perderá o dinheiro e voltará de mãos vazias!</p>
+                <button class="accordion-btn">💼 4. Mercado e Diretoria (IA)</button>
+                <div class="accordion-panel">
+                    <p>Você é livre para tentar comprar ou alugar qualquer jogador. Quando o passe pertence a um Player Humano, tudo se resolve na conversa. Porém, se pertencer a uma <strong>Inteligência Artificial</strong>, atenção:<br><br>
+                    As diretorias virtuais não são bobas. Elas <strong>blindam as grandes estrelas</strong> do time. Além disso, recusam propostas indecentes. Se não tiver dinheiro para pagar o valor de mercado justo, envolva jogadores da sua base para abater o preço.<br><br>
+                    Para empréstimos, lembre-se: a IA exigirá uma taxa inicial para liberar o atleta durante a vigência do contrato.</p>
+                </div>
 
-                <h3 style="color:#ff8c00; border-bottom:1px solid #333; padding-bottom:5px;">💼 5. Negociações e a IA do Jogo</h3>
-                <p>O mercado resolve todas as ofertas às 19h. Se você estiver negociando com um time controlado pela <strong>Máquina (IA)</strong>, saiba que:</p>
-                <ul>
-                    <li>Ela nunca vende ou empresta os 5 melhores jogadores do clube dela.</li>
-                    <li>Para comprar, ofereça no mínimo 95% do valor do passe base (ou inclua um jogador bom na troca para abater o preço).</li>
-                    <li>Para alugar (empréstimo), pague pelo menos 1.5% do valor do passe por cada rodada desejada.</li>
-                </ul>
+                <button class="accordion-btn">🏦 5. Finanças e o Banco Central</button>
+                <div class="accordion-panel">
+                    <p>Faltou dinheiro? A aba <strong>Cofre</strong> na "Central de Transações" é a sua saída. O Banco Central possui fundos infinitos, mas suas taxas de juros não perdoam.<br><br>
+                    Felizmente, outros treinadores podem colocar seu dinheiro sobrando no Cofre. Se eles fizerem isso, você poderá pegar empréstimos com investidores reais a taxas muito mais camaradas.<br><br>
+                    <strong style="color:#dc3545;">A Ameaça da Penhora:</strong> Planeje o pagamento de suas dívidas (descontado por rodada). Se chegar o dia do pagamento e não houver saldo no seu caixa, a justiça invadirá seu clube e levará os seus jogadores embora para quitar o débito!</p>
+                </div>
 
-                <h3 style="color:#007bff; border-bottom:1px solid #333; padding-bottom:5px;">🏦 6. O Banco Central e os Agiotas</h3>
-                <p>Se faltar dinheiro, peça um Empréstimo! O Banco Central cobra pesados 5% de juros por rodada. No entanto, se um Player Real depositar dinheiro no Cofre dele, você poderá pegar emprestado com esse player a uma taxa amigável de 2%.</p>
-                <p><strong style="color:#dc3545;">Cuidado:</strong> Se o motor cobrar a parcela diária e você não tiver saldo, seu jogador mais barato será PENHORADO e levado pelo credor!</p>
+                <button class="accordion-btn">🕵️‍♂️ 6. Olheiros e Mind Games (Espionagem)</button>
+                <div class="accordion-panel">
+                    <p>No Dashboard, o ícone de Olho (👁️) nas tabelas permite infiltrar um olheiro para descobrir a tática e a escalação atual do oponente. Cada nova espionagem no dia custa o dobro da missão anterior.<br><br>
+                    <strong>Como se defender?</strong> Use o botão de 🛡️ <strong>Treino Secreto</strong>. Ele consome recursos, mas tranca os portões do seu CT. Qualquer olheiro adversário tentará entrar, será barrado pelos seguranças, e perderá os fundos da missão sem descobrir nada.</p>
+                </div>
+
+                <button class="accordion-btn">⚔️ 7. Arena X1 e Desafios</button>
+                <div class="accordion-panel">
+                    <p>O Campeonato é só uma parte da glória. Na Arena X1, você pode desafiar qualquer time para partidas instantâneas valendo dinheiro do caixa, ou no modo <strong>Pink Slip</strong> (Apostando o passe de um jogador!).<br><br>
+                    Para não haver trapaças, jogadores apostados não podem ter uma discrepância gigante de valor de mercado.<br>
+                    <strong>Desafiando a Máquina:</strong> Você pode desafiar a IA, mas ela calcula os riscos. Se o seu clube for uma potência inegável e ela for um clube pequeno, o desafio será rejeitado por puro medo da diretoria deles.</p>
+                </div>
+
             </div>
         </div>
     `;
     document.body.appendChild(modal);
+
+    // Faz as abas expandirem magicamente
+    let acc = modal.querySelectorAll(".accordion-btn");
+    for (let i = 0; i < acc.length; i++) {
+        acc[i].addEventListener("click", function() {
+            this.classList.toggle("active");
+            let panel = this.nextElementSibling;
+            if (panel.style.maxHeight) {
+                panel.style.maxHeight = null;
+            } else {
+                panel.style.maxHeight = panel.scrollHeight + "px";
+            }
+        });
+    }
 };
 
 // ========================================================
