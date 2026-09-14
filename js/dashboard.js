@@ -199,6 +199,7 @@ function carregarVisaoGeralClube() {
                     <button onclick="darColetivaImprensa()" style="flex: 1; background: #333; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🎤 Coletiva</button>
                     <button onclick="pagarBichoExtra()" style="flex: 1; background: #ff8c00; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💰 Bicho Extra</button>
                     <button onclick="recolherPatrocinio()" style="flex: 1; background: #007bff; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">📺 Cota de TV</button>
+                    <button onclick="ativarTreinoSigiloso()" style="flex: 1; background: #800080; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; box-shadow: 0 0 10px rgba(128,0,128,0.5);">🛡️ Treino Secreto</button>
                 </div>
             </div>
         </div>
@@ -1017,47 +1018,64 @@ async function carregarEstatisticasGerais(meuTimeId) {
 
         if (times) {
             for (let t in times) {
-                // FILTRA OS DESTAQUES APENAS DA SUA DIVISÃO!
-                if (times[t].divisao === minhaDivisao && times[t].jogadores) {
+                // 🟢 FILTRO CEGO E PURO: Ignora Agentes Livres e Fantasmas!
+                // Apenas jogadores efetivos que jogaram as rodadas e não foram demitidos
+                if (times[t].divisao === minhaDivisao && times[t].jogadores && t !== "Fantasma" && !t.startsWith("Agentes_Livres")) {
                     for (let j in times[t].jogadores) {
                         let jog = times[t].jogadores[j];
-                        jog.timeOrigem = t;
-                        todosJogadores.push(jog);
+                        // Só adiciona quem realmente pisou em campo na simulação
+                        if (jog.estatisticas && jog.estatisticas.jogos > 0) {
+                            jog.timeOrigem = t;
+                            todosJogadores.push(jog);
+                        }
                     }
                 }
             }
         }
 
-        // GOLS
-        let artilheiros = [...todosJogadores].filter(j => j.estatisticas && j.estatisticas.gols > 0).sort((a, b) => b.estatisticas.gols - a.estatisticas.gols).slice(0, 5);
+        // GOLS (Os verdadeiros Artilheiros)
+        let artilheiros = [...todosJogadores]
+            .filter(j => j.estatisticas && j.estatisticas.gols > 0)
+            .sort((a, b) => b.estatisticas.gols - a.estatisticas.gols)
+            .slice(0, 5);
+
         let htmlGols = artilheiros.length === 0 ? '<li><span style="color:#666;">Sem gols...</span></li>' : '';
         artilheiros.forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            htmlGols += `<li style="padding: 4px 0;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#ff8c00; font-weight:bold;">${j.estatisticas.gols}</span></li>`;
+            htmlGols += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#ff8c00; font-weight:bold;">${j.estatisticas.gols}</span></li>`;
         });
         document.getElementById('lista-top-gols').innerHTML = htmlGols;
 
-        // ASSISTÊNCIAS
-        let assistentes = [...todosJogadores].filter(j => j.estatisticas && j.estatisticas.assistencias > 0).sort((a, b) => b.estatisticas.assistencias - a.estatisticas.assistencias).slice(0, 5);
+        // ASSISTÊNCIAS (Os verdadeiros Garçons)
+        let assistentes = [...todosJogadores]
+            .filter(j => j.estatisticas && j.estatisticas.assistencias > 0)
+            .sort((a, b) => b.estatisticas.assistencias - a.estatisticas.assistencias)
+            .slice(0, 5);
+
         let htmlAsts = assistentes.length === 0 ? '<li><span style="color:#666;">Sem assistências...</span></li>' : '';
         assistentes.forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            htmlAsts += `<li style="padding: 4px 0;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.estatisticas.assistencias}</span></li>`;
+            htmlAsts += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.estatisticas.assistencias}</span></li>`;
         });
         document.getElementById('lista-top-asts').innerHTML = htmlAsts;
 
-        // GOLEIROS (Muralhas)
-        let goleiros = [...todosJogadores].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos > 0).sort((a, b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)).slice(0, 5);
+        // GOLEIROS (As verdadeiras Muralhas - Menos Vazados)
+        let goleiros = [...todosJogadores]
+            .filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos > 0)
+            .sort((a, b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)) // 🟢 MENOR sofredor de gols vem primeiro!
+            .slice(0, 5);
+
         let htmlGks = goleiros.length === 0 ? '<li><span style="color:#666;">Aguardando...</span></li>' : '';
         goleiros.forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            htmlGks += `<li style="padding: 4px 0;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#007bff; font-weight:bold;">${j.estatisticas.gols_sofridos} GS</span></li>`;
+            // Destaca se o goleiro é uma parede absurda (0 gols sofridos)
+            let corGS = (j.estatisticas.gols_sofridos === 0) ? "var(--verde-campo)" : "#007bff";
+            htmlGks += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:${corGS}; font-weight:bold;">${j.estatisticas.gols_sofridos || 0} GS</span></li>`;
         });
         document.getElementById('lista-top-gks').innerHTML = htmlGks;
 
     } catch (e) { console.error(e); }
 }
-
 async function carregarMiniTabela(meuTimeId) {
     try {
         const snapTimes = await db.ref('banco_global_times').once('value');
@@ -1124,6 +1142,9 @@ async function carregarMiniTabela(meuTimeId) {
                 let peso = ehMeu ? "bold" : "normal";
                 let nomeDono = window.treinadoresGlobais[t.id] ? `<span style="font-size:9px; color:#aaa; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 ${window.treinadoresGlobais[t.id]}</span>` : "";
 
+                // 🟢 O Botão de Olheiro!
+                let btnEspionar = !ehMeu ? `<button onclick="espionarAdversario('${t.id}')" title="Espionar Escalação" style="background:transparent; border:none; cursor:pointer; font-size:16px; margin-left:5px; padding:0; filter:grayscale(1) brightness(2); transition:0.2s;" onmouseover="this.style.filter='none'" onmouseout="this.style.filter='grayscale(1) brightness(2)'">👁️</button>` : "";
+
                 html += `
                     <tr style="border-bottom: 1px solid #333; background: ${ehMeu ? 'rgba(255,140,0,0.1)' : 'transparent'};">
                         <td style="padding: 8px 0; color: #aaa;">${i+1}º</td>
@@ -1131,11 +1152,13 @@ async function carregarMiniTabela(meuTimeId) {
                             <div style="display:flex; align-items:center;">
                                 <img src="${getEscudo(t.id)}" onerror="this.src='esculdos/default.png'" style="width: 16px; height: 16px; margin-right: 6px;">
                                 <div style="display:flex; flex-direction:column;">
-                                    <span>${t.id.replace(/_/g, ' ')}</span>
+                                    <div style="display:flex; align-items:center;">
+                                        <span>${t.id.replace(/_/g, ' ')}</span>
+                                        ${btnEspionar}
+                                    </div>
                                     ${nomeDono}
                                 </div>
                             </div>
-                        </td>
                         </td>
                         <td>${t.J}</td>
                         <td style="color: ${t.SG > 0 ? 'var(--verde-campo)' : (t.SG < 0 ? '#dc3545' : '#888')};">${t.SG > 0 ? '+' : ''}${t.SG}</td>
@@ -2004,8 +2027,9 @@ window.iniciarTransmissaoX1 = async function(id) {
 function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, golsV_final, venci, txtFim, isIADuel, apostaValidadaIA) {
     let modal = document.getElementById('modal-arena-x1');
 
-    modal.style.background = "transparent";
-    modal.style.backgroundImage = `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('${getEstadio(mandante)}')`;
+    modal.style.backgroundColor = "#000";
+    // 🟢 Gradiente clareado também na Arena X1!
+    modal.style.backgroundImage = `linear-gradient(rgba(10,10,10,0.40), rgba(10,10,10,0.70)), url('${getEstadio(mandante)}')`;
     modal.style.backgroundPosition = "center";
     modal.style.backgroundSize = "cover";
 
@@ -2252,4 +2276,222 @@ window.mudarVelocidadeSimulacao = function(v) {
         window.x1Audios.torcidaM.volume = 0;
         window.x1Audios.torcidaV.volume = 0;
     }
+};
+
+// ========================================================
+// 🛡️ SISTEMA DE TREINO SIGILOSO (ANTI-OLHEIRO)
+// ========================================================
+window.ativarTreinoSigiloso = async function() {
+    if(!confirm("🛡️ Ativar Treino Sigiloso?\n\nCusto: R$ 100.000\nEfeito: Bloqueia a ação de olheiros adversários tentando ver sua tática.\nDuração: Vale apenas para o próximo jogo oficial simulado.")) return;
+
+    try {
+        const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+        let u = snapUser.val();
+        if(u.caixaClube < 100000) return alert("Você não tem R$ 100.000 em caixa para fechar os portões do CT!");
+
+        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+        let cal = snapCal.val() || {};
+        let rodadaAlvo = cal.rodadaAtual || 1;
+
+        // Se já passou das 19h, o treino sigiloso vai proteger a rodada do dia seguinte!
+        if (new Date().getHours() >= 19) rodadaAlvo += 1;
+
+        if (u.escudo_rodada && u.escudo_rodada.rodada === rodadaAlvo) {
+            return alert("O seu CT já está com os portões fechados para esta rodada!");
+        }
+
+        let novoCaixa = u.caixaClube - 100000;
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+            caixaClube: novoCaixa,
+            escudo_rodada: { rodada: rodadaAlvo, ativo: true }
+        });
+
+        alert("🛡️ Portões trancados! Seu treinamento está em sigilo absoluto para a Rodada " + rodadaAlvo + ".\n(- R$ 100.000)");
+    } catch(e) { console.error(e); }
+};
+
+// ========================================================
+// 👁️ SISTEMA DE OLHEIRO (ESPIONAGEM ADVERSÁRIA)
+// ========================================================
+window.espionarAdversario = async function(timeAlvoId) {
+    try {
+        const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+        let eu = snapUser.val();
+
+        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+        let cal = snapCal.val() || {};
+        let rodadaAtual = cal.rodadaAtual || 1;
+
+        // Se já passou das 19h, a espionagem cobra na cota da próxima rodada
+        let rodadaCobranca = (new Date().getHours() >= 19) ? rodadaAtual + 1 : rodadaAtual;
+
+        // Calcula o custo (Dobra a cada uso na mesma rodada)
+        let olheiroData = eu.uso_olheiro || { rodada: 0, qtd: 0 };
+        if (olheiroData.rodada !== rodadaCobranca) {
+            olheiroData = { rodada: rodadaCobranca, qtd: 0 };
+        }
+
+        let custo = 50000 * Math.pow(2, olheiroData.qtd);
+
+        if(!confirm(`🕵️‍♂️ Enviar Olheiro ao ${timeAlvoId.replace(/_/g, ' ')}?\n\nCusto desta missão: R$ ${formatarDinheiro(custo)}\n(O valor dobra a cada espionagem feita no mesmo dia).`)) return;
+
+        if(eu.caixaClube < custo) return alert(`Caixa insuficiente! Você precisa de ${formatarDinheiro(custo)} para pagar o olheiro.`);
+
+        // 1. Cobra o valor do Caixa
+        let novoCaixa = eu.caixaClube - custo;
+        olheiroData.qtd += 1;
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+            caixaClube: novoCaixa,
+            uso_olheiro: olheiroData
+        });
+
+        // 2. Tenta Invadir o Sistema do Alvo
+        const snapAllUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        const usuariosGeral = snapAllUsers.val() || {};
+        const snapTimes = await db.ref('banco_global_times').once('value');
+        const timesGerais = snapTimes.val() || {};
+
+        let donoAlvoObj = null;
+        let isIA = true;
+
+        for(let u in usuariosGeral) {
+            if(usuariosGeral[u].timeAtual === timeAlvoId) {
+                donoAlvoObj = usuariosGeral[u];
+                isIA = u.startsWith("IA_");
+                break;
+            }
+        }
+
+        // Verifica o Escudo do adversário
+        if (!isIA && donoAlvoObj && donoAlvoObj.escudo_rodada && donoAlvoObj.escudo_rodada.rodada === rodadaCobranca && donoAlvoObj.escudo_rodada.ativo) {
+            return alert(`🚨 MISSÃO FRACASSADA!\n\nO técnico do ${timeAlvoId.replace(/_/g, ' ')} ativou o Treino Sigiloso e fechou os portões do CT. Seu olheiro não conseguiu ver nada, mas o dinheiro da missão foi gasto.`);
+        }
+
+        // 3. Sucesso! Pega a Escalação
+        let tatica = donoAlvoObj ? (donoAlvoObj.mentalidade || "Moderado") : "Moderado";
+        let titularesIDs = donoAlvoObj ? (donoAlvoObj.titulares || []) : [];
+        let timeDados = timesGerais[timeAlvoId]?.jogadores || {};
+
+        // Se for IA, ela não tem array de titulares salvo, pega os 11 melhores na hora
+        if (isIA || titularesIDs.length === 0) {
+            let elencoCompleto = Object.values(timeDados).sort((a,b) => {
+                let ovrA = (a.atributos.ataque+a.atributos.defesa+a.atributos.forca+a.atributos.velocidade+a.atributos.habilidade);
+                let ovrB = (b.atributos.ataque+b.atributos.defesa+b.atributos.forca+b.atributos.velocidade+b.atributos.habilidade);
+                return ovrB - ovrA;
+            });
+            titularesIDs = elencoCompleto.slice(0, 11);
+        } else {
+            // Mapeia os IDs reais para os objetos de jogador
+            titularesIDs = titularesIDs.filter(id => id).map(id => timeDados[id]).filter(j => j);
+        }
+
+        let forcaTotal = 0;
+        let htmlJogadores = "";
+
+        titularesIDs.forEach(j => {
+            let at = j.atributos || {ataque:0, defesa:0, forca:0, velocidade:0, habilidade:0};
+            let ovr = Math.round((at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5);
+            forcaTotal += (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade);
+            let pos = j.posicoes ? j.posicoes.p.charAt(0) : "N";
+            htmlJogadores += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #333; padding:4px 0; font-size:13px;"><span><strong style="color:var(--verde-campo);">${pos}</strong> - ${j.nome}</span><strong style="color:#ff8c00;">${ovr}</strong></div>`;
+        });
+
+        // 4. Cria o Modal de Relatório
+        let modal = document.createElement('div');
+        modal.id = 'modal-relatorio-olheiro';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+        modal.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                    <h2 style="color:#007bff; margin:0; font-size:18px;">🕵️‍♂️ Dossiê Espião</h2>
+                    <button onclick="document.getElementById('modal-relatorio-olheiro').remove()" style="background:transparent; border:none; color:#aaa; font-size:24px; cursor:pointer;">&times;</button>
+                </div>
+
+                <div style="text-align:center; margin-bottom:15px;">
+                    <img src="${getEscudo(timeAlvoId)}" style="width:60px; height:60px; filter:drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                    <h3 style="color:#fff; margin:5px 0 0 0;">${timeAlvoId.replace(/_/g, ' ')}</h3>
+                </div>
+
+                <div style="background:#111; padding:12px; border-radius:6px; border:1px solid #333; margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="color:#aaa;">Mentalidade:</span><strong style="color:#ff8c00;">${tatica}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#aaa;">Força Bruta do 11:</span><strong style="color:var(--verde-campo);">${forcaTotal}</strong></div>
+                </div>
+
+                <h4 style="color:#aaa; border-bottom:1px solid #333; padding-bottom:5px; margin-top:0;">📋 Equipe Titular Identificada</h4>
+                <div style="max-height: 200px; overflow-y:auto; padding-right:5px;">
+                    ${htmlJogadores || "<span style='color:#666;'>O clube não definiu os titulares.</span>"}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+    } catch(e) { console.error(e); }
+};
+
+// ========================================================
+// 📖 MANUAL DO JOGO (INJEÇÃO NO MENU)
+// ========================================================
+window.addEventListener('DOMContentLoaded', () => {
+    // Injeta o botão do Manual na barra lateral
+    let sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        let btnSair = sidebar.querySelector('.btn-sair');
+        let btnManual = document.createElement('button');
+        btnManual.innerHTML = '📖 Manual do Técnico';
+        btnManual.style.color = '#007bff';
+        btnManual.onclick = abrirManualDoJogo;
+
+        if(btnSair) sidebar.insertBefore(btnManual, btnSair);
+        else sidebar.appendChild(btnManual);
+    }
+});
+
+window.abrirManualDoJogo = function() {
+    let modal = document.createElement('div');
+    modal.id = 'modal-manual-jogo';
+    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
+
+    modal.innerHTML = `
+        <div style="background:#1a1a1a; width:95%; max-width:700px; height:85vh; border-radius:12px; border:1px solid #444; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+
+            <div style="padding:15px 20px; border-bottom:1px solid #333; background:#111; display:flex; justify-content:space-between; align-items:center; border-radius: 12px 12px 0 0;">
+                <h2 style="color:#007bff; margin:0; font-size:18px;">📖 Bíblia do Treinador RDM</h2>
+                <button onclick="document.getElementById('modal-manual-jogo').remove()" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer;">&times;</button>
+            </div>
+
+            <div style="flex:1; overflow-y:auto; padding:20px; color:#ccc; font-size:14px; line-height:1.6;">
+
+                <h3 style="color:var(--verde-campo); border-bottom:1px solid #333; padding-bottom:5px; margin-top:0;">⚙️ 1. O Motor P2P e os Horários</h3>
+                <p>Todas as partidas da Liga acontecem de forma simulada. O gatilho diário é ativado exatamente às <strong>19h00</strong>. Ao bater a hora, o primeiro treinador a entrar na aba "Transmissão" ativa a nuvem e os jogos começam para todos ao mesmo tempo. As Copas acontecem às 20h00.</p>
+
+                <h3 style="color:var(--verde-campo); border-bottom:1px solid #333; padding-bottom:5px;">📋 2. Escalação e Fadiga</h3>
+                <p>Escalar seus melhores jogadores (OVR Alto) aumenta matematicamente suas chances de fazer gols.<br>
+                <strong style="color:#dc3545;">🚨 Regra de Ouro:</strong> Nunca tenha 11 jogadores ou menos no seu elenco total! Se o Motor P2P rodar e o seu time não tiver banco de reservas, ele assumirá que seus atletas estão fadigados e você sofrerá uma <strong>penalidade de 15%</strong> na sua Força Total.</p>
+
+                <h3 style="color:var(--verde-campo); border-bottom:1px solid #333; padding-bottom:5px;">🧠 3. Tática e Mentalidade</h3>
+                <ul>
+                    <li><strong>Ofensivo:</strong> Você ganha +30% de bônus no ataque, mas deixa a defesa exposta, dando +20% de bônus ao adversário. Ideal contra times muito fracos.</li>
+                    <li><strong>Retranca:</strong> Você corta a chance de gol do adversário pela metade (-50%), mas abdica de atacar (-30% da sua força e você nunca fará mais que 1 gol no jogo). Ideal para segurar um empate contra os gigantes.</li>
+                    <li><strong>Moderado:</strong> Sem bônus ou penalidades. Jogo jogado.</li>
+                </ul>
+
+                <h3 style="color:#ff8c00; border-bottom:1px solid #333; padding-bottom:5px;">🕵️‍♂️ 4. Olheiros e Treino Sigiloso (Mind Games)</h3>
+                <p>Na aba 'Dashboard', o botão 👁️ permite que você <strong>Espione</strong> o adversário antes das 19h, revelando os 11 titulares que ele escolheu e a tática. O primeiro uso no dia custa R$ 50 mil, o segundo custa R$ 100 mil, depois R$ 200 mil, etc.</p>
+                <p>Para se defender, use o botão <strong>Treino Secreto</strong> (R$ 100.000). Ele fecha os portões do seu CT. Qualquer olheiro que tentar lhe espionar perderá o dinheiro e voltará de mãos vazias!</p>
+
+                <h3 style="color:#ff8c00; border-bottom:1px solid #333; padding-bottom:5px;">💼 5. Negociações e a IA do Jogo</h3>
+                <p>O mercado resolve todas as ofertas às 19h. Se você estiver negociando com um time controlado pela <strong>Máquina (IA)</strong>, saiba que:</p>
+                <ul>
+                    <li>Ela nunca vende ou empresta os 5 melhores jogadores do clube dela.</li>
+                    <li>Para comprar, ofereça no mínimo 95% do valor do passe base (ou inclua um jogador bom na troca para abater o preço).</li>
+                    <li>Para alugar (empréstimo), pague pelo menos 1.5% do valor do passe por cada rodada desejada.</li>
+                </ul>
+
+                <h3 style="color:#007bff; border-bottom:1px solid #333; padding-bottom:5px;">🏦 6. O Banco Central e os Agiotas</h3>
+                <p>Se faltar dinheiro, peça um Empréstimo! O Banco Central cobra pesados 5% de juros por rodada. No entanto, se um Player Real depositar dinheiro no Cofre dele, você poderá pegar emprestado com esse player a uma taxa amigável de 2%.</p>
+                <p><strong style="color:#dc3545;">Cuidado:</strong> Se o motor cobrar a parcela diária e você não tiver saldo, seu jogador mais barato será PENHORADO e levado pelo credor!</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 };

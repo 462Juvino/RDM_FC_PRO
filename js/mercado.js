@@ -663,7 +663,17 @@ window.renderListaTransacoes = function(aba) {
             ? `<span style="color:#aaa;">Proposta de:</span> ${t.comprador.replace(/_/g, ' ')} <span style="font-size:10px;">${t.is_comp_real ? '👤 (Player)' : '🤖 (Máquina)'}</span>`
             : `<span style="color:#aaa;">Proposta para:</span> ${t.vendedor} <span style="font-size:10px;">${t.is_vend_real ? '👤 (Player)' : '🤖 (Máquina)'}</span>`;
 
-        let txtTroca = t.id_troca ? `<div style="color:var(--verde-campo); font-size:12px; margin-top:4px;">🔄 Inclui atleta na troca</div>` : '';
+        // 🟢 Busca a identidade do jogador oferecido na troca e o seu valor!
+        let txtTroca = "";
+        if (t.id_troca) {
+            let jogTroca = todosJogadores.find(jx => jx.id_banco === t.id_troca);
+            let nomeTroca = jogTroca ? jogTroca.nome : "Atleta Excluído";
+            let valorTroca = jogTroca ? formatarDinheiro(jogTroca.valor) : "";
+            txtTroca = `
+                <div style="background: rgba(0, 184, 83, 0.1); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--verde-campo); color:var(--verde-campo); font-size:12px; margin-top:6px; margin-bottom:6px;">
+                    🔄 Ofertou em troca: <strong style="color:#fff;">${nomeTroca}</strong> <span style="color:#888; font-size:11px;">(${valorTroca})</span>
+                </div>`;
+        }
 
         let dataFormatada = "Hoje";
         if (t.data_proposta) {
