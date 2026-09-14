@@ -1,25 +1,25 @@
 const mapaMidia = {
     // SÉRIE A
-    "Sao_Paulo": { escudo: "São_Paulo.png", estadio: "Morumbi (São_Paulo) São_Paulo.webp", hino: "São_Paulo_Hino.mp3", torcida: "São_Paulo_torcida.mp3" },
-    "Palmeiras": { escudo: "Palmeiras.png", estadio: "Allianz_Parque (São_Paulo)Palmeiras.webp", hino: "Palmeiras_Hino.mp3", torcida: "Palmeiras_torcida.mp3" },
-    "Corinthians": { escudo: "Corinthians.png", estadio: "Neo_Química_Arena (São_Paulo) Corinthians.webp", hino: "Corinthians_Hino.mp3", torcida: "Corinthians_torcida.mp3" },
-    "Santos": { escudo: "Santos.png", estadio: "Vila_Belmiro(Santos) Santos.webp", hino: "Santos_Hino.mp3", torcida: "Santos_torcida.mp3" },
-    "Flamengo": { escudo: "Flamengo.png", estadio: "Maracanã (Rio_de_Janeiro) Flamengo.webp", hino: "Flamengo_Hino.mp3", torcida: "Flamengo_torcida.mp3" },
-    "Fluminense": { escudo: "Fluminense.png", estadio: "Maracanã (Rio_de_Janeiro)Fluminense.webp", hino: "Fluminense_Hino.mp3", torcida: "Fluminense_torcida.mp3" },
-    "Vasco": { escudo: "Vasco.png", estadio: "São_Januário (Rio_de_Janeiro) Vasco.webp", hino: "Vasco_Hino.mp3", torcida: "Vasco_torcida.mp3" },
-    "Botafogo": { escudo: "Botafogo.png", estadio: "Estádio_Nilton Santos (Rio_de_Janeiro) Botafogo.webp", hino: "Botafogo_Hino.mp3", torcida: "Botafogo_torcida.mp3" },
-    "Cruzeiro": { escudo: "Cruzeiro.png", estadio: "Mineirão (Belo Horizonte) Cruzeiro.webp", hino: "Cruzeiro_Hino.mp3", torcida: "Cruzeiro_torcida.mp3" },
-    "Atletico-MG": { escudo: "Atletico_mineiro.png", estadio: "Arena_MRV (Belo_Horizonte) Atlético-MG.webp", hino: "Atlético_Mineiro_Hino.mp3", torcida: "Atlético_Mineiro_torcida.mp3" },
-    "Gremio": { escudo: "Gremio.png", estadio: "Arena_do_Grêmio (Porto_Alegre) Grêmio.webp", hino: "Grêmio_Hino.mp3", torcida: "Grêmio_torcida.mp3" },
-    "Internacional": { escudo: "Internacional.png", estadio: "Beira-Rio (Porto_Alegre) Internacional.webp", hino: "Internacional_Hino.mp3", torcida: "Internacional_torcida.mp3" },
-    "Athletico-PR": { escudo: "Atletico_paranaense.png", estadio: "Arena_da_Baixada (Curitiba) Athletico-PR.webp", hino: "Atlético_Paranaense_Hino.mp3", torcida: "Atlético_Paranaense_torcida.mp3" },
-    "Coritiba": { escudo: "Coritiba.png", estadio: "Couto_Pereira (Curitiba) Coritiba.webp", hino: "Coritiba_Hino.mp3", torcida: "Coritiba_torcida.mp3" },
-    "Bahia": { escudo: "Bahia.png", estadio: "Arena_Fonte_Nova (Salvador) Bahia.webp", hino: "Bahia_Hino.mp3", torcida: "Bahia_torcida.mp3" },
-    "Vitoria": { escudo: "Vitoria.png", estadio: "Barradão (Salvador) Vitória.webp", hino: "Vitória_Hino.mp3", torcida: "Vitória_torcida.mp3" },
-    "Bragantino": { escudo: "Bragantino.png", estadio: "Nabi_Abi Chedid.webp", hino: "Bragantino_Hino.mp3", torcida: "Bragantino_torcida.mp3" },
-    "Chapecoense": { escudo: "Chapecoense.png", estadio: "Arena_Condá (Chapecó) Chapecoense.webp", hino: "Chapecoense_Hino.mp3", torcida: "Chapecoense_torcida.mp3" },
-    "Remo": { escudo: "Remo.png", estadio: "Mangueirão (Belém) Remo.webp", hino: "Remo_Hino.mp3", torcida: "Remo_torcida.mp3" },
-    "Mirassol": { escudo: "Mirassol.png", estadio: "Campos_Maia (Mirassol) Mirassol.webp", hino: "Mirassol_Hino.mp3", torcida: "Mirassol_torcida.mp3" },
+    "Sao_Paulo": { escudo: "São_Paulo.png", estadio: "Sao_Paulo.webp", hino: "Sao_Paulo_Hino.mp3", torcida: "Sao_Paulo_torcida.mp3" },
+    "Palmeiras": { escudo: "Palmeiras.png", estadio: "Palmeiras.webp", hino: "Palmeiras_Hino.mp3", torcida: "Palmeiras_torcida.mp3" },
+    "Corinthians": { escudo: "Corinthians.png", estadio: "Corinthians.webp", hino: "Corinthians_Hino.mp3", torcida: "Corinthians_torcida.mp3" },
+    "Santos": { escudo: "Santos.png", estadio: "Santos.webp", hino: "Santos_Hino.mp3", torcida: "Santos_torcida.mp3" },
+    "Flamengo": { escudo: "Flamengo.png", estadio: "Flamengo.webp", hino: "Flamengo_Hino.mp3", torcida: "Flamengo_torcida.mp3" },
+    "Fluminense": { escudo: "Fluminense.png", estadio: "Fluminense.webp", hino: "Fluminense_Hino.mp3", torcida: "Fluminense_torcida.mp3" },
+    "Vasco": { escudo: "Vasco.png", estadio: "Vasco.webp", hino: "Vasco_Hino.mp3", torcida: "Vasco_torcida.mp3" },
+    "Botafogo": { escudo: "Botafogo.png", estadio: "Botafogo.webp", hino: "Botafogo_Hino.mp3", torcida: "Botafogo_torcida.mp3" },
+    "Cruzeiro": { escudo: "Cruzeiro.png", estadio: "Cruzeiro.webp", hino: "Cruzeiro_Hino.mp3", torcida: "Cruzeiro_torcida.mp3" },
+    "Atletico-MG": { escudo: "Atletico_mineiro.png", estadio: "Atletico_MG.webp", hino: "Atletico_Mineiro_Hino.mp3", torcida: "Atletico_Mineiro_torcida.mp3" },
+    "Gremio": { escudo: "Gremio.png", estadio: "Gremio.webp", hino: "Gremio_Hino.mp3", torcida: "Gremio_torcida.mp3" },
+    "Internacional": { escudo: "Internacional.png", estadio: "Internacional.webp", hino: "Internacional_Hino.mp3", torcida: "Internacional_torcida.mp3" },
+    "Athletico-PR": { escudo: "Atletico_paranaense.png", estadio: "Athletico_PR.webp", hino: "Atletico_Paranaense_Hino.mp3", torcida: "Atletico_Paranaense_torcida.mp3" },
+    "Coritiba": { escudo: "Coritiba.png", estadio: "Coritiba.webp", hino: "Coritiba_Hino.mp3", torcida: "Coritiba_torcida.mp3" },
+    "Bahia": { escudo: "Bahia.png", estadio: "Bahia.webp", hino: "Bahia_Hino.mp3", torcida: "Bahia_torcida.mp3" },
+    "Vitoria": { escudo: "Vitoria.png", estadio: "Vitoria.webp", hino: "Vitoria_Hino.mp3", torcida: "Vitoria_torcida.mp3" },
+    "Bragantino": { escudo: "Bragantino.png", estadio: "Bragantino.webp", hino: "Bragantino_Hino.mp3", torcida: "Bragantino_torcida.mp3" },
+    "Chapecoense": { escudo: "Chapecoense.png", estadio: "Chapecoense.webp", hino: "Chapecoense_Hino.mp3", torcida: "Chapecoense_torcida.mp3" },
+    "Remo": { escudo: "Remo.png", estadio: "Remo.webp", hino: "Remo_Hino.mp3", torcida: "Remo_torcida.mp3" },
+    "Mirassol": { escudo: "Mirassol.png", estadio: "Mirassol.webp", hino: "Mirassol_Hino.mp3", torcida: "Mirassol_torcida.mp3" },
 
     // SÉRIE B
     "Criciuma": { escudo: "Criciuma.png", estadio: "default.webp", hino: "gol_generico.mp3", torcida: "torcida_generica.mp3" },
@@ -44,7 +44,7 @@ const mapaMidia = {
     "Ponte_Preta": { escudo: "Ponte_Preta.png", estadio: "default.webp", hino: "gol_generico.mp3", torcida: "torcida_generica.mp3" }
 };
 
-// Funções tradutoras com Fallback blindado para URLs com parênteses e espaços
+// Funções tradutoras: Removido o encodeURI para evitar quebra em servidores locais
 function getEscudo(id) {
     let path = `esculdos/default.png`;
     if (mapaMidia[id] && mapaMidia[id].escudo) {
@@ -53,23 +53,23 @@ function getEscudo(id) {
         let safeId = id.replace(/[\s-]/g, '_');
         path = `esculdos/${safeId}.png`;
     }
-    return encodeURI(path);
+    return path;
 }
 
 function getEstadio(id) {
     let path = `estadios/default.webp`;
     if (mapaMidia[id] && mapaMidia[id].estadio) path = `estadios/${mapaMidia[id].estadio}`;
-    return encodeURI(path);
+    return path;
 }
 
 function getHino(id) {
     let path = `sounds/gol_generico.mp3`;
     if (mapaMidia[id] && mapaMidia[id].hino) path = `sounds/${mapaMidia[id].hino}`;
-    return encodeURI(path);
+    return path;
 }
 
 function getTorcida(id) {
     let path = `sounds/torcida_generica.mp3`;
     if (mapaMidia[id] && mapaMidia[id].torcida) path = `sounds/${mapaMidia[id].torcida}`;
-    return encodeURI(path);
+    return path;
 }
