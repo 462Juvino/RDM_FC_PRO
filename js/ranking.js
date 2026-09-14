@@ -142,9 +142,13 @@ function renderizarTabela() {
         else if (pos <= 10) classeCSS = "zona-verde";
         else if (pos >= arrTabela.length - 3) classeCSS = "zona-vermelha";
 
-        let corNome = time.id === dadosUsuario.timeAtual ? "#ff8c00" : "#fff";
-        let pesoNome = time.id === dadosUsuario.timeAtual ? "bold" : "normal";
+        let ehMeu = time.id === dadosUsuario.timeAtual;
+        let corNome = ehMeu ? "#ff8c00" : "#fff";
+        let pesoNome = ehMeu ? "bold" : "normal";
         let nomeDono = window.treinadoresGlobais[time.id] ? `<span style="font-size:10px; color:#aaa; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 ${window.treinadoresGlobais[time.id]}</span>` : "";
+
+        // 🟢 O Botão de Olheiro!
+        let btnEspionar = !ehMeu ? `<button onclick="espionarAdversario('${time.id}')" title="Espionar Escalação" style="background:transparent; border:none; cursor:pointer; font-size:16px; margin-left:5px; padding:0; filter:grayscale(1) brightness(2); transition:0.2s;" onmouseover="this.style.filter='none'" onmouseout="this.style.filter='grayscale(1) brightness(2)'">👁️</button>` : "";
 
         tbody.innerHTML += `
             <tr class="${classeCSS}">
@@ -153,7 +157,10 @@ function renderizarTabela() {
                     <div style="display:flex; align-items:center;">
                         <img src="${getEscudo(time.id)}" onerror="this.src='esculdos/default.png'" class="escudo-mini" style="margin-right: 6px;">
                         <div style="display:flex; flex-direction:column;">
-                            <span>${time.nome}</span>
+                            <div style="display:flex; align-items:center;">
+                                <span>${time.nome}</span>
+                                ${btnEspionar}
+                            </div>
                             ${nomeDono}
                         </div>
                     </div>
@@ -281,4 +288,165 @@ function deslogar() {
     localStorage.removeItem('treinadorLiga');
     localStorage.removeItem('treinadorUsuario');
     window.location.href = "index.html";
+}
+
+// ========================================================
+// 👁️ SISTEMA DE OLHEIRO (ESPIONAGEM ADVERSÁRIA) COM AVISO ELEGANTE
+// ========================================================
+window.espionarAdversario = async function(timeAlvoId) {
+    try {
+        const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+        let eu = snapUser.val();
+
+        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+        let cal = snapCal.val() || {};
+        let rodadaAtual = cal.rodadaAtual || 1;
+
+        // Se já passou das 19h, a espionagem cobra na cota da próxima rodada
+        let rodadaCobranca = (new Date().getHours() >= 19) ? rodadaAtual + 1 : rodadaAtual;
+
+        // Calcula o custo (Dobra a cada uso na mesma rodada)
+        let olheiroData = eu.uso_olheiro || { rodada: 0, qtd: 0 };
+        if (olheiroData.rodada !== rodadaCobranca) {
+            olheiroData = { rodada: rodadaCobranca, qtd: 0 };
+        }
+
+        let custo = 50000 * Math.pow(2, olheiroData.qtd);
+
+        let formatarDinheiro = (v) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
+
+        // Caixa Modal Customizada (Substitui o Confirm/Alert feio do navegador)
+        let cxConf = document.createElement('div');
+        cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+        cxConf.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #ff8c00; padding:20px; box-shadow:0 10px 40px rgba(255,140,0,0.3); text-align:center;">
+                <div style="font-size:40px; margin-bottom:10px;">🕵️‍♂️</div>
+                <h3 style="color:#ff8c00; margin-top:0;">Missão de Espionagem</h3>
+                <p style="color:#ccc; font-size:14px; margin-bottom:20px;">Deseja enviar um olheiro infiltrado ao CT do <strong>${timeAlvoId.replace(/_/g, ' ')}</strong>?</p>
+                <div style="background:#111; border:1px dashed #444; padding:10px; border-radius:6px; margin-bottom:20px;">
+                    <span style="color:#888; font-size:12px;">Custo desta missão:</span><br>
+                    <strong style="color:var(--verde-campo); font-size:18px;">${formatarDinheiro(custo)}</strong>
+                    <div style="font-size:10px; color:#666; margin-top:5px;">(O valor dobra a cada espionagem no mesmo dia)</div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-confirma-esp" style="flex:1; padding:10px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Pagar e Enviar</button>
+                    <button id="btn-cancela-esp" style="flex:1; padding:10px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(cxConf);
+
+        // Ações do Modal Customizado
+        document.getElementById('btn-cancela-esp').onclick = () => cxConf.remove();
+        document.getElementById('btn-confirma-esp').onclick = async () => {
+            cxConf.remove();
+
+            if(eu.caixaClube < custo) {
+                return mostrarAvisoElegante(`Você não tem R$ ${formatarDinheiro(custo)} em caixa. O olheiro se recusou a trabalhar!`, "#dc3545", "🚨");
+            }
+
+            // 1. Cobra o valor do Caixa
+            let novoCaixa = eu.caixaClube - custo;
+            olheiroData.qtd += 1;
+            await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+                caixaClube: novoCaixa,
+                uso_olheiro: olheiroData
+            });
+
+            // 2. Tenta Invadir o Sistema do Alvo
+            const snapAllUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+            const usuariosGeral = snapAllUsers.val() || {};
+            const snapTimes = await db.ref('banco_global_times').once('value');
+            const timesGerais = snapTimes.val() || {};
+
+            let donoAlvoObj = null;
+            let isIA = true;
+
+            for(let u in usuariosGeral) {
+                if(usuariosGeral[u].timeAtual === timeAlvoId) {
+                    donoAlvoObj = usuariosGeral[u];
+                    isIA = u.startsWith("IA_");
+                    break;
+                }
+            }
+
+            // Verifica o Escudo do adversário
+            if (!isIA && donoAlvoObj && donoAlvoObj.escudo_rodada && donoAlvoObj.escudo_rodada.rodada === rodadaCobranca && donoAlvoObj.escudo_rodada.ativo) {
+                return mostrarAvisoElegante(`MISSÃO FRACASSADA!<br><br>O técnico do ${timeAlvoId.replace(/_/g, ' ')} fechou os portões do CT. Seu olheiro não viu nada, mas o dinheiro da missão foi gasto.`, "#dc3545", "🛡️");
+            }
+
+            // 3. Sucesso! Pega a Escalação
+            let tatica = donoAlvoObj ? (donoAlvoObj.mentalidade || "Moderado") : "Moderado";
+            let titularesIDs = donoAlvoObj ? (donoAlvoObj.titulares || []) : [];
+            let timeDados = timesGerais[timeAlvoId]?.jogadores || {};
+
+            if (isIA || titularesIDs.length === 0) {
+                let elencoCompleto = Object.values(timeDados).sort((a,b) => {
+                    let ovrA = (a.atributos.ataque+a.atributos.defesa+a.atributos.forca+a.atributos.velocidade+a.atributos.habilidade);
+                    let ovrB = (b.atributos.ataque+b.atributos.defesa+b.atributos.forca+b.atributos.velocidade+b.atributos.habilidade);
+                    return ovrB - ovrA;
+                });
+                titularesIDs = elencoCompleto.slice(0, 11);
+            } else {
+                titularesIDs = titularesIDs.filter(id => id).map(id => timeDados[id]).filter(j => j);
+            }
+
+            let forcaTotal = 0;
+            let htmlJogadores = "";
+
+            titularesIDs.forEach(j => {
+                let at = j.atributos || {ataque:0, defesa:0, forca:0, velocidade:0, habilidade:0};
+                let ovr = Math.round((at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5);
+                forcaTotal += (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade);
+                let pos = j.posicoes ? j.posicoes.p.charAt(0) : "N";
+                htmlJogadores += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #333; padding:4px 0; font-size:13px;"><span><strong style="color:var(--verde-campo);">${pos}</strong> - ${j.nome}</span><strong style="color:#ff8c00;">${ovr}</strong></div>`;
+            });
+
+            // 4. Cria o Modal de Relatório Final
+            let modal = document.createElement('div');
+            modal.id = 'modal-relatorio-olheiro';
+            modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+            modal.innerHTML = `
+                <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                        <h2 style="color:#007bff; margin:0; font-size:18px;">🕵️‍♂️ Dossiê Espião</h2>
+                        <button onclick="document.getElementById('modal-relatorio-olheiro').remove()" style="background:transparent; border:none; color:#aaa; font-size:24px; cursor:pointer;">&times;</button>
+                    </div>
+
+                    <div style="text-align:center; margin-bottom:15px;">
+                        <img src="${getEscudo(timeAlvoId)}" onerror="this.src='esculdos/default.png'" style="width:60px; height:60px; filter:drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                        <h3 style="color:#fff; margin:5px 0 0 0;">${timeAlvoId.replace(/_/g, ' ')}</h3>
+                    </div>
+
+                    <div style="background:#111; padding:12px; border-radius:6px; border:1px solid #333; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="color:#aaa;">Mentalidade:</span><strong style="color:#ff8c00;">${tatica}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#aaa;">Força Bruta do 11:</span><strong style="color:var(--verde-campo);">${forcaTotal}</strong></div>
+                    </div>
+
+                    <h4 style="color:#aaa; border-bottom:1px solid #333; padding-bottom:5px; margin-top:0;">📋 Equipe Titular Identificada</h4>
+                    <div style="max-height: 200px; overflow-y:auto; padding-right:5px;">
+                        ${htmlJogadores || "<span style='color:#666;'>O clube não definiu os titulares.</span>"}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
+
+    } catch(e) { console.error(e); }
+};
+
+// ========================================================
+// 🎭 FUNÇÃO AUXILIAR: MENSAGENS ELEGANTES (NO ALERTS)
+// ========================================================
+function mostrarAvisoElegante(texto, corBorda, icone) {
+    let cx = document.createElement('div');
+    cx.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cx.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:1px solid ${corBorda}; padding:25px; text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">${icone}</div>
+            <p style="color:#fff; font-size:16px; margin-bottom:20px; line-height:1.4;">${texto}</p>
+            <button onclick="this.parentElement.parentElement.remove()" style="width:100%; padding:10px; background:#333; color:#fff; border:1px solid #555; border-radius:4px; font-weight:bold; cursor:pointer;">Fechar</button>
+        </div>
+    `;
+    document.body.appendChild(cx);
 }
