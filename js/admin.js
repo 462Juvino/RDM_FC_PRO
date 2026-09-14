@@ -378,14 +378,35 @@ function injetarTimesIniciais() {
             "Vila_Nova":{divisao:"B",forca_base:0,jogadores:{"Vanderlei":{nome:"Vanderlei",idade:40,posicoes:{p:"Goleiro",s:"Nenhuma",t:"Nenhuma"},atributos:{ataque:1,defesa:7,forca:6,velocidade:2,habilidade:5},valor_mercado:300000},"Léo_Silva_VIL":{nome:"Léo Silva",idade:25,posicoes:{p:"Lateral",s:"Nenhuma",t:"Nenhuma"},atributos:{ataque:5,defesa:6,forca:6,velocidade:8,habilidade:5},valor_mercado:400000},"Anderson_Conceição":{nome:"Anderson Conceição",idade:34,posicoes:{p:"Zagueiro",s:"Nenhuma",t:"Nenhuma"},atributos:{ataque:2,defesa:7,forca:9,velocidade:3,habilidade:4},valor_mercado:380000},"Arilson":{nome:"Arilson",idade:30,posicoes:{p:"Volante",s:"Nenhuma",t:"Nenhuma"},atributos:{ataque:4,defesa:7,forca:7,velocidade:5,habilidade:6},valor_mercado:450000},"Igor_Torres":{nome:"Igor Torres",idade:24,posicoes:{p:"Meia",s:"Ponta",t:"Nenhuma"},atributos:{ataque:6,defesa:3,forca:5,velocidade:7,habilidade:7},valor_mercado:600000},"Fernandinho_VIL":{nome:"Fernandinho",idade:38,posicoes:{p:"Ponta",s:"Nenhuma",t:"Nenhuma"},atributos:{ataque:6,defesa:3,forca:5,velocidade:5,habilidade:7},valor_mercado:350000},"Caio_Dantas":{nome:"Caio Dantas",idade:33,posicoes:{p:"Centroavante",s:"Nenhuma",t:"Nenhuma"},atributos:{ataque:8,defesa:2,forca:8,velocidade:5,habilidade:6},valor_mercado:500000}}},
         };
 
+
+        // DEDUPLICAÇÃO - garante que não há times duplicados na base
+        const timesUnicos = {};
+        for(let t in baseDeTimes){
+            if(!timesUnicos[t]) timesUnicos[t] = baseDeTimes[t];
+        }
+        // Usa timesUnicos daqui pra frente
+        Object.keys(baseDeTimes).forEach(k => { if(!timesUnicos[k]) delete baseDeTimes[k]; });
+        for(let k in timesUnicos){ baseDeTimes[k] = timesUnicos[k]; }
+
+
         // ==========================================
-        // MOTOR DE FUSÃO (Junta os Reservas nos Titulares)
+        // MOTOR DE FUSÃO (Junta os Reservas nos Titulares) - CORRIGIDO
         // ==========================================
         for (let timeId in baseDeReservas) {
-            // Se o time existe na base principal e tem a pasta de jogadores
             if (baseDeTimes[timeId] && baseDeTimes[timeId].jogadores) {
-                // Ele mescla os reservas junto com os titulares instantaneamente!
-                Object.assign(baseDeTimes[timeId].jogadores, baseDeReservas[timeId]);
+                // Suporta 2 formatos:
+                // 1) baseDeReservas[time] = { jogador1, jogador2 }  (formato flat correto)
+                // 2) baseDeReservas[time] = { divisao, forca_base, jogadores: { ... } } (formato que voce usou e quebrou o banco)
+                let reservasParaMerge = baseDeReservas[timeId].jogadores ? baseDeReservas[timeId].jogadores : baseDeReservas[timeId];
+                // Garante que não vai injetar divisao/forca_base dentro de jogadores
+                let reservasLimpas = {};
+                for(let key in reservasParaMerge){
+                    if(key === 'divisao' || key === 'forca_base' || key === 'jogadores') continue; // ignora chaves de time
+                    if(reservasParaMerge[key] && reservasParaMerge[key].nome) {
+                        reservasLimpas[key] = reservasParaMerge[key];
+                    }
+                }
+                Object.assign(baseDeTimes[timeId].jogadores, reservasLimpas);
             }
         }
 
