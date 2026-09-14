@@ -56,7 +56,7 @@ function carregarMundo() {
         // Mapeia quem são os players reais (Humanos)
         timesReaisGlobais = Object.values(usuarios).map(u => u.timeAtual).filter(t => t && t !== "Sem Clube");
 
-        // 1. CARREGA O MUNDO REAL
+        // 1. CARREGA O MUNDO REAL (Série A, Série B, Agentes Livres e PRO Players já formatados)
         for (let time in banco) {
             if (time.startsWith("Agentes_Livres") && time !== `Agentes_Livres_${ligaLogada}`) continue;
 
@@ -85,7 +85,8 @@ function carregarMundo() {
                     forca: ovrAvg,
                     atributos: { ataque: atq, defesa: def, forca: frc, velocidade: vel, habilidade: hab },
                     valor: j.valor_mercado || 0,
-                    isPro: isPro
+                    isPro: isPro,
+                    timeCru: time // 🟢 Referência pura para os Filtros
                 };
 
                 todosJogadores.push(objJogador);
@@ -114,14 +115,49 @@ function carregarMundo() {
 
                 todosJogadores.push({
                     id_banco: "PRO_" + dono, nome: p.nome + " (PRO)", idade: 17, clube: "Base (Em Avaliação)", posicao: p.posicao,
-                    forca: ovrDinâmico, atributos: { ataque: mxA, defesa: mxD, forca: mxF, velocidade: mxV, habilidade: mxH }, valor: 0, isPro: true, avaliando: true
+                    forca: ovrDinâmico, atributos: { ataque: mxA, defesa: mxD, forca: mxF, velocidade: mxV, habilidade: mxH }, valor: 0, isPro: true, avaliando: true,
+                    timeCru: "Base"
                 });
             }
         }
 
         todosJogadores.sort((a, b) => b.forca - a.forca);
 
-        // 3. MAPEIA AS TRANSAÇÕES E PROPOSTAS
+        // 3. INJETA O FILTRO DE CLUBES DINAMICAMENTE NO HTML
+        // Primeiro, garantimos que a caixa de pesquisa seja um Flex Container para acomodar o novo menu
+        let boxFiltrosHtml = document.querySelector('.card-time[style*="margin-bottom"]');
+        if (boxFiltrosHtml) {
+            boxFiltrosHtml.style.display = "flex";
+            boxFiltrosHtml.style.flexWrap = "wrap";
+            boxFiltrosHtml.style.gap = "10px";
+            boxFiltrosHtml.style.alignItems = "center";
+            boxFiltrosHtml.style.justifyContent = "flex-start";
+        }
+
+        if (!document.getElementById('filtro-clube')) {
+            let clubesUnicos = [...new Set(todosJogadores.map(j => j.timeCru))].sort();
+
+            let htmlSelect = `<select id="filtro-clube" onchange="renderizarMercado()" style="padding: 10px; background-color: #2a2a2a; color: white; border: 1px solid #444; border-radius: 6px; outline: none; cursor: pointer; min-width: 150px;">
+                <option value="TODOS">🌍 Todos os Clubes</option>`;
+
+            clubesUnicos.forEach(c => {
+                let nomeBonito = c.replace(/_/g, ' ');
+                // Destaca os Agentes Livres e a Base
+                if(c === "Base") nomeBonito = "🌟 Categoria de Base";
+                if(c.startsWith("Agentes")) nomeBonito = "💼 Agentes Livres";
+
+                htmlSelect += `<option value="${c}">${nomeBonito}</option>`;
+            });
+            htmlSelect += `</select>`;
+
+            // Procura onde injetar: Do lado do filtro de Posição
+            let selectPosicaoHtml = document.getElementById('filtro-posicao');
+            if(selectPosicaoHtml) {
+                selectPosicaoHtml.insertAdjacentHTML('afterend', htmlSelect);
+            }
+        }
+
+        // 4. MAPEIA AS TRANSAÇÕES E PROPOSTAS
         for (let idAlvo in propostas) {
             let lances = propostas[idAlvo];
             let alvoEncontrado = todosJogadores.find(j => j.id_banco === idAlvo);
@@ -155,14 +191,19 @@ function carregarMundo() {
     });
 }
 
-function renderizarMercado(termoBusca = "") {
+window.renderizarMercado = function(termoBusca = "") {
     const selectPos = document.getElementById('filtro-posicao');
     if (selectPos && !document.getElementById('opt-pro')) {
         selectPos.innerHTML += `<option id="opt-pro" value="PRO_PLAYERS" style="color:var(--verde-campo); font-weight:bold;">🌟 Apenas Pro Players</option>`;
     }
 
     const filtroPos = selectPos ? selectPos.value : "TODOS";
+    const selectClube = document.getElementById('filtro-clube');
+    const filtroClube = selectClube ? selectClube.value : "TODOS";
+
     const tbody = document.getElementById('tabela-mercado');
+    if(!tbody) return;
+
     tbody.innerHTML = "";
 
     // Detecta se a tela é de Celular (Mobile)
@@ -187,20 +228,27 @@ function renderizarMercado(termoBusca = "") {
     for (let i = 0; i < todosJogadores.length; i++) {
         let j = todosJogadores[i];
 
+        // 🟢 Filtro de Posição
         if (filtroPos !== "TODOS") {
             if (filtroPos === "PRO_PLAYERS" && !j.isPro) continue;
             if (filtroPos === "Atacante" && !["Atacante", "Ponta", "Centroavante"].includes(j.posicao)) continue;
             if (filtroPos !== "Atacante" && filtroPos !== "PRO_PLAYERS" && j.posicao !== filtroPos) continue;
         }
 
-        if (termoBusca && !j.nome.toLowerCase().includes(termoBusca.toLowerCase())) continue;
-        if (exibidos >= 50) break;
+        // 🟢 Filtro de Clube (NOVO)
+        if (filtroClube !== "TODOS" && j.timeCru !== filtroClube) continue;
+
+        if (termoBusca && typeof termoBusca === 'string') {
+            if (!j.nome.toLowerCase().includes(termoBusca.toLowerCase())) continue;
+        }
+
+        if (exibidos >= 150) break; // Exibe até 150 para garantir que todos do time caibam
 
         let ehDoMeuTime = (j.clube === dadosUsuario.timeAtual.replace(/_/g, ' '));
 
         // Ação Dinâmica de Clique na Linha (Mobile & Desktop)
         let acaoClick = "";
-        if (j.avaliando) acaoClick = `alert('Na Base. Aguarde a formatação deste Pro Player!')`;
+        if (j.avaliando) acaoClick = `alert('Na Base. Aguarde a formatação deste Pro Player na 5ª Rodada!')`;
         else if (dadosUsuario.timeAtual === "Sem Clube") acaoClick = `alert('Requer Clube para negociar.')`;
         else if (ehDoMeuTime) acaoClick = `abrirOpcoesMeuJogador('${j.id_banco}')`;
         else acaoClick = `fazerProposta('${j.id_banco}')`;
