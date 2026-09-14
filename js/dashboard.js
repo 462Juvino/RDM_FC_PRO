@@ -474,54 +474,152 @@ window.concluirTreinoCT = async function(idJog, atributo, meuTimeId) {
     } catch(e) { console.error("Erro ao concluir CT:", e); }
 };
 
+// ========================================================
+// 🎭 FUNÇÃO AUXILIAR: MENSAGENS ELEGANTES DASHBOARD
+// ========================================================
+window.mostrarAvisoEleganteDash = function(texto, corBorda, icone) {
+    let cx = document.createElement('div');
+    cx.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cx.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:1px solid ${corBorda}; padding:25px; text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">${icone}</div>
+            <p style="color:#fff; font-size:16px; margin-bottom:20px; line-height:1.4;">${texto}</p>
+            <button onclick="this.parentElement.parentElement.remove()" style="width:100%; padding:10px; background:#333; color:#fff; border:1px solid #555; border-radius:4px; font-weight:bold; cursor:pointer;">Fechar</button>
+        </div>
+    `;
+    document.body.appendChild(cx);
+};
+
 // 🎤 SISTEMA DE RETENÇÃO DIÁRIA (MANUTENÇÃO DA MORAL)
 window.darColetivaImprensa = async function() {
     let hoje = new Date().toLocaleDateString('pt-BR');
-    if (dadosUsuario.ultima_coletiva === hoje) return alert("Você já deu uma coletiva hoje! A mídia e a torcida estão cansadas da sua voz por hoje.");
+    if (dadosUsuario.ultima_coletiva === hoje) return mostrarAvisoEleganteDash("Você já deu uma coletiva hoje! A mídia e a torcida estão cansadas da sua voz por hoje.", "#ff8c00", "🎤");
 
-    let sucesso = Math.random() > 0.4; // 60% chance de sucesso
-    let moralAtual = dadosUsuario.moral || 50;
-    let novaMoral = sucesso ? Math.min(100, moralAtual + 15) : Math.max(0, moralAtual - 10);
+    let cxConf = document.createElement('div');
+    cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cxConf.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #555; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.5); text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">🎤</div>
+            <h3 style="color:#fff; margin-top:0;">Coletiva de Imprensa</h3>
+            <p style="color:#ccc; font-size:14px; margin-bottom:20px;">Deseja convocar os jornalistas? Uma boa entrevista pode subir a moral em 15%, mas uma declaração infeliz derruba a moral em 10%.</p>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-conf-coletiva" style="flex:1; padding:12px; background:#007bff; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Convocar</button>
+                <button id="btn-canc-coletiva" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Não, Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cxConf);
 
-    let msg = sucesso ? "✅ A coletiva foi um sucesso! Você animou os torcedores (+15% Moral)." : "❌ Desastre na coletiva! Você falou besteira e irritou a torcida (-10% Moral).";
+    document.getElementById('btn-canc-coletiva').onclick = () => cxConf.remove();
+    document.getElementById('btn-conf-coletiva').onclick = async () => {
+        cxConf.remove();
 
-    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
-        moral: novaMoral,
-        ultima_coletiva: hoje
-    });
-    alert(msg);
+        let sucesso = Math.random() > 0.4; // 60% chance de sucesso
+        let moralAtual = dadosUsuario.moral || 50;
+        let novaMoral = sucesso ? Math.min(100, moralAtual + 15) : Math.max(0, moralAtual - 10);
+
+        let msg = sucesso ? "A coletiva foi um sucesso! Você animou os torcedores (+15% Moral)." : "Desastre na coletiva! Você falou besteira e irritou a torcida (-10% Moral).";
+
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+            moral: novaMoral,
+            ultima_coletiva: hoje
+        });
+
+        // Atualiza variável local para o painel não piscar errado depois
+        dadosUsuario.moral = novaMoral;
+
+        mostrarAvisoEleganteDash(msg, sucesso ? "var(--verde-campo)" : "#dc3545", sucesso ? "✅" : "❌");
+    };
 };
 
 window.pagarBichoExtra = async function() {
     let hoje = new Date().toLocaleDateString('pt-BR');
-    if (dadosUsuario.ultimo_bicho === hoje) return alert("A diretoria vetou! O Bicho Extra só pode ser pago uma vez ao dia.");
+    if (dadosUsuario.ultimo_bicho === hoje) return mostrarAvisoEleganteDash("A diretoria vetou! O Bicho Extra só pode ser pago uma vez ao dia.", "#ff8c00", "⛔");
 
     let caixa = dadosUsuario.caixaClube || 0;
-    if (caixa < 500000) return alert("Você não tem R$ 500.000 em caixa para pagar essa premiação!");
+    if (caixa < 500000) return mostrarAvisoEleganteDash("Você não tem R$ 500.000 em caixa para pagar essa premiação!", "#dc3545", "💸");
 
-    let moralAtual = dadosUsuario.moral || 50;
-    let novaMoral = Math.min(100, moralAtual + 25);
+    let cxConf = document.createElement('div');
+    cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cxConf.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #ff8c00; padding:20px; box-shadow:0 10px 40px rgba(255,140,0,0.3); text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">💰</div>
+            <h3 style="color:#ff8c00; margin-top:0;">Pagar Bicho Extra</h3>
+            <p style="color:#ccc; font-size:14px; margin-bottom:20px;">Deseja tirar <strong>R$ 500.000,00</strong> do caixa e dividir com o elenco para aumentar a motivação (+25% Moral)?</p>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-conf-bicho" style="flex:1; padding:12px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Pagar</button>
+                <button id="btn-canc-bicho" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Não, Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cxConf);
 
-    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
-        moral: novaMoral,
-        caixaClube: caixa - 500000,
-        ultimo_bicho: hoje
-    });
-    alert("💸 O vestiário virou uma festa! Jogadores ultra motivados (+25% Moral). R$ 500.000 foram descontados do caixa.");
+    document.getElementById('btn-canc-bicho').onclick = () => cxConf.remove();
+    document.getElementById('btn-conf-bicho').onclick = async () => {
+        cxConf.remove();
+
+        let moralAtual = dadosUsuario.moral || 50;
+        let novaMoral = Math.min(100, moralAtual + 25);
+        let novoCaixa = caixa - 500000;
+
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+            moral: novaMoral,
+            caixaClube: novoCaixa,
+            ultimo_bicho: hoje
+        });
+
+        // Atualiza a interface gráfica do saldo na hora!
+        dadosUsuario.caixaClube = novoCaixa;
+        dadosUsuario.moral = novaMoral;
+        let saldoElem = document.getElementById('saldo-treinador');
+        if (saldoElem) {
+            saldoElem.innerText = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoCaixa);
+        }
+
+        mostrarAvisoEleganteDash("O vestiário virou uma festa! Jogadores ultra motivados (+25% Moral).<br><br>R$ 500.000 foram descontados do caixa.", "var(--verde-campo)", "🎉");
+    };
 };
 
 // 📺 SISTEMA DE RETENÇÃO 2 (COTA DE TV / DAILY LOGIN)
 window.recolherPatrocinio = async function() {
     let hoje = new Date().toLocaleDateString('pt-BR');
-    if (dadosUsuario.ultimo_patrocinio === hoje) return alert("Você já resgatou sua Cota de TV diária! Volte amanhã.");
+    if (dadosUsuario.ultimo_patrocinio === hoje) return mostrarAvisoEleganteDash("Você já resgatou sua Cota de TV diária! Volte amanhã.", "#ff8c00", "📺");
 
-    let caixa = (dadosUsuario.caixaClube || 0) + 2000000; // Injeta R$ 2.000.000
+    let cxConf = document.createElement('div');
+    cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cxConf.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3); text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">📺</div>
+            <h3 style="color:#007bff; margin-top:0;">Recolher Cota de TV</h3>
+            <p style="color:#ccc; font-size:14px; margin-bottom:20px;">O Patrocinador Master liberou o depósito da rodada. Deseja resgatar <strong>R$ 2.000.000,00</strong> para os cofres do clube?</p>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-conf-tv" style="flex:1; padding:12px; background:#007bff; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Resgatar</button>
+                <button id="btn-canc-tv" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Não, Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cxConf);
 
-    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
-        caixaClube: caixa,
-        ultimo_patrocinio: hoje
-    });
-    alert("📺 Patrocinador Master depositou R$ 2.000.000 na conta do clube! Volte todos os dias para não perder dinheiro.");
+    document.getElementById('btn-canc-tv').onclick = () => cxConf.remove();
+    document.getElementById('btn-conf-tv').onclick = async () => {
+        cxConf.remove();
+
+        let novoCaixa = (dadosUsuario.caixaClube || 0) + 2000000;
+
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+            caixaClube: novoCaixa,
+            ultimo_patrocinio: hoje
+        });
+
+        // Atualiza a interface gráfica do saldo na hora!
+        dadosUsuario.caixaClube = novoCaixa;
+        let saldoElem = document.getElementById('saldo-treinador');
+        if (saldoElem) {
+            saldoElem.innerText = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoCaixa);
+        }
+
+        mostrarAvisoEleganteDash("A transferência caiu na conta! Patrocinador depositou R$ 2.000.000.<br><br>Volte todos os dias para não perder a cota.", "var(--verde-campo)", "💰");
+    };
 };
 
 // 💬 SISTEMA DE CHAT GLOBAL (OTIMIZADO PARA MOBILE)
@@ -1514,10 +1612,10 @@ window.renderAbaX1 = function(aba) {
         for (let t in arenaDadosGlobais.times) {
             if (t === meuTime || t.startsWith("Agentes_Livres") || t === "Fantasma") continue;
 
-            // Busca se tem alguém controlando esse time
+            // 🟢 IDENTIFICAÇÃO CORRETA DE IA: Só é player se não começar com IA_
             let donoNome = "🤖 IA";
             for (let k in arenaDadosGlobais.usuarios) {
-                if (arenaDadosGlobais.usuarios[k].timeAtual === t) {
+                if (arenaDadosGlobais.usuarios[k].timeAtual === t && !k.startsWith('IA_')) {
                     donoNome = `👤 ${arenaDadosGlobais.usuarios[k].nome}`;
                     break;
                 }
@@ -1550,6 +1648,10 @@ window.renderAbaX1 = function(aba) {
         let cont = 0;
         for (let id in desafiosX1Globais) {
             let d = desafiosX1Globais[id];
+
+            // 🟢 LIXEIRA DE REPRISES: Se o jogo acabou e VOCÊ já assistiu, some daqui!
+            if (d.status === 'finalizado' && d[`visto_${userLogado}`]) continue;
+
             let isEnv = (aba === 'env' && d.desafiante === meuTime);
             let isRec = (aba === 'rec' && d.desafiado === meuTime);
 
@@ -1574,10 +1676,10 @@ window.renderAbaX1 = function(aba) {
                     botoes = `<button onclick="iniciarTransmissaoX1('${id}')" style="padding:6px 12px; background:#333; color:#aaa; border:1px solid #555; border-radius:4px; cursor:pointer; font-size:11px; width:100%;">Ver Reprise da Partida</button>`;
                 }
 
-                // Descobre o nome do adversário do desafio
+                // 🟢 IDENTIFICAÇÃO CORRETA DE IA DO OPONENTE
                 let nomeAdv = "🤖 IA";
                 for (let k in arenaDadosGlobais.usuarios) {
-                    if (arenaDadosGlobais.usuarios[k].timeAtual === adv) {
+                    if (arenaDadosGlobais.usuarios[k].timeAtual === adv && !k.startsWith('IA_')) {
                         nomeAdv = `👤 ${arenaDadosGlobais.usuarios[k].nome}`;
                         break;
                     }
@@ -1596,8 +1698,8 @@ window.renderAbaX1 = function(aba) {
                         <div style="text-align:right;">${botoes}</div>
                     </div>
                 `;
-            } // Fecha o IF
-        } // 🟢 Fecha o FOR (Esta é a chave mágica que ressucitará o seu painel!)
+            }
+        }
         div.innerHTML = html || `<p style="text-align:center; color:#666; margin-top:30px;">Nenhum desafio nesta aba.</p>`;
     }
 };
@@ -1646,48 +1748,56 @@ window.enviarDesafioX1 = async function() {
     let tipo = document.getElementById('x1-tipo-aposta').value;
     let meuTime = dadosUsuario.timeAtual;
 
-    if (!oponente) return alert("Selecione um oponente!");
+    if (!oponente) return mostrarAvisoEleganteDash("Selecione um oponente!", "#dc3545", "⚔️");
 
     let forcaM = arenaDadosGlobais.times[meuTime].forca_base || 500;
     let forcaV = arenaDadosGlobais.times[oponente].forca_base || 500;
-    let isOponenteIA = !Object.values(arenaDadosGlobais.usuarios).some(u => u.timeAtual === oponente);
+
+    // 🟢 IDENTIFICAÇÃO CORRETA DE IA NO DISPARO
+    let isOponenteIA = true;
+    for (let k in arenaDadosGlobais.usuarios) {
+        if (arenaDadosGlobais.usuarios[k].timeAtual === oponente && !k.startsWith('IA_')) {
+            isOponenteIA = false;
+            break;
+        }
+    }
 
     if (isOponenteIA && forcaM > forcaV) {
-        return alert(`A Diretoria do ${oponente.replace(/_/g, ' ')} RECUSOU o desafio! A inteligência artificial identificou que seu time é superior e não quer arriscar perder os ativos do clube.`);
+        return mostrarAvisoEleganteDash(`A Diretoria do ${oponente.replace(/_/g, ' ')} RECUSOU o desafio!<br><br>A inteligência artificial identificou que seu time é superior e não quer arriscar perder os ativos do clube.`, "#ff8c00", "🤖");
     }
 
     let apostaValidada = {};
-    let taxaX1 = 5000; // 🟢 Taxa de manutenção da arena
+    let taxaX1 = 5000;
 
     if (tipo === 'dinheiro') {
         let valor = parseInt(document.getElementById('x1-valor-aposta').value);
-        if (isNaN(valor) || valor <= 0) return alert("Valor de aposta inválido.");
+        if (isNaN(valor) || valor <= 0) return mostrarAvisoEleganteDash("Valor de aposta inválido.", "#dc3545", "❌");
 
         let caixaM = dadosUsuario.caixaClube || 0;
         let caixaV = isOponenteIA ? 50000000 : 0;
         if (!isOponenteIA) {
-            let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente);
+            let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente && !u.nome.includes('Diretoria'));
             if (userAdv) caixaV = userAdv.caixaClube || 0;
         }
 
-        if (caixaM < (valor + taxaX1)) return alert(`Saldo Insuficiente! Você precisa do valor da aposta + R$ 5.000 da Taxa da Arena.`);
-        if (caixaV < (valor + taxaX1)) return alert(`O oponente não tem caixa para a aposta + R$ 5.000 de Taxa.`);
+        if (caixaM < (valor + taxaX1)) return mostrarAvisoEleganteDash(`Saldo Insuficiente! Você precisa do valor da aposta + R$ 5.000 da Taxa da Arena.`, "#dc3545", "💸");
+        if (caixaV < (valor + taxaX1)) return mostrarAvisoEleganteDash(`O oponente não tem caixa para a aposta + R$ 5.000 de Taxa.`, "#dc3545", "💸");
 
         apostaValidada = { tipo: 'dinheiro', valor: valor, taxa: taxaX1 };
     } else {
         let meuId = document.getElementById('x1-meu-jogador').value;
         let advId = document.getElementById('x1-adv-jogador').value;
-        if (!meuId || !advId) return alert("Selecione os dois jogadores da aposta.");
+        if (!meuId || !advId) return mostrarAvisoEleganteDash("Selecione os dois jogadores da aposta.", "#dc3545", "👤");
 
         let caixaM = dadosUsuario.caixaClube || 0;
         let caixaV = isOponenteIA ? 50000000 : 0;
         if (!isOponenteIA) {
-            let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente);
+            let userAdv = Object.values(arenaDadosGlobais.usuarios).find(u => u.timeAtual === oponente && !u.nome.includes('Diretoria'));
             if (userAdv) caixaV = userAdv.caixaClube || 0;
         }
 
-        if (caixaM < taxaX1) return alert(`Você precisa ter pelo menos R$ 5.000 em caixa para pagar a Taxa da Arena.`);
-        if (caixaV < taxaX1) return alert(`O oponente não tem R$ 5.000 em caixa para pagar a Taxa da Arena.`);
+        if (caixaM < taxaX1) return mostrarAvisoEleganteDash(`Você precisa ter pelo menos R$ 5.000 em caixa para pagar a Taxa da Arena.`, "#dc3545", "💸");
+        if (caixaV < taxaX1) return mostrarAvisoEleganteDash(`O oponente não tem R$ 5.000 em caixa para pagar a Taxa da Arena.`, "#dc3545", "💸");
 
         let meuJog = arenaDadosGlobais.times[meuTime].jogadores[meuId];
         let advJog = arenaDadosGlobais.times[oponente].jogadores[advId];
@@ -1697,15 +1807,13 @@ window.enviarDesafioX1 = async function() {
         let diff = Math.abs(valorM - valorV);
         let maxDiff = Math.max(valorM, valorV) * 0.05;
 
-        if (diff > maxDiff) return alert(`Aposta Rejeitada! A diferença de valor ultrapassa 5%.\nSeu Jogador: ${formatarDinheiro(valorM)}\nAdversário: ${formatarDinheiro(valorV)}`);
+        if (diff > maxDiff) return mostrarAvisoEleganteDash(`Aposta Rejeitada! A diferença de valor ultrapassa 5%.<br><br>Seu Jogador: ${formatarDinheiro(valorM)}<br>Adversário: ${formatarDinheiro(valorV)}`, "#dc3545", "⚖️");
 
         apostaValidada = { tipo: 'jogador', id_meu: meuId, id_adv: advId, dados_meu: meuJog, dados_adv: advJog };
     }
 
     if (isOponenteIA) {
-        // IA SIMULATION INSTANT (Fica pronto na hora)
-
-        // --- INÍCIO DA GERAÇÃO DE LANCES DO X1 ---
+        // IA SIMULATION INSTANT
         let linhaTempoX1 = [];
         let golsM = 0; let golsV = 0;
 
@@ -1763,7 +1871,6 @@ window.enviarDesafioX1 = async function() {
         }
 
         linhaTempoX1.sort((a,b) => a.minuto - b.minuto);
-        // --- FIM DA GERAÇÃO DE LANCES ---
 
         let empate = (golsM === golsV);
         let venci = golsM > golsV;
@@ -1796,11 +1903,10 @@ window.enviarDesafioX1 = async function() {
             d.dados_meu = apostaValidada.dados_meu; d.dados_adv = apostaValidada.dados_adv;
         }
         await db.ref(`ligas/${ligaLogada}/x1_desafios/${idDesafio}`).set(d);
-        alert("Desafio enviado com sucesso! Aguarde o oponente aceitar na aba 'Enviados'.");
+        mostrarAvisoEleganteDash("Desafio enviado com sucesso! Aguarde o oponente aceitar na aba 'Enviados'.", "var(--verde-campo)", "🚀");
         renderAbaX1('env');
     }
 };
-
 window.cancelarDesafioX1 = async function(id) {
     if(confirm("Deseja cancelar/recusar este desafio?")) {
         await db.ref(`ligas/${ligaLogada}/x1_desafios/${id}`).remove();
@@ -1886,7 +1992,10 @@ function gerarLinhaTempoX1(forcaM, forcaV, mandante, visitante) {
 window.iniciarTransmissaoX1 = async function(id) {
     let snap = await db.ref(`ligas/${ligaLogada}/x1_desafios/${id}`).once('value');
     let d = snap.val();
-    if(!d) return alert("Desafio não existe mais.");
+    if(!d) return mostrarAvisoEleganteDash("Desafio não existe mais.", "#dc3545", "🗑️");
+
+    // 🟢 MÁGICA DA LIXEIRA: Grava no Firebase que você (usuário atual) já deu play nesta reprise!
+    db.ref(`ligas/${ligaLogada}/x1_desafios/${id}/visto_${userLogado}`).set(true);
 
     let meuTime = dadosUsuario.timeAtual;
     let isDesafiante = (d.desafiante === meuTime);
@@ -2282,32 +2391,66 @@ window.mudarVelocidadeSimulacao = function(v) {
 // 🛡️ SISTEMA DE TREINO SIGILOSO (ANTI-OLHEIRO)
 // ========================================================
 window.ativarTreinoSigiloso = async function() {
-    if(!confirm("🛡️ Ativar Treino Sigiloso?\n\nCusto: R$ 100.000\nEfeito: Bloqueia a ação de olheiros adversários tentando ver sua tática.\nDuração: Vale apenas para o próximo jogo oficial simulado.")) return;
+    let cxConf = document.createElement('div');
+    cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cxConf.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #800080; padding:20px; box-shadow:0 10px 40px rgba(128,0,128,0.3); text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">🛡️</div>
+            <h3 style="color:#800080; margin-top:0;">Treino de Portões Fechados</h3>
+            <p style="color:#ccc; font-size:14px; margin-bottom:15px;">Deseja ativar o Treino Sigiloso para bloquear olheiros adversários?</p>
+            <div style="background:#111; border:1px dashed #444; padding:10px; border-radius:6px; margin-bottom:20px;">
+                <span style="color:#888; font-size:12px;">Custo da Proteção:</span><br>
+                <strong style="color:var(--verde-campo); font-size:18px;">R$ 100.000,00</strong>
+                <div style="font-size:10px; color:#666; margin-top:5px;">(Vale para a próxima rodada simulada)</div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-confirma-escudo" style="flex:1; padding:12px; background:#800080; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Ativar</button>
+                <button id="btn-cancela-escudo" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Não, Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cxConf);
 
-    try {
-        const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
-        let u = snapUser.val();
-        if(u.caixaClube < 100000) return alert("Você não tem R$ 100.000 em caixa para fechar os portões do CT!");
+    document.getElementById('btn-cancela-escudo').onclick = () => cxConf.remove();
+    document.getElementById('btn-confirma-escudo').onclick = async () => {
+        cxConf.remove();
+        try {
+            const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+            let u = snapUser.val();
 
-        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
-        let cal = snapCal.val() || {};
-        let rodadaAlvo = cal.rodadaAtual || 1;
+            if(u.caixaClube < 100000) {
+                return mostrarAvisoEleganteDash("Você não tem R$ 100.000 em caixa para fechar os portões do CT!", "#dc3545", "💸");
+            }
 
-        // Se já passou das 19h, o treino sigiloso vai proteger a rodada do dia seguinte!
-        if (new Date().getHours() >= 19) rodadaAlvo += 1;
+            const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+            let cal = snapCal.val() || {};
+            let rodadaAlvo = cal.rodadaAtual || 1;
 
-        if (u.escudo_rodada && u.escudo_rodada.rodada === rodadaAlvo) {
-            return alert("O seu CT já está com os portões fechados para esta rodada!");
+            // Se já passou das 19h, a proteção vale para o jogo do dia seguinte
+            if (new Date().getHours() >= 19) rodadaAlvo += 1;
+
+            if (u.escudo_rodada && u.escudo_rodada.rodada === rodadaAlvo && u.escudo_rodada.ativo) {
+                return mostrarAvisoEleganteDash("O seu CT já está com os portões fechados para esta rodada!", "#ff8c00", "🛡️");
+            }
+
+            let novoCaixa = u.caixaClube - 100000;
+            await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+                caixaClube: novoCaixa,
+                escudo_rodada: { rodada: rodadaAlvo, ativo: true }
+            });
+
+            // Atualiza o saldo instantaneamente na interface!
+            let saldoElem = document.getElementById('saldo-treinador');
+            if (saldoElem) {
+                saldoElem.innerText = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoCaixa);
+            }
+
+            mostrarAvisoEleganteDash("Portões trancados! Seu treinamento está em sigilo absoluto para a Rodada " + rodadaAlvo + ".<br><br>(- R$ 100.000)", "#800080", "🔒");
+        } catch(e) {
+            console.error(e);
+            mostrarAvisoEleganteDash("Ocorreu um erro ao comunicar com o servidor.", "#dc3545", "🔌");
         }
-
-        let novoCaixa = u.caixaClube - 100000;
-        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
-            caixaClube: novoCaixa,
-            escudo_rodada: { rodada: rodadaAlvo, ativo: true }
-        });
-
-        alert("🛡️ Portões trancados! Seu treinamento está em sigilo absoluto para a Rodada " + rodadaAlvo + ".\n(- R$ 100.000)");
-    } catch(e) { console.error(e); }
+    };
 };
 
 // ========================================================
@@ -2495,3 +2638,164 @@ window.abrirManualDoJogo = function() {
     `;
     document.body.appendChild(modal);
 };
+
+// ========================================================
+// 👁️ SISTEMA DE OLHEIRO (ESPIONAGEM ADVERSÁRIA) COM AVISO ELEGANTE
+// ========================================================
+window.espionarAdversario = async function(timeAlvoId) {
+    try {
+        const snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+        let eu = snapUser.val();
+
+        const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+        let cal = snapCal.val() || {};
+        let rodadaAtual = cal.rodadaAtual || 1;
+
+        // Se já passou das 19h, a espionagem cobra na cota da próxima rodada
+        let rodadaCobranca = (new Date().getHours() >= 19) ? rodadaAtual + 1 : rodadaAtual;
+
+        // Calcula o custo (Dobra a cada uso na mesma rodada)
+        let olheiroData = eu.uso_olheiro || { rodada: 0, qtd: 0 };
+        if (olheiroData.rodada !== rodadaCobranca) {
+            olheiroData = { rodada: rodadaCobranca, qtd: 0 };
+        }
+
+        let custo = 50000 * Math.pow(2, olheiroData.qtd);
+
+        let formatarDinheiro = (v) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
+
+        // Caixa Modal Customizada (Substitui o Confirm/Alert feio do navegador)
+        let cxConf = document.createElement('div');
+        cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+        cxConf.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #ff8c00; padding:20px; box-shadow:0 10px 40px rgba(255,140,0,0.3); text-align:center;">
+                <div style="font-size:40px; margin-bottom:10px;">🕵️‍♂️</div>
+                <h3 style="color:#ff8c00; margin-top:0;">Missão de Espionagem</h3>
+                <p style="color:#ccc; font-size:14px; margin-bottom:20px;">Deseja enviar um olheiro infiltrado ao CT do <strong>${timeAlvoId.replace(/_/g, ' ')}</strong>?</p>
+                <div style="background:#111; border:1px dashed #444; padding:10px; border-radius:6px; margin-bottom:20px;">
+                    <span style="color:#888; font-size:12px;">Custo desta missão:</span><br>
+                    <strong style="color:var(--verde-campo); font-size:18px;">${formatarDinheiro(custo)}</strong>
+                    <div style="font-size:10px; color:#666; margin-top:5px;">(O valor dobra a cada espionagem no mesmo dia)</div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-confirma-esp" style="flex:1; padding:10px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Pagar e Enviar</button>
+                    <button id="btn-cancela-esp" style="flex:1; padding:10px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(cxConf);
+
+        // Ações do Modal Customizado
+        document.getElementById('btn-cancela-esp').onclick = () => cxConf.remove();
+        document.getElementById('btn-confirma-esp').onclick = async () => {
+            cxConf.remove();
+
+            if(eu.caixaClube < custo) {
+                return mostrarAvisoElegante(`Você não tem R$ ${formatarDinheiro(custo)} em caixa. O olheiro se recusou a trabalhar!`, "#dc3545", "🚨");
+            }
+
+            // 1. Cobra o valor do Caixa
+            let novoCaixa = eu.caixaClube - custo;
+            olheiroData.qtd += 1;
+            await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+                caixaClube: novoCaixa,
+                uso_olheiro: olheiroData
+            });
+
+            // 2. Tenta Invadir o Sistema do Alvo
+            const snapAllUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+            const usuariosGeral = snapAllUsers.val() || {};
+            const snapTimes = await db.ref('banco_global_times').once('value');
+            const timesGerais = snapTimes.val() || {};
+
+            let donoAlvoObj = null;
+            let isIA = true;
+
+            for(let u in usuariosGeral) {
+                if(usuariosGeral[u].timeAtual === timeAlvoId) {
+                    donoAlvoObj = usuariosGeral[u];
+                    isIA = u.startsWith("IA_");
+                    break;
+                }
+            }
+
+            // Verifica o Escudo do adversário
+            if (!isIA && donoAlvoObj && donoAlvoObj.escudo_rodada && donoAlvoObj.escudo_rodada.rodada === rodadaCobranca && donoAlvoObj.escudo_rodada.ativo) {
+                return mostrarAvisoElegante(`MISSÃO FRACASSADA!<br><br>O técnico do ${timeAlvoId.replace(/_/g, ' ')} fechou os portões do CT. Seu olheiro não viu nada, mas o dinheiro da missão foi gasto.`, "#dc3545", "🛡️");
+            }
+
+            // 3. Sucesso! Pega a Escalação
+            let tatica = donoAlvoObj ? (donoAlvoObj.mentalidade || "Moderado") : "Moderado";
+            let titularesIDs = donoAlvoObj ? (donoAlvoObj.titulares || []) : [];
+            let timeDados = timesGerais[timeAlvoId]?.jogadores || {};
+
+            if (isIA || titularesIDs.length === 0) {
+                let elencoCompleto = Object.values(timeDados).sort((a,b) => {
+                    let ovrA = (a.atributos.ataque+a.atributos.defesa+a.atributos.forca+a.atributos.velocidade+a.atributos.habilidade);
+                    let ovrB = (b.atributos.ataque+b.atributos.defesa+b.atributos.forca+b.atributos.velocidade+b.atributos.habilidade);
+                    return ovrB - ovrA;
+                });
+                titularesIDs = elencoCompleto.slice(0, 11);
+            } else {
+                titularesIDs = titularesIDs.filter(id => id).map(id => timeDados[id]).filter(j => j);
+            }
+
+            let forcaTotal = 0;
+            let htmlJogadores = "";
+
+            titularesIDs.forEach(j => {
+                let at = j.atributos || {ataque:0, defesa:0, forca:0, velocidade:0, habilidade:0};
+                let ovr = Math.round((at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5);
+                forcaTotal += (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade);
+                let pos = j.posicoes ? j.posicoes.p.charAt(0) : "N";
+                htmlJogadores += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #333; padding:4px 0; font-size:13px;"><span><strong style="color:var(--verde-campo);">${pos}</strong> - ${j.nome}</span><strong style="color:#ff8c00;">${ovr}</strong></div>`;
+            });
+
+            // 4. Cria o Modal de Relatório Final
+            let modal = document.createElement('div');
+            modal.id = 'modal-relatorio-olheiro';
+            modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+            modal.innerHTML = `
+                <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                        <h2 style="color:#007bff; margin:0; font-size:18px;">🕵️‍♂️ Dossiê Espião</h2>
+                        <button onclick="document.getElementById('modal-relatorio-olheiro').remove()" style="background:transparent; border:none; color:#aaa; font-size:24px; cursor:pointer;">&times;</button>
+                    </div>
+
+                    <div style="text-align:center; margin-bottom:15px;">
+                        <img src="${getEscudo(timeAlvoId)}" onerror="this.src='esculdos/default.png'" style="width:60px; height:60px; filter:drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                        <h3 style="color:#fff; margin:5px 0 0 0;">${timeAlvoId.replace(/_/g, ' ')}</h3>
+                    </div>
+
+                    <div style="background:#111; padding:12px; border-radius:6px; border:1px solid #333; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="color:#aaa;">Mentalidade:</span><strong style="color:#ff8c00;">${tatica}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#aaa;">Força Bruta do 11:</span><strong style="color:var(--verde-campo);">${forcaTotal}</strong></div>
+                    </div>
+
+                    <h4 style="color:#aaa; border-bottom:1px solid #333; padding-bottom:5px; margin-top:0;">📋 Equipe Titular Identificada</h4>
+                    <div style="max-height: 200px; overflow-y:auto; padding-right:5px;">
+                        ${htmlJogadores || "<span style='color:#666;'>O clube não definiu os titulares.</span>"}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
+
+    } catch(e) { console.error(e); }
+};
+
+// ========================================================
+// 🎭 FUNÇÃO AUXILIAR: MENSAGENS ELEGANTES (NO ALERTS)
+// ========================================================
+function mostrarAvisoElegante(texto, corBorda, icone) {
+    let cx = document.createElement('div');
+    cx.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cx.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:1px solid ${corBorda}; padding:25px; text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">${icone}</div>
+            <p style="color:#fff; font-size:16px; margin-bottom:20px; line-height:1.4;">${texto}</p>
+            <button onclick="this.parentElement.parentElement.remove()" style="width:100%; padding:10px; background:#333; color:#fff; border:1px solid #555; border-radius:4px; font-weight:bold; cursor:pointer;">Fechar</button>
+        </div>
+    `;
+    document.body.appendChild(cx);
+}

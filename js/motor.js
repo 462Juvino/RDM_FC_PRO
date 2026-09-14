@@ -276,25 +276,30 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 // ============================================
                 let isDonoHumano = false;
                 for (let u in usuarios) {
-                    if (usuarios[u].timeAtual === timeDoAlvo) { isDonoHumano = true; break; }
+                    // 🟢 CORREÇÃO: Garante que a conta tem "timeAtual", bate com o alvo e NÃO começa com 'IA_'
+                    if (usuarios[u].timeAtual === timeDoAlvo && !u.startsWith('IA_')) {
+                        isDonoHumano = true;
+                        break;
+                    }
                 }
 
+                // Se o dono for HUMANO REAL e o tempo acabou (19h), a proposta expira sem resolução.
                 if (isDonoHumano) {
-                    // Humano que ignora propostas até 19h as perde automaticamente!
                     for (let login in lances) {
                         if (!login.startsWith('IA_')) {
                             let rnd = Math.floor(Math.random()*1000);
                             updates[`ligas/${liga}/caixa_mensagens/${login}/msg_expirou_${Date.now()}_${rnd}`] = {
                                 tipo: 'recusa',
-                                texto: `Sua oferta por ${dadosDoAlvo.nome} EXPIROU. O treinador humano do ${timeDoAlvo.replace(/_/g,' ')} não respondeu a tempo.`,
+                                texto: `Sua oferta por ${dadosDoAlvo.nome} EXPIROU. O treinador do ${timeDoAlvo.replace(/_/g,' ')} não abriu a mesa de negociação a tempo.`,
                                 data: new Date().toISOString()
                             };
                         }
                     }
-                    // 🟢 APAGA CIRURGICAMENTE
                     Object.keys(lances).forEach(l => updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
-                    continue;
+                    continue; // 🚨 PULA! (Não entra no leilão da IA)
                 }
+
+                // 🚨 SE CHEGOU AQUI: O dono é a MÁQUINA (IA) e ela VAI resolver a parada!
 
                 // ============================================
                 // 🤖 IA AVALIANDO AS PROPOSTAS (A BRIGA)
