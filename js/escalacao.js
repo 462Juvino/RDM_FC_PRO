@@ -359,6 +359,13 @@ function renderizarTabela() {
 
         let ovr = Math.round((at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade)/5);
         let corOVR = ovr>=85? '#ffd700' : ovr>=75? '#00b853' : ovr>=65? '#fff' : '#aaa';
+        let ovr = Math.round((at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade)/5);
+        let corOVR = ovr>=85? '#ffd700' : ovr>=75? '#00b853' : ovr>=65? '#fff' : '#aaa';
+        let fad = j.fadiga||0;
+        let corFis = fad>=20? '#dc3545' : fad>=10? '#ffc107' : '#00b853';
+        let txtFis = fad===0? '100%' : `${Math.max(0,100-Math.round(fad*1.5))}%`;
+        let iconFis = fad>=20? '🟥' : fad>=10? '🟨' : '🟩';
+
         tbody.innerHTML += `
             <tr style="${estaEscalado ? 'opacity: 0.5;' : (estaNoCT ? 'opacity: 0.6; background: rgba(0, 123, 255, 0.15);' : '')}">
                 <td style="text-align: left; font-weight: bold; color: ${estaNoCT ? '#007bff' : 'white'};">
@@ -366,6 +373,7 @@ function renderizarTabela() {
                 </td>
                 <td style="font-size: 12px;">${pos.p}</td>
                 <td style="font-weight:bold; color:${corOVR}; font-size:13px; background:rgba(0,0,0,0.3); border-radius:4px;">${ovr}</td>
+                <td style="font-size:11px; color:${corFis}; font-weight:bold;" title="Fadiga: ${fad}">${iconFis} ${txtFis}</td>
                 <td style="font-size: 12px;">${at.ataque}</td>
                 <td style="font-size: 12px;">${at.defesa}</td>
                 <td style="font-size: 12px;">${at.forca}</td>
