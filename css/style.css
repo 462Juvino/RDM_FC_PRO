@@ -727,3 +727,24 @@ input, select { font-size: 16px !important; } /* evita zoom no iOS */
     *::-webkit-scrollbar { width: 3px; height: 3px; }
     * { scrollbar-width: thin; }
 }
+
+/* RANKING - SCROLL HORIZONTAL NO VERTICAL MOBILE - FIX */
+@media (max-width: 768px) {
+  .area-trabalho { overflow-x: visible !important; }
+  .box-tabela, .tabela-wrapper, .ranking-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    width: 100% !important;
+  }
+  .tabela-ranking, #tabela-ranking, .area-trabalho .tabela-ranking {
+    display: table !important;
+    width: max-content !important;
+    min-width: 680px !important;
+    max-width: none !important;
+  }
+  .area-trabalho table th,
+  .area-trabalho table td {
+    white-space: nowrap;
+  }
+}
