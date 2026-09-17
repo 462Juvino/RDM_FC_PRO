@@ -1024,7 +1024,11 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
             if(titularesIds.length===0){
                 return montarEscalacaoIAInteligente(timeId, elenco);
             }
-            return titularesIds.map(id=> { let j = elenco[id]; return j? {...j, id} : null; }).filter(j=>j);
+            let titularesReais = titularesIds.map(id=> { let j = elenco[id]; return j? {...j, id} : null; }).filter(j=>j);
+            if(titularesReais.length < 11){
+                return montarEscalacaoIAInteligente(timeId, elenco);
+            }
+            return titularesReais;
         }
 
         // FIX P2P: Simula TODOS os jogos da rodada, não só o meu

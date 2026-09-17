@@ -57,8 +57,12 @@ function getEscudo(id) {
 }
 
 function getEstadio(id) {
-    let path = `estadios/default.webp`;
-    if (mapaMidia[id] && mapaMidia[id].estadio) path = `estadios/${mapaMidia[id].estadio}`;
+    let path = `./estadios/default.webp`;
+    if (mapaMidia[id] && mapaMidia[id].estadio) path = `./estadios/${mapaMidia[id].estadio}`;
+    // Fallback absoluto para o WebStorm localhost:63342 que cria /index.html/RDM_FC_PRO/
+    if(window.location.href.includes('63342')){
+        path = path.replace('./', '/RDM_FC_PRO/');
+    }
     return path;
 }
 
