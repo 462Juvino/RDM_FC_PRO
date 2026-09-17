@@ -359,8 +359,6 @@ function renderizarTabela() {
 
         let ovr = Math.round((at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade)/5);
         let corOVR = ovr>=85? '#ffd700' : ovr>=75? '#00b853' : ovr>=65? '#fff' : '#aaa';
-        let ovr = Math.round((at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade)/5);
-        let corOVR = ovr>=85? '#ffd700' : ovr>=75? '#00b853' : ovr>=65? '#fff' : '#aaa';
         let fad = j.fadiga||0;
         let corFis = fad>=20? '#dc3545' : fad>=10? '#ffc107' : '#00b853';
         let txtFis = fad===0? '100%' : `${Math.max(0,100-Math.round(fad*1.5))}%`;
