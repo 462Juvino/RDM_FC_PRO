@@ -1157,13 +1157,3 @@ window.mostrarLetreiroGol = function(nomeTime) {
     setTimeout(() => { div.style.transition = "opacity 0.5s"; div.style.opacity = "0"; setTimeout(() => div.remove(), 500); }, 4000);
 };
 
-// FIX: Alias para o botão da print e fallback do som 404
-if(window.gerarPartida && !window.gerarPartidaAoVivo){
-  window.gerarPartidaAoVivo = window.gerarPartida;
-}
-if(typeof somApito !== 'undefined'){
-  somApito.onerror = function(){
-    console.warn('apito_arbitro.mp3 não encontrado, usando fallback');
-    try{ somApito.src = 'sounds/apito.mp3'; }catch(e){}
-  };
-}
