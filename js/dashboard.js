@@ -278,11 +278,20 @@ function carregarVisaoGeralClube() {
                 <button class="widget-btn" onclick="abrirModalX1()" style="background: #dc3545; color: white; border: none; font-weight: bold; width: 100%;">Entrar na Arena</button>
             </div>
 
-            <!-- WIDGET 6: CENTRO DE TREINAMENTO (CT) -->
+            <!-- WIDGET 6: CENTRO DE TREINAMENTO + FISIOTERAPIA (2 ABAS) -->
             <div class="widget-card" style="border: 1px solid #007bff; box-shadow: 0 0 15px rgba(0,123,255,0.1); grid-column: 1 / -1;">
-                <h3 style="color: #007bff; margin-bottom: 5px;">CT Intensivo 🏋️‍♂️</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="color: #007bff; margin:0;">CT & Fisioterapia 🏋️‍♂️🏥</h3>
+                    <div style="display:flex; gap:5px;">
+                        <button id="aba-ct-btn" onclick="mudarAbaCT('treino')" style="padding:5px 12px; background:#007bff; color:#fff; border:none; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">Treino</button>
+                        <button id="aba-fisio-btn" onclick="mudarAbaCT('fisio')" style="padding:5px 12px; background:#222; color:#888; border:1px solid #333; border-radius:4px; font-size:11px; cursor:pointer;">Fisio 2h</button>
+                    </div>
+                </div>
                 <div id="area-ct" style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 5px;">
-                    <p style="color:#666; font-size:12px; text-align:center;">Abrindo portões do CT...</p>
+                    <p style="color:#666; font-size:12px; text-align:center;">Abrindo portões...</p>
+                </div>
+                <div id="area-fisio" style="flex: 1; display:none; flex-direction: column; margin-top: 5px;">
+                    <p style="color:#666; font-size:12px; text-align:center;">Carregando DM...</p>
                 </div>
             </div>
         </div>
@@ -1059,11 +1068,11 @@ async function gerarNoticia(meuTime) {
             }
         }
 
-        // 📰 3. FOFOCAS DA LIGA (Jogos, X1, Mercado)
+        // 📰 3. FOFOCAS DA LIGA - JORNAL COMPLETO CÔMICO
         if (cal) {
             let rAtual = cal.rodadaAtual || 1;
             let rodadaChave = `rodada_${rAtual}`;
-            let jogos = {...(cal.serieA?.[rodadaChave]||{}), ...(cal.serieB?.[rodadaChave]||{})};
+            let jogos = {...(cal.serieA?.[rodadaChave]||{}),...(cal.serieB?.[rodadaChave]||{})};
 
             for (let j in jogos) {
                 let jogo = jogos[j];
@@ -1071,49 +1080,108 @@ async function gerarNoticia(meuTime) {
                     let isHumanoM = Object.values(usuarios).some(u => u.timeAtual === jogo.mandante);
                     let isHumanoV = Object.values(usuarios).some(u => u.timeAtual === jogo.visitante);
                     if (isHumanoM && isHumanoV) {
-                        noticias.push(`"🔥 CLÁSSICO À VISTA! O duelo de gigantes entre ${jogo.mandante.replace(/_/g,' ')} e ${jogo.visitante.replace(/_/g,' ')} promete parar a liga nesta rodada!"`);
+                        let frasesClassico = [
+                            `"🔥 CLÁSSICO À VISTA! ${jogo.mandante.replace(/_/g,' ')} x ${jogo.visitante.replace(/_/g,' ')} vai parar a cidade! Ingressos esgotados!"`,
+                            `"⚔️ CHEIRINHO DE SANGUE! ${jogo.mandante.replace(/_/g,' ')} e ${jogo.visitante.replace(/_/g,' ')} se odeiam desde 1923. Promete pancadaria!"`,
+                            `"💣 DUELO DE GIGANTES! ${jogo.mandante.replace(/_/g,' ')} vs ${jogo.visitante.replace(/_/g,' ')} - Até o árbitro pediu folga!"`
+                        ];
+                        noticias.push(frasesClassico[Math.floor(Math.random()*frasesClassico.length)]);
                     }
                 }
             }
 
             if (rAtual > 1) {
                 let rAnt = `rodada_${rAtual - 1}`;
-                let jogosAnt = {...(cal.serieA?.[rAnt]||{}), ...(cal.serieB?.[rAnt]||{})};
+                let jogosAnt = {...(cal.serieA?.[rAnt]||{}),...(cal.serieB?.[rAnt]||{})};
                 for (let j in jogosAnt) {
                     let jogo = jogosAnt[j];
-                    if (jogo.jogado && Math.abs(jogo.placarMandante - jogo.placarVisitante) >= 3) {
-                        let humilhado = jogo.placarMandante < jogo.placarVisitante ? jogo.mandante : jogo.visitante;
-                        let carrasco = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
-                        noticias.push(`"🛑 VEXAME! A imprensa não perdoa a surra que o ${humilhado.replace(/_/g,' ')} tomou do ${carrasco.replace(/_/g,' ')} na rodada anterior."`);
+                    if (jogo.jogado) {
+                        let diff = Math.abs(jogo.placarMandante - jogo.placarVisitante);
+                        if (diff >= 3) {
+                            let humilhado = jogo.placarMandante < jogo.placarVisitante? jogo.mandante : jogo.visitante;
+                            let carrasco = jogo.placarMandante > jogo.placarVisitante? jogo.mandante : jogo.visitante;
+                            let frasesGoleada = [
+                                `"🛑 VEXAME HISTÓRICO! ${humilhado.replace(/_/g,' ')} tomou uma surra de ${jogo.placarMandante}x${jogo.placarVisitante} do ${carrasco.replace(/_/g,' ')} e a torcida pede a cabeça do treinador!"`,
+                                `"😭 HUMILHAÇÃO! ${humilhado.replace(/_/g,' ')} foi amassado pelo lanterna ${carrasco.replace(/_/g,' ')}! Até o gandula fez gol!"`,
+                                `"💀 ENTERROU! ${carrasco.replace(/_/g,' ')} goleou o ${humilhado.replace(/_/g,' ')} e mandou pra Série B do coração!"`
+                            ];
+                            noticias.push(frasesGoleada[Math.floor(Math.random()*frasesGoleada.length)]);
+                        } else if (diff === 0) {
+                            noticias.push(`"😴 EMPATE SONOLENTO! ${jogo.mandante.replace(/_/g,' ')} 0x0 ${jogo.visitante.replace(/_/g,' ')} - Nem o VAR quis ver esse jogo!"`);
+                        }
                     }
                 }
             }
+        }
+
+        // FISIOTERAPIA E CT - FOFOCA
+        for(let uId in usuarios){
+            let u = usuarios[uId];
+            if(u.fisioterapia_nivel && u.fisioterapia_nivel>0 && Math.random()<0.1){
+                noticias.push(`"🏥 O ${u.timeAtual.replace(/_/g,' ')} investiu no DM! Nível ${u.fisioterapia_nivel} e os jogadores estão voando de tão recuperados!"`);
+            }
+            if(u.ct_ativo && u.ct_ativo.id_jogador){
+                let nomeCT = times[u.timeAtual]?.jogadores?.[u.ct_ativo.id_jogador]?.nome || "um craque";
+                noticias.push(`"🏋️‍♂️ ${u.timeAtual.replace(/_/g,' ')} está treinando ${nomeCT} no CT! Dizem que vai voltar voando!"`);
+            }
+        }
+
+        // AGENTES LIVRES E LENDAS
+        let agentesSnap = times[`Agentes_Livres_${ligaLogada}`];
+        if(agentesSnap && Object.keys(agentesSnap.jogadores||{}).length>0){
+            let qtd = Object.keys(agentesSnap.jogadores).length;
+            let nomes = Object.values(agentesSnap.jogadores).slice(0,2).map(j=>j.nome).join(' e ');
+            noticias.push(`"👀 AGENTES LIVRES BOMBANDO! ${qtd} jogadores sem clube, incluindo ${nomes}! Quem vai contratar?"`);
+        }
+        if(times['Lendas_Futebol'] && Object.keys(times['Lendas_Futebol'].jogadores||{}).length>0){
+            noticias.push(`"⭐ LENDA NA ÁREA! Uma lenda do futebol apareceu nos Agentes Livres! Corre que a IA vai levar!"`);
         }
 
         if (desafios) {
             for (let id in desafios) {
                 let d = desafios[id];
                 if (d.status === 'finalizado') {
-                    let v = d.golsM > d.golsV ? d.desafiante : d.desafiado;
-                    let p = d.golsM > d.golsV ? d.desafiado : d.desafiante;
-                    let txtAposta = d.tipo === 'dinheiro' ? `limpou o caixa` : `roubou o passe do atleta`;
-                    noticias.push(`"⚔️ ARENA X1: O bicho pegou! O ${v.replace(/_/g,' ')} deu uma aula, amassou o ${p.replace(/_/g,' ')} e ${txtAposta}!"`);
+                    let v = d.golsM > d.golsV? d.desafiante : d.desafiado;
+                    let p = d.golsM > d.golsV? d.desafiado : d.desafiante;
+                    let frasesX1 = [
+                        `"⚔️ ARENA X1: O ${v.replace(/_/g,' ')} humilhou o ${p.replace(/_/g,' ')} por ${Math.max(d.golsM,d.golsV)}x${Math.min(d.golsM,d.golsV)} e levou ${d.aposta?.tipo==='dinheiro'?`R$ ${d.aposta.valor}`:`o jogador ${d.aposta?.jogador||''}`}!"`,
+                        `"💰 X1 VALENDO GRANA! ${v.replace(/_/g,' ')} deu aula no ${p.replace(/_/g,' ')}! O perdedor vai ter que vender o estádio!"`,
+                        `"🔥 X1 PEGANDO FOGO! ${v.replace(/_/g,' ')} amassou o ${p.replace(/_/g,' ')} na Arena! Até a mãe do perdedor torceu pro vencedor!"`
+                    ];
+                    noticias.push(frasesX1[Math.floor(Math.random()*frasesX1.length)]);
                 }
             }
         }
 
+        // MERCADO - COMPRA E VENDA COM NOME
         if (propostas) {
-            for (let idAlvo in propostas) {
-                let lances = Object.keys(propostas[idAlvo]).length;
-                if (lances > 1) {
-                    let nomeAlvo = "Um craque misterioso";
-                    for(let t in times) { if(times[t].jogadores && times[t].jogadores[idAlvo]) { nomeAlvo = times[t].jogadores[idAlvo].nome; break; } }
-                    noticias.push(`"💼 LEILÃO PEGANDO FOGO! O telefone não para. ${nomeAlvo} já tem ${lances} clubes brigando a tapa pela sua contratação!"`);
+            for (let idJog in propostas) {
+                let lances = propostas[idJog];
+                let qtdLances = Object.keys(lances).length;
+                if (qtdLances >= 2) {
+                    let nomeJog = times[Object.values(usuarios).find(u=>u.timeAtual===Object.values(lances)[0]?.time_origem)?.timeAtual||'']?.jogadores?.[idJog]?.nome || idJog;
+                    let frasesLeilao = [
+                        `"💼 LEILÃO INSANO! ${nomeJog} tem ${qtdLances} clubes brigando! O telefone do empresário derreteu!"`,
+                        `"💸 CORRIDA POR ${nomeJog.toUpperCase()}! ${qtdLances} propostas na mesa! Quem paga mais leva esse canela de ouro!"`
+                    ];
+                    noticias.push(frasesLeilao[Math.floor(Math.random()*frasesLeilao.length)]);
                 }
             }
         }
 
-        let ricaços = Object.keys(investidores).filter(k => !investidores[k].is_ia && investidores[k].saldo > 10000000);
+        // JORNAL PERSONALIZADO DE JOGOS RECENTES (busca jornal do Firebase)
+        try{
+            let snapJornal = await db.ref(`ligas/${ligaLogada}/jornal`).orderByChild('data').limitToLast(20).once('value');
+            let jornais = snapJornal.val()||{};
+            for(let jId in jornais){
+                let j = jornais[jId];
+                if(j.texto && Math.random()<0.3){
+                    noticias.push(`"${j.texto}"`);
+                }
+            }
+        }catch(e){}
+
+        let ricaços = Object.keys(investidores).filter(k =>!investidores[k].is_ia && investidores[k].saldo > 10000000);
         if (ricaços.length > 0) {
             let agiota = ricaços[Math.floor(Math.random() * ricaços.length)];
             noticias.push(`"🏦 AGIOTA OU GÊNIO? O clube ${agiota.replace(/_/g,' ')} virou o Banco Central da liga e está emprestando fortunas a juros altos!"`);
@@ -2490,6 +2558,40 @@ window.ativarTreinoSigiloso = async function() {
     };
 };
 
+window.mudarAbaCT = function(aba){
+  document.getElementById('area-ct').style.display = aba==='treino'?'flex':'none';
+  document.getElementById('area-fisio').style.display = aba==='fisio'?'flex':'none';
+  document.getElementById('aba-ct-btn').style.background = aba==='treino'?'#007bff':'#222';
+  document.getElementById('aba-ct-btn').style.color = aba==='treino'?'#fff':'#888';
+  document.getElementById('aba-fisio-btn').style.background = aba==='fisio'?'#00b853':'#222';
+  document.getElementById('aba-fisio-btn').style.color = aba==='fisio'?'#fff':'#888';
+  if(aba==='fisio') carregarFisioterapiaDashboard();
+};
+
+async function carregarFisioterapiaDashboard(){
+  let area = document.getElementById('area-fisio');
+  if(!area) return;
+  let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+  let eu = snapUser.val()||{};
+  let nivel = eu.fisioterapia_nivel||0;
+  let cfg = window.fisioConfig[nivel]||{slots:0, tempo:0};
+  let slots = eu.fisioterapia_slots||[];
+  let snapTime = await db.ref(`banco_global_times/${eu.timeAtual}/jogadores`).once('value');
+  let elenco = snapTime.val()||{};
+  let fadigados = Object.keys(elenco).filter(id=>(elenco[id].fadiga||0)>0).length;
+
+  area.innerHTML = `
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:#ccc; margin-bottom:8px;">
+      <span>Nível ${nivel} | ${slots.length}/${cfg.slots} ocupados | ${fadigados} fadigados</span>
+      <span style="color:#00b853; cursor:pointer; font-weight:bold;" onclick="abrirModalFisioterapia()">Gerenciar →</span>
+    </div>
+    <div style="display:flex; gap:5px;">
+      <button onclick="abrirModalFisioterapia()" style="flex:1; padding:8px; background:#00b853; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🏥 Abrir Departamento</button>
+    </div>
+  `;
+}
+
+
 // ========================================================
 // 👁️ SISTEMA DE OLHEIRO (ESPIONAGEM ADVERSÁRIA)
 // ========================================================
@@ -2777,6 +2879,183 @@ window.abrirManualDoJogo = function() {
         });
     }
 };
+
+// ========================================================
+// 🏥 DEPARTAMENTO DE FISIOTERAPIA - RECUPERAÇÃO DE FADIGA
+// ========================================================
+window.fisioConfig = {
+  0: { slots: 0, tempo: 0, custo: 0, nome: "Sem Depto" },
+  1: { slots: 1, tempo: 7200000, custo: 30000, nome: "Nível 1", upgradeTickets: 10, upgradeDinheiro: 0 }, // 2h = 7200000ms
+  2: { slots: 2, tempo: 5400000, custo: 30000, nome: "Nível 2", upgradeTickets: 30, upgradeDinheiro: 500000 }, // 1h30 = 5400000ms
+  3: { slots: 3, tempo: 2400000, custo: 30000, nome: "Nível 3", upgradeTickets: 100, upgradeDinheiro: 1000000 } // 40min = 2400000ms
+};
+
+window.abrirModalFisioterapia = async function(){
+  let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+  let eu = snapUser.val()||{};
+  let nivel = eu.fisioterapia_nivel||0;
+  let cfg = window.fisioConfig[nivel]||window.fisioConfig[0];
+  let cfgProx = window.fisioConfig[nivel+1];
+
+  let snapTime = await db.ref(`banco_global_times/${eu.timeAtual}/jogadores`).once('value');
+  let elenco = snapTime.val()||{};
+  let listaFadigados = Object.keys(elenco).map(id=>({id,...elenco[id]})).filter(j=> (j.fadiga||0)>0).sort((a,b)=> (b.fadiga||0)-(a.fadiga||0)).slice(0,20);
+
+  let slots = eu.fisioterapia_slots||[];
+  let htmlSlots = "";
+  slots.forEach((s,i)=>{
+    let fim = new Date(s.fim);
+    let agora = new Date();
+    let diff = Math.max(0, s.fim - agora.getTime());
+    let min = Math.floor(diff/60000);
+    let seg = Math.floor((diff%60000)/1000);
+    let jNome = elenco[s.id_jogador]?.nome || s.id_jogador;
+    htmlSlots += `<div style="background:#111; border:1px solid #333; padding:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="color:#fff; font-size:13px;">${jNome} - 🔋 ${s.fadiga_antes} → ${s.fadiga_antes-1}</span>
+      <span style="color:${min>0?'#ff8c00':'#00b853'}; font-size:12px;">${min>0?`${min}m ${seg}s`:'Pronto! ✅'}</span>
+    </div>`;
+  });
+  if(slots.length===0) htmlSlots = `<p style="color:#666; font-size:13px;">Nenhum jogador em recuperação. Bora poupar o elenco!</p>`;
+
+  let htmlJogadores = listaFadigados.map(j=>{
+    let fad = j.fadiga||0;
+    let cor = fad<=9?"#00b853":fad<=19?"#ffc107":"#dc3545";
+    return `<div style="background:#1a1a1a; border:1px solid #333; padding:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+      <span style="color:#fff; font-size:12px;">${j.nome} <small style="color:${cor};">🔋 ${fad}</small></span>
+      <button onclick="iniciarRecuperacaoFisio('${j.id||Object.keys(elenco).find(k=>elenco[k].nome===j.nome)}')" style="padding:4px 10px; background:#00b853; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:11px;">Recuperar R$30k</button>
+    </div>`;
+  }).join('') || `<p style="color:#666;">Elenco 100% zerado! 🔋</p>`;
+
+  let htmlUpgrade = "";
+  if(nivel<3 && cfgProx){
+    htmlUpgrade = `<div style="background:#222; border:1px dashed #ff8c00; padding:12px; border-radius:6px; margin-top:15px;">
+      <strong style="color:#ff8c00;">⬆️ Upgrade para ${cfgProx.nome}</strong><br>
+      <span style="color:#ccc; font-size:12px;">${cfgProx.slots} jogadores simultâneos | ${cfgProx.tempo/60000} min por 1 fadiga | Custo: ${cfgProx.upgradeTickets} tickets ${cfgProx.upgradeDinheiro>0?`+ R$ ${cfgProx.upgradeDinheiro.toLocaleString('pt-BR')}`:''}</span><br>
+      <button onclick="melhorarNivelFisio()" style="margin-top:8px; padding:8px 15px; background:#ff8c00; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Melhorar Departamento</button>
+    </div>`;
+  } else if(nivel===3){
+    htmlUpgrade = `<div style="background:#111; border:1px solid #00b853; padding:10px; border-radius:6px; margin-top:15px; color:#00b853; text-align:center;">🏥 Departamento Nível Máximo! 3 jogadores a cada 40 min</div>`;
+  }
+
+  let modal = document.createElement('div');
+  modal.id = 'modal-fisio';
+  modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10005; display:flex; justify-content:center; align-items:center;";
+  modal.innerHTML = `
+    <div style="background:#1a1a1a; width:95%; max-width:600px; max-height:85vh; border-radius:12px; border:1px solid #444; display:flex; flex-direction:column; overflow:hidden;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid #333; background:#111;">
+        <h2 style="margin:0; color:#00b853;">🏥 Fisioterapia - Nível ${nivel} (${cfg.nome})</h2>
+        <button onclick="document.getElementById('modal-fisio').remove()" style="background:transparent; border:none; color:#aaa; font-size:24px; cursor:pointer;">&times;</button>
+      </div>
+      <div style="overflow-y:auto; flex:1; padding:15px;">
+        <div style="background:#111; padding:10px; border-radius:6px; margin-bottom:15px; border-left:3px solid #00b853;">
+          <strong style="color:#fff; font-size:13px;">Em Recuperação (${slots.length}/${cfg.slots})</strong>
+          <div style="margin-top:8px;">${htmlSlots}</div>
+        </div>
+        <strong style="color:#fff;">Jogadores Fadigados</strong>
+        <div style="max-height:200px; overflow-y:auto; margin-top:8px;">${htmlJogadores}</div>
+        ${htmlUpgrade}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  // Loop de atualização a cada 1s
+  if(window.loopFisio) clearInterval(window.loopFisio);
+  window.loopFisio = setInterval(async ()=>{
+    let sUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+    let u = sUser.val()||{};
+    let agora = Date.now();
+    let slotsAtuais = u.fisioterapia_slots||[];
+    let novosSlots = [];
+    let updates = {};
+    let mudou = false;
+    for(let s of slotsAtuais){
+      if(s.fim <= agora){
+        // Recuperou 1 de fadiga
+        let snapJog = await db.ref(`banco_global_times/${u.timeAtual}/jogadores/${s.id_jogador}/fadiga`).once('value');
+        let fadAtual = snapJog.val()||0;
+        let novaFad = Math.max(0, fadAtual-1);
+        updates[`banco_global_times/${u.timeAtual}/jogadores/${s.id_jogador}/fadiga`] = novaFad;
+        mudou = true;
+        // Registra no jornal
+        let logJornal = {
+          tipo: "fisio",
+          texto: `🏥 ${u.timeAtual.replace(/_/g,' ')} recuperou ${s.fadiga_antes-1} de fadiga de jogador no DM!`,
+          time: u.timeAtual,
+          data: new Date().toISOString()
+        };
+        await db.ref(`ligas/${ligaLogada}/jornal_fisio/${Date.now()}`).set(logJornal);
+      } else {
+        novosSlots.push(s);
+      }
+    }
+    if(mudou){
+      await db.ref().update(updates);
+      await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/fisioterapia_slots`).set(novosSlots);
+      // Atualiza modal se aberto
+      let modalAberto = document.getElementById('modal-fisio');
+      if(modalAberto) { modalAberto.remove(); abrirModalFisioterapia(); }
+    }
+  }, 5000);
+};
+
+window.iniciarRecuperacaoFisio = async function(idJogador){
+  let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+  let eu = snapUser.val()||{};
+  let nivel = eu.fisioterapia_nivel||0;
+  if(nivel===0) return alert("🚫 Você precisa comprar o Nível 1 do Departamento por 10 tickets primeiro!");
+  let cfg = window.fisioConfig[nivel];
+  let slots = eu.fisioterapia_slots||[];
+  if(slots.length >= cfg.slots) return alert(`🚫 Departamento lotado! Nível ${nivel} só permite ${cfg.slots} por vez. Faça upgrade!`);
+  if(slots.some(s=>s.id_jogador===idJogador)) return alert("Esse jogador já está em recuperação!");
+  if((eu.caixaClube||0) < cfg.custo) return alert(`Sem grana! Custa R$ ${cfg.custo.toLocaleString('pt-BR')}`);
+
+  let snapJog = await db.ref(`banco_global_times/${eu.timeAtual}/jogadores/${idJogador}`).once('value');
+  let j = snapJog.val();
+  if(!j || (j.fadiga||0)<=0) return alert("Jogador sem fadiga!");
+
+  let novoSlot = {
+    id_jogador: idJogador,
+    fadiga_antes: j.fadiga,
+    inicio: Date.now(),
+    fim: Date.now() + cfg.tempo
+  };
+  slots.push(novoSlot);
+  await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+    caixaClube: (eu.caixaClube||0) - cfg.custo,
+    fisioterapia_slots: slots
+  });
+  document.getElementById('modal-fisio')?.remove();
+  abrirModalFisioterapia();
+};
+
+window.melhorarNivelFisio = async function(){
+  let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+  let eu = snapUser.val()||{};
+  let nivel = eu.fisioterapia_nivel||0;
+  let prox = window.fisioConfig[nivel+1];
+  if(!prox) return;
+  if((eu.tickets||0) < prox.upgradeTickets) return alert(`Faltam tickets! Precisa ${prox.upgradeTickets}`);
+  if((eu.caixaClube||0) < prox.upgradeDinheiro) return alert(`Falta dinheiro! Precisa R$ ${prox.upgradeDinheiro.toLocaleString('pt-BR')}`);
+
+  if(!confirm(`Confirmar upgrade para ${prox.nome}?\nCusto: ${prox.upgradeTickets} tickets ${prox.upgradeDinheiro>0?`+ R$ ${prox.upgradeDinheiro.toLocaleString('pt-BR')}`:''}\nBenefício: ${prox.slots} jogadores, ${prox.tempo/60000}min por fadiga`)) return;
+
+  await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
+    fisioterapia_nivel: nivel+1,
+    tickets: (eu.tickets||0) - prox.upgradeTickets,
+    caixaClube: (eu.caixaClube||0) - prox.upgradeDinheiro
+  });
+  // Jornal com upgrade
+  await db.ref(`ligas/${ligaLogada}/jornal/${Date.now()}_fisio`).set({
+    tipo: "upgrade_fisio",
+    time: eu.timeAtual,
+    texto: `🏥 UPGRADE! O ${eu.timeAtual.replace(/_/g,' ')} investiu pesado e subiu o Depto de Fisioterapia para o ${prox.nome}! Agora recupera ${prox.slots} jogadores em ${prox.tempo/60000}min!`,
+    data: new Date().toISOString()
+  });
+  document.getElementById('modal-fisio')?.remove();
+  abrirModalFisioterapia();
+  alert(`✅ Departamento melhorado para ${prox.nome}!`);
+};
+
 
 
 // ========================================================

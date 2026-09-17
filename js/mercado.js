@@ -1401,6 +1401,12 @@ window.aceitarProposta = async function(idAlvo, loginComprador, valorCustom){
 
         await db.ref().update(updates);
         alert(`✅ Vendido! ${dadosDoAlvo.nome} por ${formatarDinheiro(valorFinal)}`);
+        await db.ref(`ligas/${ligaLogada}/jornal/${Date.now()}`).set({
+          tipo: "mercado",
+          texto: `💰 MERCADO AGITADO! O ${comprador.replace(/_/g,' ')} comprou ${nomeAlvo} do ${vendedor.replace(/_/g,' ')} por ${formatarDinheiro(valor)}! A torcida foi à loucura!`,
+          time: comprador,
+          data: new Date().toISOString()
+        });
         carregarMundo();
     }catch(e){ console.error(e); alert("Erro: "+e.message); }
 };
