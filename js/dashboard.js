@@ -2022,24 +2022,62 @@ function gerarLinhaTempoX1(forcaM, forcaV, mandante, visitante) {
     let linhaTempo = [];
     let golsM = 0; let golsV = 0;
 
-    const sortearX1 = (tId, posicoes = null) => {
-        let el = arenaDadosGlobais.times[tId]?.jogadores ? Object.values(arenaDadosGlobais.times[tId].jogadores) : [];
-        if(posicoes) {
-            let filt = el.filter(j => posicoes.includes(j.posicoes?.p));
-            if(filt.length > 0) return filt[Math.floor(Math.random() * filt.length)];
+    const getTitularesX1 = (tId) => {
+        let login = Object.keys(arenaDadosGlobais.usuarios||{}).find(k=> arenaDadosGlobais.usuarios[k].timeAtual===tId);
+        let ids = login? (arenaDadosGlobais.usuarios[login].titulares||[]) : [];
+        let jogadores = arenaDadosGlobais.times[tId]?.jogadores||{};
+        let lista = [];
+        if(ids.length>0){
+            lista = ids.filter(Boolean).map(id=> jogadores[id]).filter(Boolean).map((j,idx)=> ({...j, id_real: ids[idx]}));
         }
-        return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
+        if(lista.length<11){
+            // fallback top 11 por OVR
+            let todos = Object.values(jogadores).map(j=> ({...j, ovr: ((j.atributos.ataque||0)+(j.atributos.defesa||0)+(j.atributos.forca||0)+(j.atributos.velocidade||0)+(j.atributos.habilidade||0))/5 })).sort((a,b)=>b.ovr-a.ovr);
+            lista = todos.slice(0,11);
+        }
+        return lista;
+    };
+    const getReservasX1 = (tId) => {
+        let titulares = getTitularesX1(tId);
+        let nomesTit = titulares.map(t=>t.nome);
+        let todos = Object.values(arenaDadosGlobais.times[tId]?.jogadores||{});
+        return todos.filter(j=>!nomesTit.includes(j.nome));
+    };
+
+    let titularesM = getTitularesX1(mandante);
+    let titularesV = getTitularesX1(visitante);
+    let reservasM = getReservasX1(mandante);
+    let reservasV = getReservasX1(visitante);
+
+    const sortearX1 = (tId, minuto, posicoes = null) => {
+        let ehMandante = tId===mandante;
+        let poolTit = ehMandante? titularesM : titularesV;
+        let poolRes = ehMandante? reservasM : reservasV;
+        let pool = [];
+        if(minuto<=45){
+            pool = poolTit; // 1º tempo SÓ titular
+        } else {
+            // 2º tempo 75% titular, 25% reserva entrando
+            pool = Math.random()<0.75? poolTit : (poolRes.length? poolRes : poolTit);
+        }
+        if(posicoes){
+            let filt = pool.filter(j=> posicoes.includes(j.posicoes?.p));
+            if(filt.length>0) return filt[Math.floor(Math.random()*filt.length)];
+        }
+        return pool.length? pool[Math.floor(Math.random()*pool.length)] : {nome:"Jogador", posicoes:{p:"Atacante"}};
     };
 
     for(let i=0; i<5; i++) {
+        let minutoGolM = Math.floor(Math.random()*89)+1;
         if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
-            let nA = sortearX1(mandante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
-            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
+            let nA = sortearX1(mandante, minutoGolM, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+            linhaTempo.push({ minuto: minutoGolM, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
             golsM++;
         }
+        let minutoGolV = Math.floor(Math.random()*89)+1;
         if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
-            let nA = sortearX1(visitante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
-            linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
+            let nA = sortearX1(visitante, minutoGolV, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+            linhaTempo.push({ minuto: minutoGolV, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
             golsV++;
         }
     }
@@ -2049,13 +2087,13 @@ function gerarLinhaTempoX1(forcaM, forcaV, mandante, visitante) {
         if (minAleatorio === 45) minAleatorio = 46;
 
         let isM = Math.random() > 0.5;
-        let tAtq = isM ? mandante : visitante;
-        let tDef = isM ? visitante : mandante;
+        let tAtq = isM? mandante : visitante;
+        let tDef = isM? visitante : mandante;
 
-        let atk = sortearX1(tAtq, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
-        let mei = sortearX1(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
-        let zag = sortearX1(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
-        let gol = sortearX1(tDef, ["Goleiro"]).nome.split(" ")[0];
+        let atk = sortearX1(tAtq, minAleatorio, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
+        let mei = sortearX1(tAtq, minAleatorio, ["Meia", "Volante"]).nome.split(" ")[0];
+        let zag = sortearX1(tDef, minAleatorio, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
+        let gol = sortearX1(tDef, minAleatorio, ["Goleiro"]).nome.split(" ")[0];
 
         let frases = [
             `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,
@@ -2117,31 +2155,33 @@ window.iniciarTransmissaoX1 = async function(id) {
             return el.length ? el[Math.floor(Math.random() * el.length)] : {nome: "Jogador"};
         };
 
-        for(let i=0; i<5; i++) {
-            if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
-                let nA = sortearX1(mandante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
-                linhaTempoX1.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
-                golsM++;
-            }
-            if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
-                let nA = sortearX1(visitante, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
-                linhaTempoX1.push({ minuto: Math.floor(Math.random()*89)+1, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
-                golsV++;
-            }
+    for(let i=0; i<5; i++) {
+        let minutoGolM = Math.floor(Math.random()*89)+1;
+        if (Math.random() < (forcaM / (forcaM + forcaV)) * 0.6) {
+            let nA = sortearX1(mandante, minutoGolM, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+            linhaTempo.push({ minuto: minutoGolM, tipo: 'gol_m', texto: `⚽ GOOOL! Golaço espetacular de ${nA}! A Arena vai à loucura!` });
+            golsM++;
         }
+        let minutoGolV = Math.floor(Math.random()*89)+1;
+        if (Math.random() < (forcaV / (forcaM + forcaV)) * 0.6) {
+            let nA = sortearX1(visitante, minutoGolV, ["Atacante", "Centroavante", "Ponta"]).nome.split(" ")[0];
+            linhaTempo.push({ minuto: minutoGolV, tipo: 'gol_v', texto: `⚽ GOL DO VISITANTE! ${nA} acha uma brecha na zaga e manda pro fundo da rede!` });
+            golsV++;
+        }
+    }
 
-        for(let i=0; i<16; i++) {
-            let minAleatorio = Math.floor(Math.random()*89)+1;
-            if (minAleatorio === 45) minAleatorio = 46;
+    for(let i=0; i<16; i++) {
+        let minAleatorio = Math.floor(Math.random()*89)+1;
+        if (minAleatorio === 45) minAleatorio = 46;
 
-            let isM = Math.random() > 0.5;
-            let tAtq = isM ? mandante : visitante;
-            let tDef = isM ? visitante : mandante;
+        let isM = Math.random() > 0.5;
+        let tAtq = isM? mandante : visitante;
+        let tDef = isM? visitante : mandante;
 
-            let atk = sortearX1(tAtq, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
-            let mei = sortearX1(tAtq, ["Meia", "Volante"]).nome.split(" ")[0];
-            let zag = sortearX1(tDef, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
-            let gol = sortearX1(tDef, ["Goleiro"]).nome.split(" ")[0];
+        let atk = sortearX1(tAtq, minAleatorio, ["Atacante", "Ponta", "Centroavante"]).nome.split(" ")[0];
+        let mei = sortearX1(tAtq, minAleatorio, ["Meia", "Volante"]).nome.split(" ")[0];
+        let zag = sortearX1(tDef, minAleatorio, ["Zagueiro", "Lateral", "Volante"]).nome.split(" ")[0];
+        let gol = sortearX1(tDef, minAleatorio, ["Goleiro"]).nome.split(" ")[0];
 
             let frases = [
                 `UHHH! ${mei} deu um passe açucarado para ${atk}, que chutou raspando a trave!`,

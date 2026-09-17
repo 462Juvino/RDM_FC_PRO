@@ -114,18 +114,50 @@ function gerarLinhaTempoComplexaV2(jogo, forcaM, forcaV, titularesM, titularesV)
     let linha=[]; let golsM=0, golsV=0;
     let climas=["☀️ Céu limpo","⛅ Nublado","🌧️ Chuva"];
     linha.push({minuto:0, tipo:"clima", texto:`🌤️ Clima: ${climas[Math.floor(Math.random()*climas.length)]}. Mando +10% para ${jogo.mandante.replace(/_/g,' ')}`});
+
+    // Cartões tracking
+    let amarelosM={}, amarelosV={}, expulsosM=[], expulsosV=[];
+    const getMentalidade = (timeAt)=>{
+        // tenta pegar do dono real
+        try{
+            let usuarios = JSON.parse(localStorage.getItem('cache_usuarios')||'{}');
+            // fallback usa forca.mentalidade se vier do motor
+            return timeAt==="M"? (forcaM.mentalidade||"Moderado") : (forcaV.mentalidade||"Moderado");
+        }catch(e){ return "Moderado"; }
+    };
+    const pesoCartaoPorMentalidade = (ment)=>{
+        if(ment==="Retranca"||ment==="Retranca Total") return 0.18; // muito faltoso
+        if(ment==="Ofensivo"||ment==="Ultra Ofensiva") return 0.08; // menos faltoso, mais técnico
+        return 0.11; // Moderado/Equilibrado
+    };
+    const mentM = forcaM.mentalidade||"Moderado";
+    const mentV = forcaV.mentalidade||"Moderado";
+
     let minuto=1;
     while(minuto<=90){
-        if(Math.random()<0.30){
+        if(Math.random()<0.32){
             let ftM = forcaM.meio+forcaM.ataque; let ftV = forcaV.meio+forcaV.ataque;
-            let timeAt = Math.random() < ftM/(ftM+ftV) ? "M" : "V";
+            let timeAt = Math.random() < ftM/(ftM+ftV)? "M" : "V";
+            let timeDef = timeAt==="M"? "V" : "M";
             let titulares = timeAt==="M"? titularesM : titularesV;
+            let titularesDef = timeAt==="M"? titularesV : titularesM;
             let timeNome = timeAt==="M"? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
+            let timeDefNome = timeDef==="M"? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
+            // filtra expulsos
+            titulares = titulares.filter(j=>!j.expulso &&!expulsosM.includes(j.nome) &&!expulsosV.includes(j.nome));
+            titularesDef = titularesDef.filter(j=>!j.expulso);
             if(titulares.length===0){ minuto++; continue; }
             let jogador = titulares[Math.floor(Math.random()*titulares.length)];
+            let defensor = titularesDef[Math.floor(Math.random()*titularesDef.length)] || {nome:"zagueiro"};
+
             let roll=Math.random();
-            if(roll<0.05){
-                let tipoGol = Math.random()<0.2 ? "cabecada_escanteio" : (Math.random()<0.15 ? "penalti" : "normal");
+            // Chance gol 5% base, ofensiva aumenta um pouco
+            let chanceGol = 0.05;
+            if((timeAt==="M" && mentM.includes("Ofens")) || (timeAt==="V" && mentV.includes("Ofens"))) chanceGol=0.07;
+            if((timeAt==="M" && mentM.includes("Retranca")) || (timeAt==="V" && mentV.includes("Retranca"))) chanceGol=0.035;
+
+            if(roll<chanceGol){
+                let tipoGol = Math.random()<0.2? "cabecada_escanteio" : (Math.random()<0.15? "penalti" : "normal");
                 let goleador = escolherGoleadorComplexoV2(titulares, tipoGol);
                 if(!goleador){ minuto++; continue; }
                 if(tipoGol==="penalti") linha.push({minuto, tipo: timeAt==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL! ${goleador.nome} (${timeNome}) cobra pênalti e marca!`, jogador:goleador.nome});
@@ -133,9 +165,38 @@ function gerarLinhaTempoComplexaV2(jogo, forcaM, forcaV, titularesM, titularesV)
                 else linha.push({minuto, tipo: timeAt==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL DO ${timeNome}! ${goleador.nome} balança as redes!`, jogador:goleador.nome});
                 if(timeAt==="M") golsM++; else golsV++;
             } else {
-                let tipos=["posse","chute_fora","escanteio","falta","cabecada","defesa","contra_ataque","cartao_amarelo","penalti","var","desarme","impedimento","cruzamento","falta_perigosa","substituicao"];
-                let tipo=tipos[Math.floor(Math.random()*tipos.length)];
-                linha.push({minuto, tipo, texto:`${tipo.toUpperCase()} - ${jogador.nome} (${timeNome})`});
+                // FALTA / CARTÃO por mentalidade
+                let probCartao = timeAt==="M"? pesoCartaoPorMentalidade(mentV) : pesoCartaoPorMentalidade(mentM); // quem DEFENDE faz falta
+                // Retranca faz mais falta, Ofensivo sofre mais falta
+                if(Math.random() < probCartao){
+                    let amarelados = timeDef==="M"? amarelosM : amarelosV;
+                    let expulsos = timeDef==="M"? expulsosM : expulsosV;
+                    let qtdAmarelo = amarelados[defensor.nome]||0;
+                    if(qtdAmarelo>=1 && Math.random()<0.6){
+                        // segundo amarelo = vermelho
+                        linha.push({minuto, tipo:"cartao_vermelho", texto:`🟥 VERMELHO! Segundo amarelo! ${defensor.nome} (${timeDefNome}) está EXPULSO! Falta dura em ${jogador.nome}!`, jogador:defensor.nome, time: timeDef});
+                        expulsos.push(defensor.nome);
+                        defensor.expulso=true;
+                    } else if(Math.random()<0.12){
+                        // vermelho direto
+                        linha.push({minuto, tipo:"cartao_vermelho", texto:`🟥 VERMELHO DIRETO! ${defensor.nome} (${timeDefNome}) faz falta criminosa em ${jogador.nome}!`, jogador:defensor.nome, time: timeDef});
+                        expulsos.push(defensor.nome);
+                        defensor.expulso=true;
+                    } else {
+                        amarelados[defensor.nome]= (amarelados[defensor.nome]||0)+1;
+                        linha.push({minuto, tipo:"cartao_amarelo", texto:`🟨 CARTÃO AMARELO! ${defensor.nome} (${timeDefNome}) chega atrasado em ${jogador.nome}!`, jogador:defensor.nome, time: timeDef});
+                    }
+                } else {
+                    let tipos=["posse","chute_fora","escanteio","falta","cabecada","defesa","contra_ataque","desarme","impedimento","cruzamento","falta_perigosa"];
+                    if(minuto>60) tipos.push("substituicao");
+                    let tipo=tipos[Math.floor(Math.random()*tipos.length)];
+                    let txt = "";
+                    if(tipo==="falta") txt = `🚩 Falta de ${defensor.nome} (${timeDefNome}) em ${jogador.nome}!`;
+                    else if(tipo==="falta_perigosa") txt = `⚠️ Falta perigosa! ${defensor.nome} (${timeDefNome}) derruba ${jogador.nome} na entrada da área!`;
+                    else if(tipo==="substituicao" && minuto>60) txt = `🔄 Substituição no ${timeNome}: sai ${jogador.nome}, entra um reserva para dar gás!`;
+                    else txt = `${tipo.toUpperCase()} - ${jogador.nome} (${timeNome}) tenta contra ${defensor.nome}`;
+                    linha.push({minuto, tipo, texto: txt});
+                }
             }
         }
         minuto+=Math.floor(Math.random()*4)+1;
