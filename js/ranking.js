@@ -160,14 +160,138 @@ function getEscudo(timeId){
     return 'esculdos/default.png';
 }
 
-// Espião - reutiliza função do dashboard se não existir
-if(!window.espionarAdversario){
-    window.espionarAdversario = async function(timeAlvoId){
-        // Redireciona para dashboard que já tem o modal completo
-        localStorage.setItem('espionarAlvo', timeAlvoId);
-        window.location.href = 'dashboard.html';
-    };
+// Helper dinheiro se não existir
+if(!window.formatarDinheiro){
+  window.formatarDinheiro = function(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0); };
 }
+
+    // Modal bonitinho padrão
+function modalAvisoRanking(titulo, texto, cor="#007bff", icone="🕵️‍♂️"){
+  let m=document.createElement('div');
+  m.id='modal-aviso-ranking';
+  m.style.cssText="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10006; display:flex; justify-content:center; align-items:center;";
+  m.innerHTML=`
+    <div style="background:#1e1e1e; width:90%; max-width:380px; border-radius:12px; border:2px solid ${cor}; padding:20px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+      <div style="font-size:36px; margin-bottom:10px;">${icone}</div>
+      <h3 style="color:${cor}; margin:0 0 10px 0;">${titulo}</h3>
+      <p style="color:#ccc; font-size:14px; line-height:1.4; margin-bottom:18px;">${texto}</p>
+      <button onclick="document.getElementById('modal-aviso-ranking').remove()" style="width:100%; padding:10px; background:#2a2a2a; color:#fff; border:1px solid #444; border-radius:6px; font-weight:bold; cursor:pointer;">Fechar</button>
+    </div>`;
+  document.body.appendChild(m);
+}
+function modalConfirmRanking(timeAlvoId, custo, eu, rodadaCobranca, olheiroData){
+  let m=document.createElement('div');
+  m.id='modal-confirm-ranking';
+  m.style.cssText="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10006; display:flex; justify-content:center; align-items:center;";
+  m.innerHTML=`
+    <div style="background:#1e1e1e; width:90%; max-width:380px; border-radius:12px; border:2px solid #ff8c00; padding:20px; box-shadow:0 10px 30px rgba(255,140,0,0.2);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="color:#ff8c00; margin:0;">🕵️‍♂️ Enviar Olheiro?</h3>
+        <button onclick="document.getElementById('modal-confirm-ranking').remove()" style="background:transparent; border:none; color:#666; font-size:22px; cursor:pointer;">&times;</button>
+      </div>
+      <div style="background:#111; border:1px solid #333; border-radius:8px; padding:12px; margin-bottom:12px; text-align:left;">
+        <div style="color:#aaa; font-size:12px;">Alvo</div>
+        <div style="color:#fff; font-weight:bold; font-size:15px; margin-bottom:8px;">${timeAlvoId.replace(/_/g,' ')}</div>
+        <div style="display:flex; justify-content:space-between; font-size:13px;"><span style="color:#aaa;">Custo missão</span><strong style="color:#00b853;">${formatarDinheiro(custo)}</strong></div>
+        <div style="font-size:11px; color:#666; margin-top:6px;">Valor dobra a cada espionagem no mesmo dia. Uso hoje: ${olheiroData.qtd}x</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-cancelar-esp" style="flex:1; padding:10px; background:#2a2a2a; color:#aaa; border:1px solid #444; border-radius:6px; cursor:pointer;">Cancelar</button>
+        <button id="btn-confirmar-esp" style="flex:1; padding:10px; background:#ff8c00; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Espionar por ${formatarDinheiro(custo)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  document.getElementById('btn-cancelar-esp').onclick=()=>m.remove();
+  document.getElementById('btn-confirmar-esp').onclick=async()=>{
+    m.remove();
+    await executarEspionagemRanking(timeAlvoId, custo, eu, rodadaCobranca, olheiroData);
+  };
+}
+
+async function executarEspionagemRanking(timeAlvoId, custo, eu, rodadaCobranca, olheiroData){
+  try{
+    let novoCaixa = eu.caixaClube - custo;
+    olheiroData.qtd += 1;
+    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({ caixaClube: novoCaixa, uso_olheiro: olheiroData });
+
+    let [snapAllUsers, snapTimes] = await Promise.all([
+      db.ref(`ligas/${ligaLogada}/usuarios`).once('value'),
+      db.ref('banco_global_times').once('value')
+    ]);
+    let usuariosGeral = snapAllUsers.val()||{};
+    let timesGerais = snapTimes.val()||{};
+    let donoAlvoObj = null; let isIA = true;
+    for(let u in usuariosGeral){ if(usuariosGeral[u].timeAtual===timeAlvoId){ donoAlvoObj=usuariosGeral[u]; isIA = u.startsWith('IA_'); break; } }
+
+    if(!isIA && donoAlvoObj && donoAlvoObj.escudo_rodada && donoAlvoObj.escudo_rodada.rodada===rodadaCobranca && donoAlvoObj.escudo_rodada.ativo){
+      return modalAvisoRanking("Missão Fracassada!", `O técnico do ${timeAlvoId.replace(/_/g,' ')} ativou o <strong style="color:#ff8c00;">Treino Sigiloso</strong> e fechou os portões. Seu olheiro não viu nada, mas o dinheiro foi gasto.`, "#dc3545", "🚨");
+    }
+
+    let tatica = donoAlvoObj? (donoAlvoObj.mentalidade||"Moderado") : "Moderado";
+    let titularesIDs = donoAlvoObj? (donoAlvoObj.titulares||[]) : [];
+    let timeDados = timesGerais[timeAlvoId]?.jogadores||{};
+
+    if(isIA || titularesIDs.length===0){
+      let elenco = Object.values(timeDados).sort((a,b)=>{
+        let ovrA=(a.atributos.ataque+a.atributos.defesa+a.atributos.forca+a.atributos.velocidade+a.atributos.habilidade);
+        let ovrB=(b.atributos.ataque+b.atributos.defesa+b.atributos.forca+b.atributos.velocidade+b.atributos.habilidade);
+        return ovrB-ovrA;
+      });
+      titularesIDs = elenco.slice(0,11);
+    } else {
+      titularesIDs = titularesIDs.filter(id=>id).map(id=>timeDados[id]).filter(j=>j);
+    }
+
+    let forcaTotal = 0; let htmlJogadores = "";
+    titularesIDs.forEach(j=>{
+      let at=j.atributos||{ataque:0,defesa:0,forca:0,velocidade:0,habilidade:0};
+      let ovr=Math.round((at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5);
+      forcaTotal += (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade);
+      let pos=j.posicoes? j.posicoes.p.charAt(0) : "N";
+      htmlJogadores += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #333; padding:6px 0; font-size:13px;"><span><strong style="color:var(--verde-campo);">${pos}</strong> - ${j.nome}</span><strong style="color:#ff8c00;">${ovr}</strong></div>`;
+    });
+
+    let modal=document.createElement('div');
+    modal.id='modal-relatorio-olheiro';
+    modal.style.cssText="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;";
+    modal.innerHTML=`
+      <div style="background:#1e1e1e; width:100%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3); max-height:90vh; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px;">
+          <h2 style="color:#007bff; margin:0; font-size:18px;">🕵️‍♂️ Dossiê Espião</h2>
+          <button onclick="document.getElementById('modal-relatorio-olheiro').remove()" style="background:#2a2a2a; border:1px solid #444; color:#fff; width:32px; height:32px; border-radius:50%; cursor:pointer;">✕</button>
+        </div>
+        <div style="text-align:center; margin-bottom:15px;">
+          <img src="${getEscudo(timeAlvoId)}" onerror="this.src='esculdos/default.png'" style="width:64px; height:64px; background:#111; border-radius:50%; padding:8px; border:1px solid #333;">
+          <h3 style="color:#fff; margin:8px 0 0 0;">${timeAlvoId.replace(/_/g,' ')}</h3>
+        </div>
+        <div style="background:#111; padding:12px; border-radius:8px; border:1px solid #333; margin-bottom:15px; display:flex; justify-content:space-between;">
+          <div><div style="color:#666; font-size:11px;">MENTALIDADE</div><strong style="color:#ff8c00;">${tatica}</strong></div>
+          <div style="text-align:right;"><div style="color:#666; font-size:11px;">FORÇA DO 11</div><strong style="color:var(--verde-campo);">${forcaTotal}</strong></div>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-right:5px;">${htmlJogadores||"<span style='color:#666;'>Sem titulares definidos.</span>"}</div>
+      </div>`;
+    document.body.appendChild(modal);
+  }catch(e){ console.error(e); modalAvisoRanking("Erro", e.message, "#dc3545", "❌"); }
+}
+
+window.espionarAdversario = async function(timeAlvoId){
+  try{
+    let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+    let eu = snapUser.val()||{};
+    let snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
+    let cal = snapCal.val()||{};
+    let rodadaAtual = cal.rodadaAtual||1;
+    let rodadaCobranca = (new Date().getHours()>=19)? rodadaAtual+1 : rodadaAtual;
+    let olheiroData = eu.uso_olheiro || {rodada:0, qtd:0};
+    if(olheiroData.rodada!== rodadaCobranca) olheiroData = {rodada: rodadaCobranca, qtd:0};
+    let custo = 50000 * Math.pow(2, olheiroData.qtd);
+
+    if((eu.caixaClube||0) < custo){
+      return modalAvisoRanking("Caixa Insuficiente", `Você precisa de <strong>${formatarDinheiro(custo)}</strong> para enviar o olheiro ao ${timeAlvoId.replace(/_/g,' ')}.`, "#dc3545", "💸");
+    }
+    modalConfirmRanking(timeAlvoId, custo, eu, rodadaCobranca, olheiroData);
+  }catch(e){ console.error(e); modalAvisoRanking("Erro", e.message, "#dc3545", "❌"); }
+};
 
 // CONTROLE DO MENU MOBILE - COPIADO DO DASHBOARD
 function toggleMenu() {
