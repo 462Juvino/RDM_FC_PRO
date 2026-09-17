@@ -98,9 +98,17 @@
         </main>
     </div>
 
-    <!-- Script do Motor do Jogo -->
     <script src="js/firebase-config.js"></script>
+    <script src="js/matchEngine_final.js"></script>
     <script src="js/matchEngine.js"></script>
     <script src="js/midia.js"></script>
+    <script>
+      // Garante que o botão INICIAR PARTIDA funcione mesmo se só um dos arquivos existir
+      document.addEventListener('DOMContentLoaded', () => {
+        if(!window.gerarPartidaAoVivo && window.gerarPartida){
+          window.gerarPartidaAoVivo = window.gerarPartida;
+        }
+      });
+    </script>
 </body>
 </html>
