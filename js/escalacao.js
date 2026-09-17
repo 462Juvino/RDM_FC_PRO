@@ -125,7 +125,7 @@ function carregarElenco(nomeTime) {
 
     }).catch(erro => {
         console.error("Erro ao buscar elenco:", erro);
-        document.getElementById('tabela-jogadores').innerHTML = `<tr><td colspan="7" style="color: #dc3545; padding: 20px;">❌ Falha na conexão com o servidor.</td></tr>`;
+        document.getElementById('tabela-jogadores').innerHTML = `<tr><td colspan="8" style="color: #dc3545; padding: 20px;">❌ Falha na conexão com o servidor.</td></tr>`;
     });
 }
 
@@ -304,7 +304,7 @@ function renderizarTabela() {
     tbody.innerHTML = "";
 
     if(Object.keys(elencoCompleto).length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="padding: 20px; color: #dc3545;">⚠️ O seu clube não possui nenhum jogador cadastrado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="padding: 20px; color: #dc3545;">⚠️ O seu clube não possui nenhum jogador cadastrado.</td></tr>`;
         return;
     }
 
@@ -357,12 +357,15 @@ function renderizarTabela() {
             btnHtml = `<button class="btn-escalar" onclick="escalarJogador('${id}')" style="width: 65px;">Escalar</button>`;
         }
 
+        let ovr = Math.round((at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade)/5);
+        let corOVR = ovr>=85? '#ffd700' : ovr>=75? '#00b853' : ovr>=65? '#fff' : '#aaa';
         tbody.innerHTML += `
-            <tr style="${estaEscalado ? 'opacity: 0.5;' : (estaNoCT || estaNosAgentes || estaSuspenso ? 'opacity: 0.6; background: rgba(220, 53, 69, 0.1);' : '')}">
-                <td style="text-align: left; font-weight: bold; color: ${estaNoCT ? '#007bff' : (estaSuspenso ? '#dc3545' : 'white')};">
-                    ${btnHtml} <span style="margin-left:5px; font-size: 13px;">${j.nome || 'Desconhecido'}</span> <span style="font-size:11px; color:${corFadiga};">${iconFadiga} ${fadiga}</span>
+            <tr style="${estaEscalado ? 'opacity: 0.5;' : (estaNoCT ? 'opacity: 0.6; background: rgba(0, 123, 255, 0.15);' : '')}">
+                <td style="text-align: left; font-weight: bold; color: ${estaNoCT ? '#007bff' : 'white'};">
+                    ${btnHtml} <span style="margin-left:5px; font-size: 13px;">${j.nome || 'Desconhecido'}</span>
                 </td>
                 <td style="font-size: 12px;">${pos.p}</td>
+                <td style="font-weight:bold; color:${corOVR}; font-size:13px; background:rgba(0,0,0,0.3); border-radius:4px;">${ovr}</td>
                 <td style="font-size: 12px;">${at.ataque}</td>
                 <td style="font-size: 12px;">${at.defesa}</td>
                 <td style="font-size: 12px;">${at.forca}</td>
@@ -374,7 +377,7 @@ function renderizarTabela() {
 
     if(!temAlguemNaLista && slotSelecionadoSigla) {
         tbody.innerHTML = `
-            <tr><td colspan="7" style="padding: 20px; color: #ff8c00;">
+            <tr><td colspan="8" style="padding: 20px; color: #ff8c00;">
                 Nenhum atleta na posição. Improvise um jogador!<br>
                 <button onclick="limparFiltroDeEmergencia()" style="margin-top:10px; padding: 6px 12px; background: transparent; border: 1px solid #ff8c00; color: #ff8c00; border-radius: 4px; cursor: pointer;">Ver Todo o Elenco</button>
             </td></tr>`;
