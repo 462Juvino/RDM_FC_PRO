@@ -250,10 +250,42 @@ async function checarRotinas(liga) {
         let ultCopa = sis.ultima_simulacao_copa;
         let ultMoral = sis.ultima_queda_moral; // 🟢 NOVO: Checagem da Moral
 
-        let rodarCampHoje = (hora >= HORA_CAMP && ultCamp !== dataAtualStr);
-        let rodarCopaHoje = (hora >= HORA_COPA && ultCopa !== dataAtualStr);
+        let rodarCampHoje = (hora >= HORA_CAMP && ultCamp!== dataAtualStr);
+        let rodarCopaHoje = (hora >= HORA_COPA && ultCopa!== dataAtualStr);
+        let rodarQuedaMoral = (hora >= 6 && ultMoral!== dataAtualStr);
+
+        // TRATOR: Verifica se tem jogo com data <= hoje que não foi jogado e já passou das 20h
         let rodarAtrasados = (!ultCamp || ultCamp < ontemStr);
-        let rodarQuedaMoral = (hora >= 6 && ultMoral !== dataAtualStr); // 🟢 NOVO: 6h da manhã derruba a moral
+        if(!rodarAtrasados && hora >= 20){
+            try{
+                let snapCalCheck = await db.ref(`ligas/${liga}/calendario`).once('value');
+                let calCheck = snapCalCheck.val();
+                if(calCheck){
+                    let hoje = new Date(); hoje.setHours(0,0,0,0);
+                    let temAtrasado = false;
+                    let checarDiv = (divObj)=>{
+                        if(!divObj) return;
+                        for(let chave in divObj){
+                            for(let jId in divObj[chave]){
+                                let j = divObj[chave][jId];
+                                if(j.jogado) continue;
+                                if(j.data_jogo){
+                                    let [d, m] = j.data_jogo.split(' ')[0].split('/');
+                                    let dtJogo = new Date(hoje.getFullYear(), parseInt(m)-1, parseInt(d));
+                                    dtJogo.setHours(0,0,0,0);
+                                    if(dtJogo <= hoje){ temAtrasado = true; break; }
+                                }
+                            }
+                            if(temAtrasado) break;
+                        }
+                    };
+                    checarDiv(calCheck.serieA);
+                    checarDiv(calCheck.serieB);
+                    if(calCheck.copa) checarDiv(calCheck.copa);
+                    if(temAtrasado) rodarAtrasados = true;
+                }
+            }catch(e){ console.warn('Erro checagem atrasados', e); }
+        }
 
         // 🔍 OLHEIRO DO MERCADO: Verifica se há propostas pendentes que já passaram das 19h ou são de ontem
         const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
@@ -1121,15 +1153,21 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
 
                     let arts = [...todosJgs].filter(j => j.estatisticas && j.estatisticas.gols > 0).sort((a,b) => b.estatisticas.gols - a.estatisticas.gols).slice(0, 3);
-                    arts.forEach(j => { let novoValor = Math.min(99, (j.atributos.ataque || 60) + 5); updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/ataque`] = novoValor; });
+                    arts.forEach(j => {
+                        let novo = Math.min(99, (j.atributos.ataque || 60) + 5);
+                        if(times[j.timeBanco]?.jogadores?.[j.idBanco]) times[j.timeBanco].jogadores[j.idBanco].atributos.ataque = novo;
+                    });
 
                     let asts = [...todosJgs].filter(j => j.estatisticas && j.estatisticas.assistencias > 0).sort((a,b) => b.estatisticas.assistencias - a.estatisticas.assistencias).slice(0, 3);
-                    asts.forEach(j => { let novoValor = Math.min(99, (j.atributos.habilidade || 60) + 5); updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/habilidade`] = novoValor; });
+                    asts.forEach(j => {
+                        let novo = Math.min(99, (j.atributos.habilidade || 60) + 5);
+                        if(times[j.timeBanco]?.jogadores?.[j.idBanco]) times[j.timeBanco].jogadores[j.idBanco].atributos.habilidade = novo;
+                    });
 
                     let gks = [...todosJgs].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos >= 5);
                     gks.sort((a,b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)).slice(0, 3).forEach(j => {
-                        let novoValor = Math.min(99, (j.atributos.defesa || 60) + 5);
-                        updates[`banco_global_times/${j.timeBanco}/jogadores/${j.idBanco}/atributos/defesa`] = novoValor;
+                        let novo = Math.min(99, (j.atributos.defesa || 60) + 5);
+                        if(times[j.timeBanco]?.jogadores?.[j.idBanco]) times[j.timeBanco].jogadores[j.idBanco].atributos.defesa = novo;
                     });
                 }
             }
@@ -1417,6 +1455,26 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             if (!updates[`ligas/${liga}/sistema/ultima_simulacao_camp`]) updates[`ligas/${liga}/sistema/ultima_simulacao_camp`] = ontemStr;
             if (!updates[`ligas/${liga}/sistema/ultima_simulacao_copa`]) updates[`ligas/${liga}/sistema/ultima_simulacao_copa`] = ontemStr;
         }
+        // FIX: Remove conflito de ancestral - se tem /jogadores/ID e /jogadores/ID/atributos no mesmo update, apaga o filho e mantém só o pai
+        let chaves = Object.keys(updates);
+        for(let pai of chaves){
+            for(let filho of chaves){
+                if(filho!== pai && filho.startsWith(pai + '/')){
+                    // Se o pai é o objeto completo do jogador, mergeia o filho nele
+                    if(typeof updates[pai] === 'object' && updates[pai]!== null &&!Array.isArray(updates[pai])){
+                        let subPath = filho.replace(pai + '/', '').split('/');
+                        let alvo = updates[pai];
+                        for(let i=0;i<subPath.length-1;i++){
+                            alvo[subPath[i]] = alvo[subPath[i]] || {};
+                            alvo = alvo[subPath[i]];
+                        }
+                        alvo[subPath[subPath.length-1]] = updates[filho];
+                    }
+                    delete updates[filho];
+                }
+            }
+        }
+
         await db.ref().update(updates);
         await lockRef.set(false);
 

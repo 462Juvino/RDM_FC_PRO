@@ -20,7 +20,9 @@ const canalTorcidaM = new Audio();
 const canalTorcidaV = new Audio();
 const canalEfeitos = new Audio();
 const canalHino = new Audio();
-const somApito = new Audio('sounds/apito_arbitro.mp3');
+const somApito = new Audio();
+try{ somApito.src = 'sounds/apito_arbitro.mp3'; }catch(e){}
+somApito.addEventListener('error', ()=>{ try{ somApito.src=''; }catch(e){} });
 
 canalTorcidaM.loop = true;
 canalTorcidaV.loop = true;
@@ -984,8 +986,15 @@ function gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV
     linha.push({minuto:46, tipo:'inicio', texto:`🟢 Rola a bola para a etapa complementar!`});
     linha.push({minuto:94, tipo:'fim', texto:`🏁 APITO FINAL! ${jogo.mandante.replace(/_/g,' ')} ${golsM} x ${golsV} ${jogo.visitante.replace(/_/g,' ')}`});
 
-    linha.sort((a,b)=>a.minuto-b.minuto);
-    return {linha, golsM, golsV, expulsos, substituicoes};
+    // FIX: remove duplicados e ordena cronológico
+    let unicos = [];
+    let vistos = new Set();
+    for(let ev of linha){
+        let chave = ev.minuto + '_' + ev.texto;
+        if(!vistos.has(chave)){ vistos.add(chave); unicos.push(ev); }
+    }
+    unicos.sort((a,b)=>a.minuto-b.minuto);
+    return {linha: unicos, golsM, golsV, substituicoes, cartoes, expulsos, lesoes};
 }
 
 // Função chamada pelo botão da partida.html
@@ -1007,17 +1016,25 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
         }
         if(!jogo || jogo.jogado) return alert("Jogo já realizado!");
 
-        // Pega titulares reais escalados
         function getTitulares(timeId){
             let donoLogin = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===timeId);
             let dono = donoLogin? usuarios[donoLogin] : null;
             let titularesIds = dono?.titulares||[];
             let elenco = times[timeId]?.jogadores||{};
             if(titularesIds.length===0){
-                // IA: monta escalação inteligente
                 return montarEscalacaoIAInteligente(timeId, elenco);
             }
-            return titularesIds.map(id=> elenco[id]).filter(j=>j).map(j=> ({...j, id}));
+            return titularesIds.map(id=> { let j = elenco[id]; return j? {...j, id} : null; }).filter(j=>j);
+        }
+
+        // FIX P2P: Simula TODOS os jogos da rodada, não só o meu
+        let jogosParaSimular = [];
+        let divisaoCal = cal.serieA && cal.serieA[chave]? cal.serieA : cal.serieB;
+        if(divisaoCal && divisaoCal[chave]){
+            for(let jId in divisaoCal[chave]){
+                let j = divisaoCal[chave][jId];
+                if(!j.jogado) jogosParaSimular.push({id: jId, dados: j, div: cal.serieA && cal.serieA[chave]? 'serieA' : 'serieB'});
+            }
         }
 
         let titularesM = getTitulares(jogo.mandante);
@@ -1087,8 +1104,26 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
         jogo.jogado = true;
         updates[`ligas/${ligaLogada}/calendario/${caminhoDivisao}/${idJ}`] = jogo;
 
-        // Avança rodada se todos jogos da rodada foram jogados
-        // ... lógica existente de avanço
+        // P2P: Simula os outros jogos da mesma rodada que ainda não foram jogados (IA x IA)
+        for(let item of jogosParaSimular){
+            if(item.id === idJ) continue;
+            let outroJogo = item.dados;
+            let titM2 = getTitulares(outroJogo.mandante);
+            let titV2 = getTitulares(outroJogo.visitante);
+            let donoM2Login = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===outroJogo.mandante);
+            let donoV2Login = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===outroJogo.visitante);
+            let donoM2 = donoM2Login? usuarios[donoM2Login] : null;
+            let donoV2 = donoV2Login? usuarios[donoV2Login] : null;
+            let fM2 = calcularForcaTime(titM2, donoM2?.mentalidade||"Equilibrado", donoM2?.estilo||"Equilibrado", donoM2?.moral||50, true, donoM2?.ct_ativo, donoM2?.escudo_rodada);
+            let fV2 = calcularForcaTime(titV2, donoV2?.mentalidade||"Equilibrado", donoV2?.estilo||"Equilibrado", donoV2?.moral||50, false, donoV2?.ct_ativo, donoV2?.escudo_rodada);
+            let res2 = gerarLinhaDoTempoComplexa(outroJogo, times, usuarios, titM2, titV2, fM2, fV2);
+            outroJogo.linhaDoTempo = res2.linha;
+            outroJogo.horaInicio = tsAgora;
+            outroJogo.placarMandante = res2.golsM;
+            outroJogo.placarVisitante = res2.golsV;
+            outroJogo.jogado = true;
+            updates[`ligas/${ligaLogada}/calendario/${item.div}/${chave}/${item.id}`] = outroJogo;
+        }
 
         await db.ref().update(updates);
     }catch(e){ console.error(e); alert("Erro: "+e.message); }
@@ -1121,17 +1156,20 @@ function montarEscalacaoIAInteligente(timeId, elencoObj){
 }
 
 // Funções auxiliares de narração e placar (mantidas do original)
-function reproduzirLinhaDoTempo(linha, horaInicio, pm, pv){ /* ... mesma do original ... */
+function reproduzirLinhaDoTempo(linha, horaInicio, pm, pv){
+    let el = document.getElementById('narracao-container');
+    if(el) el.innerHTML = '';
+    linha = [...linha].sort((a,b)=>a.minuto-b.minuto);
     let idx=0;
     function tocarProx(){
         if(idx>=linha.length) return;
         let ev = linha[idx];
-        let el = document.getElementById('narracao-container');
         if(el){
             let div = document.createElement('div');
             div.style.cssText = "border-left:3px solid "+(ev.tipo.includes('gol')?'gold':'#444')+"; padding:5px 10px; margin:5px 0; background:#111;";
             div.innerHTML = `<strong>${ev.minuto}'</strong> - ${ev.texto}`;
-            el.prepend(div);
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
             if(ev.tipo.includes('gol')){
                 if(ev.tipo.includes('mandante')) placarNarracaoM++; else placarNarracaoV++;
                 atualizarTorcidasOficiais();
@@ -1157,3 +1195,10 @@ window.mostrarLetreiroGol = function(nomeTime) {
     setTimeout(() => { div.style.transition = "opacity 0.5s"; div.style.opacity = "0"; setTimeout(() => div.remove(), 500); }, 4000);
 };
 
+window.gerarPartidaAoVivo = async function(){
+  let idJ = meuJogoId;
+  let exib = rodadaExibicao || `camp_rodada_${rodadaSistema}`;
+  let isMata = exib.startsWith('copa_');
+  let chave = isMata? exib.replace('copa_','') : exib.replace('camp_','');
+  return await window.gerarPartida(idJ, chave, isMata);
+};
