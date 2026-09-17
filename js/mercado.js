@@ -76,6 +76,13 @@ function carregarMundo() {
 
                 let ovrAvg = Math.round((atq + def + frc + vel + hab) / 5);
 
+                let ehLenda = j.nome.includes("(Lenda)") || time === "Lendas_Futebol";
+                let valorBase = j.valor_mercado || 0;
+                let valorFinal = valorBase;
+                if(time.startsWith("Agentes_Livres") &&!ehLenda){
+                    valorFinal = Math.round(valorBase * 0.5);
+                }
+
                 let objJogador = {
                     id_banco: idJog,
                     nome: j.nome,
@@ -84,9 +91,11 @@ function carregarMundo() {
                     posicao: j.posicoes ? j.posicoes.p : "N/A",
                     forca: ovrAvg,
                     atributos: { ataque: atq, defesa: def, forca: frc, velocidade: vel, habilidade: hab },
-                    valor: j.valor_mercado || 0,
+                    valor: valorFinal,
+                    valorOriginal: valorBase,
                     isPro: isPro,
-                    timeCru: time // 🟢 Referência pura para os Filtros
+                    ehLenda: ehLenda,
+                    timeCru: time
                 };
 
                 todosJogadores.push(objJogador);
@@ -121,6 +130,22 @@ function carregarMundo() {
             }
         }
 
+        // FIX LENDAS DUPLICADAS: Mantém só 1 cópia, prioriza time que comprou
+        let mapaUnico = {};
+        for(let j of todosJogadores){
+            let chave = j.id_banco;
+            if(!mapaUnico[chave]){
+                mapaUnico[chave] = j;
+            } else {
+                let atual = mapaUnico[chave];
+                let atualEhLenda = atual.timeCru === 'Lendas_Futebol' || atual.timeCru.startsWith('Agentes_Livres');
+                let novoEhLenda = j.timeCru === 'Lendas_Futebol' || j.timeCru.startsWith('Agentes_Livres');
+                if(atualEhLenda &&!novoEhLenda){
+                    mapaUnico[chave] = j;
+                }
+            }
+        }
+        todosJogadores = Object.values(mapaUnico);
         todosJogadores.sort((a, b) => b.forca - a.forca);
 
                 // 3. INJETA / ATUALIZA O FILTRO DE CLUBES DINAMICAMENTE (CORRIGIDO)
