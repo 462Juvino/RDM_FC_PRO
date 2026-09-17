@@ -1403,8 +1403,8 @@ window.aceitarProposta = async function(idAlvo, loginComprador, valorCustom){
         alert(`✅ Vendido! ${dadosDoAlvo.nome} por ${formatarDinheiro(valorFinal)}`);
         await db.ref(`ligas/${ligaLogada}/jornal/${Date.now()}`).set({
           tipo: "mercado",
-          texto: `💰 MERCADO AGITADO! O ${comprador.replace(/_/g,' ')} comprou ${nomeAlvo} do ${vendedor.replace(/_/g,' ')} por ${formatarDinheiro(valor)}! A torcida foi à loucura!`,
-          time: comprador,
+          texto: `💰 MERCADO AGITADO! O ${lance.time_comprador.replace(/_/g,' ')} comprou ${dadosDoAlvo.nome} do ${timeDoAlvo.replace(/_/g,' ')} por ${formatarDinheiro(valorFinal)}! A torcida foi à loucura!`,
+          time: lance.time_comprador,
           data: new Date().toISOString()
         });
         carregarMundo();
