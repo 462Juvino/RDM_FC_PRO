@@ -123,46 +123,31 @@ function carregarMundo() {
 
         todosJogadores.sort((a, b) => b.forca - a.forca);
 
-        // 3. INJETA O FILTRO DE CLUBES DINAMICAMENTE NO HTML
-        // Primeiro, garantimos que a caixa de pesquisa seja um Flex Container para acomodar o novo menu
-        let boxFiltrosHtml = document.querySelector('.card-time[style*="margin-bottom"]');
-        if (boxFiltrosHtml) {
-            boxFiltrosHtml.style.display = "flex";
-            boxFiltrosHtml.style.flexWrap = "wrap";
-            boxFiltrosHtml.style.gap = "10px";
-            boxFiltrosHtml.style.alignItems = "center";
-            boxFiltrosHtml.style.justifyContent = "flex-start";
-        }
+                // 3. INJETA / ATUALIZA O FILTRO DE CLUBES DINAMICAMENTE (CORRIGIDO)
+        let selectClubeExistente = document.getElementById('filtro-clube');
+        let clubesUnicos = [...new Set(todosJogadores.map(j => j.timeCru))].sort();
 
-        if (!document.getElementById('filtro-clube')) {
-            let clubesUnicos = [...new Set(todosJogadores.map(j => j.timeCru))].sort();
-
-            let htmlSelect = `<select id="filtro-clube" onchange="renderizarMercado()" style="padding: 10px; background-color: #2a2a2a; color: white; border: 1px solid #444; border-radius: 6px; outline: none; cursor: pointer; min-width: 150px;">
-                <option value="TODOS">🌍 Todos os Clubes</option>`;
-
+        if (selectClubeExistente) {
+            let valorAtual = selectClubeExistente.value;
+            selectClubeExistente.innerHTML = `<option value="TODOS_CLUBES">🌍 Todos os Clubes</option>`;
             clubesUnicos.forEach(c => {
                 let nomeBonito = c.replace(/_/g, ' ');
-                // Destaca os Agentes Livres e a Base
                 if(c === "Base") nomeBonito = "🌟 Categoria de Base";
                 if(c.startsWith("Agentes")) nomeBonito = "💼 Agentes Livres";
-
-                htmlSelect += `<option value="${c}">${nomeBonito}</option>`;
+                if(c === "Lendas_Futebol") nomeBonito = "⭐ Lendas";
+                selectClubeExistente.innerHTML += `<option value="${c}">${nomeBonito}</option>`;
             });
-            htmlSelect += `</select>`;
-
-            // Procura onde injetar: Do lado do filtro de Posição
-            let selectPosicaoHtml = document.getElementById('filtro-posicao');
-            if(selectPosicaoHtml) {
-                selectPosicaoHtml.insertAdjacentHTML('afterend', htmlSelect);
+            if([...selectClubeExistente.options].some(o=>o.value===valorAtual)){
+                selectClubeExistente.value = valorAtual;
             }
         }
 
-        // 4. MAPEIA AS TRANSAÇÕES E PROPOSTAS
+                // 4. MAPEIA AS TRANSAÇÕES E PROPOSTAS (COM CONTRAPROPOSTA)
         for (let idAlvo in propostas) {
             let lances = propostas[idAlvo];
             let alvoEncontrado = todosJogadores.find(j => j.id_banco === idAlvo);
-            let donoAlvo = alvoEncontrado ? alvoEncontrado.clube : "Desconhecido";
-            let nomeAlvo = alvoEncontrado ? alvoEncontrado.nome : "Jogador";
+            let donoAlvo = alvoEncontrado? alvoEncontrado.clube : "Desconhecido";
+            let nomeAlvo = alvoEncontrado? alvoEncontrado.nome : "Jogador";
 
             for (let login in lances) {
                 let lance = lances[login];
@@ -177,12 +162,17 @@ function carregarMundo() {
                     is_comp_real: isCompReal, is_vend_real: isVendReal,
                     data_proposta: lance.data_proposta,
                     login_comprador: login,
-                    tipo_negocio: lance.tipo_negocio || 'compra', // 🤝 Identifica se é aluguel
-                    duracao_rodadas: lance.duracao_rodadas || 0
+                    tipo_negocio: lance.tipo_negocio || 'compra',
+                    duracao_rodadas: lance.duracao_rodadas || 0,
+                    is_contra: lance.tipo_negocio === 'contraproposta'
                 };
 
-                if (comp === dadosUsuario.timeAtual) propostasEnviadasGlobais.push(objLance);
-                if (donoAlvo === dadosUsuario.timeAtual.replace(/_/g, ' ')) propostasRecebidasGlobais.push(objLance);
+                if (comp === dadosUsuario.timeAtual || lance.proposta_original_de === userLogado) {
+                    propostasEnviadasGlobais.push(objLance);
+                }
+                if (donoAlvo === dadosUsuario.timeAtual.replace(/_/g, ' ')) {
+                    propostasRecebidasGlobais.push(objLance);
+                }
             }
         }
 
@@ -235,8 +225,12 @@ window.renderizarMercado = function(termoBusca = "") {
             if (filtroPos !== "Atacante" && filtroPos !== "PRO_PLAYERS" && j.posicao !== filtroPos) continue;
         }
 
-        // 🟢 Filtro de Clube (NOVO)
-        if (filtroClube !== "TODOS" && j.timeCru !== filtroClube) continue;
+                // 🟢 Filtro de Clube (CORRIGIDO)
+        if (window.filtroForcadoAgentesLivres || termoBusca === "AGENTES_LIVRES") {
+            if (!j.timeCru.includes("Agentes_Livres")) continue;
+        } else if (filtroClube !== "TODOS" && filtroClube !== "TODOS_CLUBES" && j.timeCru !== filtroClube) {
+            continue;
+        }
 
         if (termoBusca && typeof termoBusca === 'string') {
             if (!j.nome.toLowerCase().includes(termoBusca.toLowerCase())) continue;
@@ -287,16 +281,6 @@ window.renderizarMercado = function(termoBusca = "") {
         exibidos++;
     }
 }
-
-// Opções para o Seu Próprio Jogador (Gatilho para o futuro)
-window.abrirOpcoesMeuJogador = function(idJogador) {
-    let j = todosJogadores.find(x => x.id_banco === idJogador);
-    if(!j) return;
-
-    if(confirm(`🛠️ OPÇÕES: ${j.nome}\n\nDeseja colocar este jogador na Lista de Empréstimos?`)) {
-        alert("Excelente! O sistema de colocar na vitrine será ativado na próxima Etapa!");
-    }
-};
 
 function pesquisarJogador() {
     const termo = document.getElementById('busca-jogador').value;
@@ -1069,3 +1053,355 @@ window.confirmarEmprestimoFin = function(nomeCredor, maxCredor, taxaBase) {
         carregarMundo();
     });
 };
+
+// FUNÇÃO CONTRAPROPOSTA
+window.abrirContraProposta = function(idAlvo, loginComprador){
+    let prop = propostasRecebidasGlobais.find(p=>p.id_alvo===idAlvo && p.login_comprador===loginComprador);
+    let valorOriginal = prop? prop.valor : 0;
+    let novoValor = prompt(`Valor original: ${formatarDinheiro(valorOriginal)}\nDigite a CONTRAPROPOSTA maior:`, Math.round(valorOriginal*1.25));
+    if(!novoValor || parseInt(novoValor) <= valorOriginal) return alert("Tem que ser MAIOR que a original!");
+    db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${userLogado}_contra_${Date.now()}`).set({
+        time_comprador: dadosUsuario.timeAtual,
+        valor_oferecido: parseInt(novoValor),
+        tipo_negocio: 'contraproposta',
+        data_proposta: new Date().toISOString(),
+        proposta_original_de: loginComprador
+    }).then(()=> alert("Contraproposta enviada!"));
+};
+
+// HISTÓRICO
+window.carregarHistoricoMercado = function(){
+    db.ref(`ligas/${ligaLogada}/historico_transferencias`).orderByChild('data').limitToLast(30).once('value').then(snap=>{
+        let hist = snap.val()||{};
+        let arr = Object.values(hist).sort((a,b)=> new Date(b.data) - new Date(a.data));
+        let div = document.getElementById('area-historico-mercado');
+        if(!div){ div = document.createElement('div'); div.id='area-historico-mercado'; document.querySelector('.card-time').appendChild(div); }
+        if(arr.length===0){ div.innerHTML='<p style="color:#666; text-align:center;">Nenhuma transferência ainda.</p>'; return; }
+        let html = '<table style="width:100%; font-size:12px;"><tr style="color:#888;"><th>Jogador</th><th>De</th><th>Para</th><th>Valor</th></tr>';
+        arr.forEach(h=>{
+            html+=`<tr style="border-bottom:1px solid #222;"><td style="color:#fff;">${h.jogador_nome}</td><td style="color:#aaa;">${h.time_origem.replace(/_/g,' ')}</td><td style="color:var(--verde-campo);">${h.time_destino.replace(/_/g,' ')}</td><td style="color:#ff8c00;">${formatarDinheiro(h.valor)}</td></tr>`;
+        });
+        html+='</table>';
+        div.innerHTML = html;
+    });
+};
+
+window.resetarFiltroMercado = function(){
+    window.filtroForcadoAgentesLivres = false;
+    document.getElementById('busca-jogador').value = '';
+    let selectClube = document.getElementById('filtro-clube');
+    if(selectClube) selectClube.value = 'TODOS_CLUBES';
+    let selectPos = document.getElementById('filtro-posicao');
+    if(selectPos) selectPos.value = 'TODOS';
+    renderizarMercado();
+};
+
+window.filtrarAgentesLivres = function(){
+    document.getElementById('busca-jogador').value = '';
+    let selectClube = document.getElementById('filtro-clube');
+    if(selectClube){
+        let opcaoAgentes = [...selectClube.options].find(o=>o.value.includes('Agentes_Livres'));
+        if(opcaoAgentes){
+            selectClube.value = opcaoAgentes.value;
+        } else {
+            // Se não tem agentes livres na lista (banco vazio), força mesmo assim
+            selectClube.value = `Agentes_Livres_${ligaLogada}`;
+        }
+    }
+    window.filtroForcadoAgentesLivres = true;
+    renderizarMercado('AGENTES_LIVRES');
+};
+
+window.trocarSubAbaMercado = function(aba){
+    let divTodos = document.getElementById('subaba-todos');
+    let divLivres = document.getElementById('subaba-livres');
+    let divHist = document.getElementById('subaba-historico');
+    let tabela = document.getElementById('tabela-mercado') || document.querySelector('table.tabela-ranking');
+    // Move a tabela para dentro da subaba todos se ainda estiver fora
+    if(tabela && divTodos &&!divTodos.contains(tabela)) divTodos.appendChild(tabela.parentElement? tabela.parentElement : tabela);
+    if(divTodos) divTodos.style.display = aba==='todos'?'block':'none';
+    if(divLivres) divLivres.style.display = aba==='livres'?'block':'none';
+    if(divHist) divHist.style.display = aba==='historico'?'block':'none';
+    document.getElementById('aba-btn-todos').style.background = aba==='todos'?'var(--verde-campo)':'#2a2a2a';
+    document.getElementById('aba-btn-livres').style.background = aba==='livres'?'var(--verde-campo)':'#2a2a2a';
+    document.getElementById('aba-btn-historico').style.background = aba==='historico'?'var(--verde-campo)':'#2a2a2a';
+    if(aba==='livres') filtrarAgentesLivresSubAba();
+    if(aba==='historico') carregarHistoricoMercado();
+    if(aba==='todos') { window.filtroForcadoAgentesLivres=false; renderizarMercado(); }
+};
+window.filtrarAgentesLivresSubAba = function(){
+    let div = document.getElementById('lista-agentes-livres');
+    if(!div) return;
+    let livres = todosJogadores.filter(j=> j.timeCru && j.timeCru.includes('Agentes_Livres'));
+    if(livres.length===0){ div.innerHTML='<p style="color:#666; text-align:center; padding:20px;">Nenhum agente livre. Envie seu olheiro para buscar lendas ou libere jogadores no mercado!</p>'; return; }
+    div.innerHTML = livres.map(j=> `<div style="background:#1a1a1a; border:1px solid ${j.nome.includes('Lenda')||Object.keys(BANCO_LENDAS).some(k=>j.nome.includes(BANCO_LENDAS[k].nome))?'gold':'#333'}; padding:10px; border-radius:6px;">
+        <strong style="color:#fff;">${j.nome} ${j.nome.includes('Lenda')||j.forca>=18?'⭐':''}</strong><br><small style="color:#aaa;">${j.posicao} | OVR ${j.forca} | ${j.clube}</small><br>
+        <span style="color:var(--verde-campo); font-weight:bold;">${formatarDinheiro(j.valor)}</span><br>
+        <button onclick="fazerProposta('${j.id_banco}')" style="width:100%; margin-top:6px; background:#ff8c00; color:#fff; border:none; padding:6px; border-radius:4px; cursor:pointer;">Negociar</button>
+    </div>`).join('');
+};
+// Redireciona o botão antigo para a nova sub-aba
+window.filtrarAgentesLivres = function(){ trocarSubAbaMercado('livres'); };
+window.resetarFiltroMercado = function(){
+    window.filtroForcadoAgentesLivres=false;
+    let busca = document.getElementById('busca-jogador'); if(busca) busca.value='';
+    let sel = document.getElementById('filtro-clube'); if(sel) sel.value='TODOS_CLUBES';
+    let selPos = document.getElementById('filtro-posicao'); if(selPos) selPos.value='TODOS';
+    renderizarMercado();
+};
+
+// OLHEIRO COMO SUB-ABA DO MERCADO
+const trocarOriginal = window.trocarSubAbaMercado;
+window.trocarSubAbaMercado = function(aba){
+    if(trocarOriginal) trocarOriginal(aba);
+    // Esconde todas
+    ['todos','livres','historico','olheiro'].forEach(a=>{
+        let el = document.getElementById('subaba-'+a);
+        if(el) el.style.display = a===aba?'block':'none';
+        let btn = document.getElementById('aba-btn-'+a);
+        if(btn) btn.style.background = a===aba?'var(--verde-campo)':'#2a2a2a';
+    });
+    if(aba==='olheiro' && typeof carregarOlheiro === 'function'){
+        carregarOlheiro();
+    }
+    if(aba==='todos'){
+        let tabela = document.getElementById('tabela-mercado') || document.querySelector('table.tabela-ranking');
+        let dest = document.getElementById('subaba-todos');
+        if(tabela && dest &&!dest.contains(tabela)) dest.appendChild(tabela.parentElement? tabela.parentElement : tabela);
+    }
+};
+
+
+// FIX 1: mercado.js - Correção do clique no meu jogador
+// Substitua toda a função abrirOpcoesMeuJogador e as 2 abaixo por estas:
+
+window.abrirOpcoesMeuJogador = function(idJogador) {
+    let j = todosJogadores.find(x => x.id_banco === idJogador);
+    if(!j) return alert("Jogador não encontrado!");
+
+    // Se já está nos Agentes Livres
+    if(j.timeCru && j.timeCru.includes('Agentes_Livres')){
+        if(confirm(`🔙 ${j.nome} está nos Agentes Livres.\n\nDeseja REMOVER e trazer de volta para o seu elenco (${dadosUsuario.timeAtual.replace(/_/g,' ')})?`)){
+            window.removerDeAgentesLivres(idJogador);
+        }
+        return;
+    }
+
+    // Se é do meu time
+    let ehMeu = (j.timeCru === dadosUsuario.timeAtual) || (j.clube === dadosUsuario.timeAtual.replace(/_/g,' '));
+    if(!ehMeu){
+        return window.fazerProposta(idJogador);
+    }
+
+    if(confirm(`📤 Colocar ${j.nome} (OVR ${j.forca}) nos Agentes Livres?\n\nEle sairá do seu time e aparecerá para TODOS na aba Agentes Livres para negociação.\n• Lendas e jogadores que você não quer mais ficam aqui\n• IA pode comprar com 50% do valor\n• Você pode fazer contra-proposta até 80%\n\nConfirmar?`)){
+        window.colocarEmAgentesLivres(idJogador);
+    }
+};
+
+window.colocarEmAgentesLivres = async function(idJogador){
+    try{
+        let timeAtual = dadosUsuario.timeAtual;
+        let snapBanco = await db.ref(`banco_global_times/${timeAtual}/jogadores/${idJogador}`).once('value');
+        let dadosJog = snapBanco.val();
+        if(!dadosJog) return alert("Jogador não encontrado no seu elenco! Talvez já foi movido.");
+
+        let valorOriginal = dadosJog.valor_mercado || 0;
+        let isIA = timeAtual.startsWith("IA_") || (userLogado && userLogado.startsWith("IA_"));
+        let valorComDesconto = isIA ? Math.round(valorOriginal * 0.8) : valorOriginal;
+
+        // Mantém atributos e tudo
+        let jogadorParaLivres = {
+            nome: dadosJog.nome,
+            posicoes: dadosJog.posicoes,
+            atributos: dadosJog.atributos,
+            valor_mercado: valorComDesconto,
+            idade: dadosJog.idade || 20,
+            estatisticas: dadosJog.estatisticas || {gols:0, assistencias:0, jogos:0},
+            fadiga: dadosJog.fadiga || 0,
+            time_origem: timeAtual,
+            origem_livre: userLogado,
+            data_entrada_livre: new Date().toISOString(),
+            pro_player: dadosJog.pro_player || false,
+            bonus_ranking: dadosJog.bonus_ranking || 0
+        };
+
+        let updates = {};
+        updates[`banco_global_times/${timeAtual}/jogadores/${idJogador}`] = null;
+        updates[`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${idJogador}`] = jogadorParaLivres;
+        updates[`banco_global_times/Agentes_Livres_${ligaLogada}/divisao`] = "Livre";
+
+        // Remove das titulares se estiver escalado
+        let snapTit = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/titulares`).once('value');
+        let titulares = snapTit.val()||[];
+        let mudou = false;
+        for(let i=0;i<titulares.length;i++){
+            if(titulares[i]===idJogador){ titulares[i]=null; mudou=true; }
+        }
+        if(mudou){
+            updates[`ligas/${ligaLogada}/usuarios/${userLogado}/titulares`] = titulares;
+        }
+
+        await db.ref().update(updates);
+        alert(`✅ ${dadosJog.nome} enviado para Agentes Livres!\nValor: ${formatarDinheiro(valorComDesconto)} ${isIA?'(20% desconto IA)':''}`);
+        carregarMundo();
+    }catch(e){ console.error(e); alert("Erro ao mover: "+e.message); }
+};
+
+window.removerDeAgentesLivres = async function(idJogador){
+    try{
+        let snapLivre = await db.ref(`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${idJogador}`).once('value');
+        let dadosJog = snapLivre.val();
+        if(!dadosJog) return alert("Jogador não está mais nos Agentes Livres!");
+
+        if(dadosJog.origem_livre !== userLogado && dadosJog.time_origem !== dadosUsuario.timeAtual){
+            return alert("Você só pode remover jogadores que você mesmo colocou!\nOrigem: "+(dadosJog.time_origem||'desconhecida'));
+        }
+
+        let updates = {};
+        updates[`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${idJogador}`] = null;
+        updates[`banco_global_times/${dadosUsuario.timeAtual}/jogadores/${idJogador}`] = {
+            nome: dadosJog.nome,
+            posicoes: dadosJog.posicoes,
+            atributos: dadosJog.atributos,
+            valor_mercado: dadosJog.valor_mercado,
+            idade: dadosJog.idade,
+            estatisticas: dadosJog.estatisticas,
+            fadiga: dadosJog.fadiga,
+            pro_player: dadosJog.pro_player,
+            bonus_ranking: dadosJog.bonus_ranking || 0
+        };
+
+        await db.ref().update(updates);
+        alert(`✅ ${dadosJog.nome} voltou para o seu elenco!`);
+        carregarMundo();
+    }catch(e){ console.error(e); alert("Erro: "+e.message); }
+};
+
+
+// 2. AGENTES LIVRES COM BOTÃO REMOVER PARA SEUS JOGADORES
+window.filtrarAgentesLivresSubAba = function(){
+    let div = document.getElementById('lista-agentes-livres');
+    if(!div) return;
+    let livres = todosJogadores.filter(j=> j.timeCru && j.timeCru.includes('Agentes_Livres'));
+    if(livres.length===0){ div.innerHTML='<p style="color:#666; text-align:center; padding:20px;">Nenhum agente livre. Envie seu olheiro para buscar lendas ou libere jogadores no mercado!</p>'; return; }
+    div.innerHTML = livres.map(j=> {
+        let ehMeu = false;
+        // Checa se foi eu que coloquei (precisa buscar dados completos, mas pelo nome do time_origem)
+        // Vamos usar timeCru e dadosUsuario para inferir
+        // Na renderização completa vamos buscar no banco depois, aqui simplificamos
+        let isLenda = j.nome.includes('Lenda')|| Object.keys(typeof BANCO_LENDAS!=='undefined'?BANCO_LENDAS:{}).some(k=> j.nome.includes(BANCO_LENDAS[k].nome));
+        let corBorda = isLenda?'gold':'#333';
+        let botaoAcao = '';
+        // Se for meu time de origem (vamos checar via todosJogadores que tem time_origem no objeto original)
+        // Para simplificar, se o jogador está nos livres e meu time já teve ele, mostra remover
+        // O backend vai validar de qualquer forma
+        // Vamos mostrar dois botões: Negociar (para todos) e se for meu, Remover
+        if(j.clube==="Agentes Livres"){
+            botaoAcao = `<div style="display:flex; gap:5px; margin-top:6px;">
+                <button onclick="fazerProposta('${j.id_banco}')" style="flex:1; background:#ff8c00; color:#fff; border:none; padding:6px; border-radius:4px; cursor:pointer;">Negociar</button>
+                <button onclick="abrirOpcoesMeuJogador('${j.id_banco}')" style="flex:1; background:#333; color:#aaa; border:1px solid #555; padding:6px; border-radius:4px; cursor:pointer;">Meu? Remover</button>
+            </div>`;
+        } else {
+            botaoAcao = `<button onclick="fazerProposta('${j.id_banco}')" style="width:100%; margin-top:6px; background:#ff8c00; color:#fff; border:none; padding:6px; border-radius:4px; cursor:pointer;">Negociar</button>`;
+        }
+        return `<div style="background:#1a1a1a; border:1px solid ${corBorda}; padding:10px; border-radius:6px;">
+            <strong style="color:#fff;">${j.nome} ${isLenda?'⭐':''}</strong><br><small style="color:#aaa;">${j.posicao} | OVR ${j.forca} | ${j.clube}</small><br>
+            <small style="color:#666;">Origem: ${(j.timeCru||'').replace(/_/g,' ')}</small><br>
+            <span style="color:var(--verde-campo); font-weight:bold;">${formatarDinheiro(j.valor)}</span><br>
+            ${botaoAcao}
+        </div>`;
+    }).join('');
+};
+
+// 3. CONTRA-PROPOSTA COM REGRA 50% / 80%
+window.abrirContraProposta = function(idAlvo, loginComprador){
+    let prop = propostasRecebidasGlobais.find(p=>p.id_alvo===idAlvo && p.login_comprador===loginComprador);
+    if(!prop) return alert("Proposta não encontrada!");
+    let valorOriginal = prop.valor;
+    let jogador = todosJogadores.find(j=> j.id_banco===idAlvo);
+    let valorMercado = jogador? jogador.valor : valorOriginal*2; // se for de livres, valorMercado é o dobro do oferecido (50%)
+
+    let ehAgentesLivres = prop.timeCru && prop.timeCru.includes("Agentes_Livres");
+    let textoExplica = ehAgentesLivres ?
+        `Proposta da IA nos Agentes Livres: ${formatarDinheiro(valorOriginal)} (50% do valor)\nValor de mercado: ${formatarDinheiro(valorMercado)}\n\nVocê pode fazer contra-proposta até 80% do valor (${formatarDinheiro(valorMercado*0.8)}). Se pedir mais que isso, a IA recusa e finaliza.` :
+        `Valor original: ${formatarDinheiro(valorOriginal)}\nDigite sua contra-proposta:`;
+
+    let novoValorStr = prompt(textoExplica, Math.round(valorMercado*0.7));
+    if(!novoValorStr) return;
+    let novoValor = parseInt(novoValorStr);
+    if(isNaN(novoValor) || novoValor <= valorOriginal) return alert("Contra-proposta tem que ser MAIOR que a original!");
+
+    if(ehAgentesLivres){
+        if(novoValor > valorMercado*0.8){
+            if(confirm(`❌ IA RECUSOU!\nVocê pediu ${formatarDinheiro(novoValor)} que é mais que 80% do valor (${formatarDinheiro(valorMercado*0.8)}).\nA negociação será finalizada. Deseja finalizar?`)){
+                // Finaliza - remove proposta
+                db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).remove();
+                alert("Negociação finalizada. Proposta removida.");
+                carregarMundo();
+            }
+            return;
+        } else {
+            // IA aceita até 80%
+            if(confirm(`✅ IA ACEITOU sua contra-proposta de ${formatarDinheiro(novoValor)} (até 80% do valor)!\nDeseja vender?`)){
+                // Aceita venda
+                aceitarProposta(idAlvo, loginComprador, novoValor);
+                return;
+            }
+        }
+    }
+
+    // Para proposta normal (não livres), envia contra-proposta
+    db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${userLogado}_contra_${Date.now()}`).set({
+        time_comprador: dadosUsuario.timeAtual,
+        valor_oferecido: novoValor,
+        tipo_negocio: 'contraproposta',
+        data_proposta: new Date().toISOString(),
+        proposta_original_de: loginComprador,
+        is_contra: true
+    }).then(()=> alert("Contra-proposta enviada! Aguarde resposta."));
+};
+
+// Função aceitar com valor custom (para contra-proposta aceita)
+window.aceitarProposta = async function(idAlvo, loginComprador, valorCustom){
+    try{
+        let snapProp = await db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).once('value');
+        let lance = snapProp.val();
+        if(!lance) return alert("Proposta não existe mais");
+        let valorFinal = valorCustom || lance.valor_oferecido;
+
+        // Busca dados
+        let snapBanco = await db.ref('banco_global_times').once('value');
+        let banco = snapBanco.val()||{};
+        let snapUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+        let usuarios = snapUsers.val()||{};
+
+        let timeDoAlvo = null; let dadosDoAlvo = null;
+        for(let t in banco){
+            if(banco[t].jogadores && banco[t].jogadores[idAlvo]){ timeDoAlvo = t; dadosDoAlvo = banco[t].jogadores[idAlvo]; break; }
+        }
+        if(!dadosDoAlvo) return alert("Jogador não encontrado!");
+
+        let comprador = usuarios[loginComprador];
+        let updates = {};
+        // Remove de TODOS
+        for(let tCheck in banco){ if(banco[tCheck].jogadores && banco[tCheck].jogadores[idAlvo]){ updates[`banco_global_times/${tCheck}/jogadores/${idAlvo}`]=null; } }
+        updates[`banco_global_times/${lance.time_comprador}/jogadores/${idAlvo}`]=dadosDoAlvo;
+        // Dinheiro
+        if(comprador) updates[`ligas/${ligaLogada}/usuarios/${loginComprador}/caixaClube`] = (comprador.caixaClube||0)-valorFinal;
+        let loginVendedor = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===timeDoAlvo);
+        if(loginVendedor) updates[`ligas/${ligaLogada}/usuarios/${loginVendedor}/caixaClube`] = (usuarios[loginVendedor].caixaClube||0)+valorFinal;
+        // Limpa propostas
+        let snapTodasProps = await db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}`).once('value');
+        let todas = snapTodasProps.val()||{};
+        Object.keys(todas).forEach(l=> updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${l}`]=null);
+        // Histórico
+        updates[`ligas/${ligaLogada}/historico_transferencias/${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
+            jogador_nome: dadosDoAlvo.nome, jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: lance.time_comprador, valor: valorFinal, tipo: 'compra', data: new Date().toISOString()
+        };
+
+        await db.ref().update(updates);
+        alert(`✅ Vendido! ${dadosDoAlvo.nome} por ${formatarDinheiro(valorFinal)}`);
+        carregarMundo();
+    }catch(e){ console.error(e); alert("Erro: "+e.message); }
+};
+

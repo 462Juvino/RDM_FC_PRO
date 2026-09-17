@@ -27,6 +27,138 @@ function dispararNotificacao(titulo, mensagem) {
 // ========================================================
 // 1. LOOP DO MOTOR P2P (GATILHO DE TEMPO)
 // ========================================================
+
+// ==========================================
+// NOVO - FUNÇÕES COMPLEXAS V2 (FADIGA, TÁTICA, IA COMPETITIVA)
+// ==========================================
+function calcularForcaRealJogadorV2(j){
+    let at = j.atributos||{ataque:5,defesa:5,forca:5,velocidade:5,habilidade:5};
+    let base = (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5;
+    let fadiga = j.fadiga||0;
+    let mult = 1 - (fadiga*0.015);
+    if(mult<0.5) mult=0.5;
+    return base*mult;
+}
+function calcularForcaTimeComplexaV2(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo){
+    let atk=0, def=0, meio=0;
+    titulares.forEach(j=>{
+        let at=j.atributos||{}; let fReal=calcularForcaRealJogadorV2(j); let pos=j.posicoes?.p||"Meia";
+        if(["Atacante","Centroavante","Ponta"].includes(pos)) atk += (at.ataque*1.5+at.velocidade+at.habilidade)/3*(fReal/10);
+        else if(["Zagueiro","Lateral","Goleiro"].includes(pos)) def += (at.defesa*1.5+at.forca+at.velocidade*0.5)/3*(fReal/10);
+        else meio += (at.habilidade*1.2+at.ataque*0.8+at.defesa*0.8)/3*(fReal/10);
+    });
+    if(mentalidade==="Ofensivo"){ atk*=1.25; def*=0.85; } else if(mentalidade==="Defensivo"||mentalidade==="Retranca"){ atk*=0.85; def*=1.25; } else if(mentalidade==="Equilibrado"){ atk*=1.05; def*=1.05; }
+    if(estilo==="Posse de Bola"){ meio*=1.3; atk*=1.1; } else if(estilo==="Contra-Ataque"){ atk*=1.2; def*=1.1; meio*=0.9; } else if(estilo==="Bola Longa"){ atk*=1.15; def*=1.05; }
+    let multMoral = 0.7 + (moral/100)*0.6; atk*=multMoral; def*=multMoral; meio*=multMoral;
+    if(isMandante){ atk*=1.10; def*=1.10; meio*=1.10; }
+    if(ctAtivo){ atk*=1.05; def*=1.05; meio*=1.05; }
+    if(escudoAtivo){ atk*=1.08; def*=1.08; }
+    return {ataque:atk, defesa:def, meio:meio, total:atk+def+meio};
+}
+function montarEscalacaoIAInteligenteV2(timeId, elencoObj){
+    let elenco = Object.values(elencoObj||{}).map((j, idx)=> ({...j, id: Object.keys(elencoObj)[idx]}));
+    if(elenco.length===0) return [];
+    let goleiros = elenco.filter(j=> j.posicoes?.p==="Goleiro").sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+    let zagueiros = elenco.filter(j=> j.posicoes?.p==="Zagueiro").sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+    let laterais = elenco.filter(j=> j.posicoes?.p==="Lateral").sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+    let volantes = elenco.filter(j=> j.posicoes?.p==="Volante").sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+    let meias = elenco.filter(j=> j.posicoes?.p==="Meia").sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+    let atacantes = elenco.filter(j=> ["Atacante","Centroavante","Ponta"].includes(j.posicoes?.p)).sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+    let titulares = [];
+    if(goleiros[0]) titulares.push(goleiros[0]);
+    titulares.push(...zagueiros.slice(0,2));
+    titulares.push(...laterais.slice(0,2));
+    titulares.push(...volantes.slice(0,1));
+    titulares.push(...meias.slice(0,2));
+    titulares.push(...atacantes.slice(0,3));
+    while(titulares.length<11){
+        let restantes = elenco.filter(j=> !titulares.some(t=> t.id===j.id)).sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a));
+        if(restantes[0]) titulares.push(restantes[0]); else break;
+    }
+    titulares = titulares.map(t=>{
+        if((t.fadiga||0)>20){
+            let pos = t.posicoes?.p;
+            let reserva = elenco.filter(j=> j.posicoes?.p===pos && !titulares.some(tt=>tt.id===j.id) && (j.fadiga||0)<10).sort((a,b)=> calcularForcaRealJogadorV2(b)-calcularForcaRealJogadorV2(a))[0];
+            if(reserva && calcularForcaRealJogadorV2(reserva) >= calcularForcaRealJogadorV2(t)*0.85){ return reserva; }
+        }
+        return t;
+    });
+    return titulares.slice(0,11);
+}
+function escolherGoleadorComplexoV2(titulares, tipoGol){
+    let candidatos = titulares.filter(j=>!j.expulso);
+    if(candidatos.length===0) return null;
+    if(tipoGol==="penalti"){
+        let ceni = candidatos.find(j=> j.nome.toLowerCase().includes("ceni"));
+        if(ceni && Math.random()<0.3) return ceni;
+    }
+    candidatos = candidatos.filter(j=> j.posicoes?.p!=="Goleiro" || j.nome.toLowerCase().includes("ceni"));
+    if(tipoGol.includes("cabecada")){
+        let zagueiros = candidatos.filter(j=> ["Zagueiro","Volante","Centroavante"].includes(j.posicoes?.p));
+        if(zagueiros.length>0 && Math.random()<0.6) return zagueiros[Math.floor(Math.random()*zagueiros.length)];
+    }
+    let pesos = candidatos.map(j=>{
+        let pos=j.posicoes?.p||"Meia"; let peso=1;
+        if(["Atacante","Centroavante","Ponta"].includes(pos)) peso=3;
+        else if(["Meia"].includes(pos)) peso=1.8;
+        else if(["Volante","Lateral"].includes(pos)) peso=0.8;
+        else if(["Zagueiro"].includes(pos)) peso=0.5;
+        peso *= (j.atributos?.ataque||5)/10 + (j.atributos?.habilidade||5)/20;
+        return peso;
+    });
+    let total = pesos.reduce((a,b)=>a+b,0); let r=Math.random()*total;
+    for(let i=0;i<candidatos.length;i++){ r-=pesos[i]; if(r<=0) return candidatos[i]; }
+    return candidatos[0];
+}
+function gerarLinhaTempoComplexaV2(jogo, forcaM, forcaV, titularesM, titularesV){
+    let linha=[]; let golsM=0, golsV=0;
+    let climas=["☀️ Céu limpo","⛅ Nublado","🌧️ Chuva"];
+    linha.push({minuto:0, tipo:"clima", texto:`🌤️ Clima: ${climas[Math.floor(Math.random()*climas.length)]}. Mando +10% para ${jogo.mandante.replace(/_/g,' ')}`});
+    let minuto=1;
+    while(minuto<=90){
+        if(Math.random()<0.30){
+            let ftM = forcaM.meio+forcaM.ataque; let ftV = forcaV.meio+forcaV.ataque;
+            let timeAt = Math.random() < ftM/(ftM+ftV) ? "M" : "V";
+            let titulares = timeAt==="M"? titularesM : titularesV;
+            let timeNome = timeAt==="M"? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
+            if(titulares.length===0){ minuto++; continue; }
+            let jogador = titulares[Math.floor(Math.random()*titulares.length)];
+            let roll=Math.random();
+            if(roll<0.05){
+                let tipoGol = Math.random()<0.2 ? "cabecada_escanteio" : (Math.random()<0.15 ? "penalti" : "normal");
+                let goleador = escolherGoleadorComplexoV2(titulares, tipoGol);
+                if(!goleador){ minuto++; continue; }
+                if(tipoGol==="penalti") linha.push({minuto, tipo: timeAt==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL! ${goleador.nome} (${timeNome}) cobra pênalti e marca!`, jogador:goleador.nome});
+                else if(tipoGol.includes("cabecada")) linha.push({minuto, tipo: timeAt==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL DE CABEÇA! ${goleador.nome} (${timeNome}) sobe mais que a zaga!`, jogador:goleador.nome});
+                else linha.push({minuto, tipo: timeAt==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL DO ${timeNome}! ${goleador.nome} balança as redes!`, jogador:goleador.nome});
+                if(timeAt==="M") golsM++; else golsV++;
+            } else {
+                let tipos=["posse","chute_fora","escanteio","falta","cabecada","defesa","contra_ataque","cartao_amarelo","penalti","var","desarme","impedimento","cruzamento","falta_perigosa","substituicao"];
+                let tipo=tipos[Math.floor(Math.random()*tipos.length)];
+                linha.push({minuto, tipo, texto:`${tipo.toUpperCase()} - ${jogador.nome} (${timeNome})`});
+            }
+        }
+        minuto+=Math.floor(Math.random()*4)+1;
+    }
+    linha.push({minuto:45, tipo:'intervalo', texto:`⏱️ Intervalo: ${golsM} x ${golsV}`});
+    linha.push({minuto:46, tipo:'inicio', texto:`🟢 Segundo tempo!`});
+    linha.push({minuto:94, tipo:'fim', texto:`🏁 Final: ${jogo.mandante.replace(/_/g,' ')} ${golsM} x ${golsV} ${jogo.visitante.replace(/_/g,' ')}`});
+    linha.sort((a,b)=>a.minuto-b.minuto);
+    return {linha, golsM, golsV};
+}
+function aplicarFadigaMotorV2(timeId, titulares, times, updates){
+    let elenco = times[timeId]?.jogadores||{};
+    for(let id in elenco){
+        let j=elenco[id];
+        let ehTitular = titulares.some(t=> t.id===id || t.nome===j.nome);
+        let novaFadiga = j.fadiga||0;
+        if(ehTitular){ novaFadiga+=1; if(novaFadiga>35) novaFadiga=35; }
+        else { novaFadiga-=0.5; if(novaFadiga<0) novaFadiga=0; }
+        updates[`banco_global_times/${timeId}/jogadores/${id}/fadiga`]=novaFadiga;
+    }
+}
+
+
 function iniciarMotorDescentralizado(liga) {
     // 🟢 DESTRAVA O SISTEMA: Quebra o cadeado de segurança no Firebase caso o motor tenha travado em erros anteriores!
     db.ref(`ligas/${liga}/sistema/lock_simulacao`).set(false).then(() => {
@@ -217,6 +349,63 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             }
         }
 
+        // ============================================
+        // --- PASSO A.1: IA GERENCIA AGENTES LIVRES (NOVO) ---
+        // ============================================
+        // IA coloca jogadores excedentes nos Agentes Livres com 20% desconto
+        for(let t of timesIA){
+            let elenco = times[t]?.jogadores||{};
+            let qtd = Object.keys(elenco).length;
+            if(qtd > 25){
+                // Pega os 3 piores com fadiga alta ou OVR baixo
+                let piores = Object.keys(elenco).map(id=> ({id,...elenco[id]}))
+                   .sort((a,b)=>{
+                        let fadA = a.fadiga||0, fadB = b.fadiga||0;
+                        let ovrA = (a.atributos.ataque+a.atributos.defesa+a.atributos.forca+a.atributos.velocidade+a.atributos.habilidade);
+                        let ovrB = (b.atributos.ataque+b.atributos.defesa+b.atributos.forca+b.atributos.velocidade+b.atributos.habilidade);
+                        return (ovrA - fadA*10) - (ovrB - fadB*10);
+                    }).slice(0,2);
+
+                for(let p of piores){
+                    if(Math.random()<0.5){
+                        let valorDesconto = Math.round((p.valor_mercado||1000000)*0.8);
+                        let jogadorLivre = {...p, valor_mercado: valorDesconto, time_origem: t, origem_livre: `IA_${t}`, data_entrada_livre: new Date().toISOString()};
+                        delete jogadorLivre.id;
+                        updates[`banco_global_times/${t}/jogadores/${p.id}`] = null;
+                        updates[`banco_global_times/Agentes_Livres_${liga}/jogadores/${p.id}`] = jogadorLivre;
+                        updates[`banco_global_times/Agentes_Livres_${liga}/divisao`] = "Livre";
+                    }
+                }
+            }
+        }
+
+        // IA tenta comprar dos Agentes Livres com 50% do valor
+        let snapLivres = await db.ref(`banco_global_times/Agentes_Livres_${liga}/jogadores`).once('value');
+        let livres = snapLivres.val()||{};
+        for(let idLivre in livres){
+            let jLivre = livres[idLivre];
+            if(jLivre.origem_livre && jLivre.origem_livre.startsWith("IA_")) continue; // IA não compra dela mesma
+            if(Math.random()<0.15){ // 15% chance de IA tentar comprar cada livre por rodada
+                let timeIALogin = `IA_${timesIA[Math.floor(Math.random()*timesIA.length)]}`;
+                let timeIA = usuarios[timeIALogin]?.timeAtual;
+                if(!timeIA) continue;
+                let oferta50 = Math.round((jLivre.valor_mercado||0)*0.5);
+                let jaTemProposta = propostas[idLivre] && propostas[idLivre][timeIALogin];
+                if(!jaTemProposta){
+                    if(!propostas[idLivre]) propostas[idLivre] = {};
+                    propostas[idLivre][timeIALogin] = {
+                        time_comprador: timeIA,
+                        valor_oferecido: oferta50,
+                        data_proposta: new Date().toISOString(),
+                        tipo_negocio: 'compra',
+                        is_agentes_livres: true,
+                        valor_original_mercado: jLivre.valor_mercado
+                    };
+                    updates[`ligas/${liga}/mercado_propostas/${idLivre}/${timeIALogin}`] = propostas[idLivre][timeIALogin];
+                }
+            }
+        }
+
         let transferenciasRealizadas = 0;
 
         // Se o mercado tiver propostas de Humanos ou IAs, resolve a briga
@@ -308,30 +497,63 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 let lanceVencedor = null;
                 let loginVencedor = "";
 
-                // Verifica se o jogador alvo é intocável (Top 5 Força do clube da IA)
-                let elencoOVRList = Object.values(times[timeDoAlvo].jogadores).map(j => {
+                // Verifica se é Agentes Livres
+                let isAgentesLivres = timeDoAlvo && timeDoAlvo.includes("Agentes_Livres");
+
+                // Verifica se o jogador alvo é intocável (Top 5 Força do clube da IA) - só vale se NÃO for Agentes Livres
+                let elencoOVRList = Object.values(times[timeDoAlvo]?.jogadores || {}).map(j => {
                     let at = j.atributos || {ataque:0, defesa:0, forca:0, velocidade:0, habilidade:0};
                     return { nome: j.nome, ovr: at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade };
                 });
 
-                elencoOVRList.sort((a,b) => b.ovr - a.ovr); // Top do maior pro menor
+                elencoOVRList.sort((a,b) => b.ovr - a.ovr);
 
                 let isTop5 = false;
-                for (let idx = 0; idx < Math.min(5, elencoOVRList.length); idx++) {
-                    if (elencoOVRList[idx].nome === dadosDoAlvo.nome) {
-                        isTop5 = true; break;
+                if(!isAgentesLivres){
+                    for (let idx = 0; idx < Math.min(5, elencoOVRList.length); idx++) {
+                        if (elencoOVRList[idx].nome === dadosDoAlvo.nome) {
+                            isTop5 = true; break;
+                        }
                     }
                 }
 
                 let precoMercado = dadosDoAlvo.valor_mercado || 1000000;
-                let precoMinimoAceitavel = isTop5 ? (precoMercado * 2) : (precoMercado * 0.95);
+                let precoMinimoAceitavel = isAgentesLivres? (precoMercado * 0.5) : (isTop5? (precoMercado * 2) : (precoMercado * 0.95));
 
                 for (let login in lances) {
                     let lance = lances[login];
                     let scoreLance = lance.valor_oferecido || 0;
+                    let ehContra = lance.tipo_negocio === 'contraproposta' || lance.is_contra;
+
+                    // REGRA NOVA AGENTES LIVRES - CONTRA-PROPOSTA 80%
+                    if(isAgentesLivres && ehContra){
+                        if(scoreLance > precoMercado * 0.8){
+                            // Mais que 80% - IA recusa e finaliza
+                            for(let l in lances){
+                                if(!l.startsWith('IA_')){
+                                    updates[`ligas/${liga}/caixa_mensagens/${l}/msg_recusa_${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
+                                        tipo: 'recusa',
+                                        texto: `❌ IA do ${timeDoAlvo.replace(/_/g,' ')} RECUSOU sua contra-proposta de ${formatarDinheiro(scoreLance)} por ${dadosDoAlvo.nome}. Você pediu mais que 80% do valor (${formatarDinheiro(precoMercado*0.8)}). Negociação finalizada.`,
+                                        data: new Date().toISOString()
+                                    };
+                                }
+                            }
+                            Object.keys(lances).forEach(l=> updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
+                            lanceVencedor = null;
+                            break;
+                        } else {
+                            // Até 80% - IA aceita
+                            if(scoreLance > maiorScore){
+                                maiorScore = scoreLance;
+                                lanceVencedor = lance;
+                                loginVencedor = login;
+                            }
+                            continue;
+                        }
+                    }
 
                     if (lance.tipo_negocio === 'emprestimo') {
-                        if (isTop5) continue; // IA não aluga titular absoluto!
+                        if (isTop5) continue;
 
                         let taxaIdeal = (precoMercado * 0.015) * (lance.duracao_rodadas || 5);
                         if (scoreLance >= taxaIdeal && scoreLance > maiorScore) {
@@ -340,7 +562,6 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                             loginVencedor = login;
                         }
                     } else {
-                        // Compra Definitiva
                         let dadosJogTroca = null;
                         if (lance.id_jogador_oferecido) {
                             dadosJogTroca = times[lance.time_comprador]?.jogadores?.[lance.id_jogador_oferecido];
@@ -351,7 +572,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                             maiorScore = scoreLance;
                             lanceVencedor = lance;
                             loginVencedor = login;
-                            lanceVencedor.dados_jogador_oferecido = dadosJogTroca; // Guarda o jogador pra trocar na nuvem
+                            lanceVencedor.dados_jogador_oferecido = dadosJogTroca;
                         }
                     }
                 }
@@ -382,9 +603,15 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = dadosDoAlvo;
                         updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = { jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeQueComprou, rodadas_restantes: lanceVencedor.duracao_rodadas };
                     } else {
-                        // Venda definitiva
-                        updates[`banco_global_times/${timeDoAlvo}/jogadores/${idAlvo}`] = null;
+                        // Venda definitiva - CORRIGIDO: remove de TODOS os times antes de adicionar
+                        for(let tCheck in times){
+                            if(times[tCheck].jogadores && times[tCheck].jogadores[idAlvo]){
+                                updates[`banco_global_times/${tCheck}/jogadores/${idAlvo}`] = null;
+                            }
+                        }
                         updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = dadosDoAlvo;
+                        // Limpa todas as propostas deste jogador
+                        Object.keys(lances).forEach(l=> updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
 
                         // Executa a Troca se houver o jogador na mala
                         if (lanceVencedor.id_jogador_oferecido && lanceVencedor.dados_jogador_oferecido) {
@@ -401,6 +628,17 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                             data: new Date().toISOString()
                         };
                     }
+
+                    // 📜 HISTÓRICO - REGISTRA TRANSFERÊNCIA
+                    updates[`ligas/${liga}/historico_transferencias/${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
+                        jogador_nome: dadosDoAlvo.nome,
+                        jogador_id: idAlvo,
+                        time_origem: timeDoAlvo,
+                        time_destino: timeQueComprou,
+                        valor: lanceVencedor.valor_oferecido,
+                        tipo: lanceVencedor.tipo_negocio || 'compra',
+                        data: new Date().toISOString()
+                    };
 
                     // Manda Carta de Derrota pra quem perdeu
                     for (let login in lances) {
@@ -505,22 +743,44 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             const processarPartidaAoVivo = (jogo, isMataMata = false) => {
                 if (jogo.jogado) return;
 
-                let donoM = null; let donoV = null;
-                let forcaM = times[jogo.mandante]?.forca_base || 500;
-                let forcaV = times[jogo.visitante]?.forca_base || 500;
+                                let donoM = null; let donoV = null;
+                let forcaM = 500; let forcaV = 500;
                 let mentM = "Moderado"; let mentV = "Moderado";
 
                 for (let u in usuarios) {
-                    if (usuarios[u].timeAtual === jogo.mandante) { if (usuarios[u].forcaAtual) forcaM = usuarios[u].forcaAtual; mentM = usuarios[u].mentalidade || "Moderado"; donoM = u; }
-                    if (usuarios[u].timeAtual === jogo.visitante) { if (usuarios[u].forcaAtual) forcaV = usuarios[u].forcaAtual; mentV = usuarios[u].mentalidade || "Moderado"; donoV = u; }
+                    if (usuarios[u].timeAtual === jogo.mandante) {
+                        if (usuarios[u].forcaAtual) forcaM = usuarios[u].forcaAtual;
+                        mentM = usuarios[u].mentalidade || "Moderado"; donoM = u;
+                    }
+                    if (usuarios[u].timeAtual === jogo.visitante) {
+                        if (usuarios[u].forcaAtual) forcaV = usuarios[u].forcaAtual;
+                        mentV = usuarios[u].mentalidade || "Moderado"; donoV = u;
+                    }
                 }
 
-                let fadigaM = (times[jogo.mandante]?.jogadores && Object.keys(times[jogo.mandante].jogadores).length > 11) ? 1.0 : 0.85;
-                let fadigaV = (times[jogo.visitante]?.jogadores && Object.keys(times[jogo.visitante].jogadores).length > 11) ? 1.0 : 0.85;
+                // NOVO CÁLCULO ATAQUE vs DEFESA
+                function calcularForcaAtaqueDefesa(timeId, times, usuarios) {
+                    let time = times[timeId];
+                    if (!time ||!time.jogadores) return {ataque: 50, defesa: 50, forcaTotal: 500};
+                    let dono = Object.values(usuarios).find(u => u.timeAtual === timeId);
+                    let titularesIds = dono?.titulares? Object.values(dono.titulares).filter(Boolean) : Object.keys(time.jogadores);
+                    let titularesObjs = titularesIds.map(id=> time.jogadores[id]).filter(Boolean).map((j,i)=> ({...j, id: titularesIds[i]}));
+                    if(titularesObjs.length===0){
+                        titularesObjs = montarEscalacaoIAInteligenteV2(timeId, time.jogadores);
+                    }
+                    let res = calcularForcaTimeComplexaV2(titularesObjs, dono?.mentalidade||"Moderado", dono?.estilo||"Equilibrado", dono?.moral||50, false, dono?.ct_ativo, dono?.escudo_rodada);
+                    return {ataque: Math.round(res.ataque), defesa: Math.round(res.defesa), forcaTotal: Math.round(res.total)};
+                }
 
+
+                let statsM = calcularForcaAtaqueDefesa(jogo.mandante, times, usuarios);
+                let statsV = calcularForcaAtaqueDefesa(jogo.visitante, times, usuarios);
+                forcaM = statsM.forcaTotal; forcaV = statsV.forcaTotal;
+
+                let fadigaM = Object.keys(times[jogo.mandante]?.jogadores||{}).length>11?1.0:0.85;
+                let fadigaV = Object.keys(times[jogo.visitante]?.jogadores||{}).length>11?1.0:0.85;
                 let modM = 1.0 * fadigaM; let modV = 1.0 * fadigaV;
                 let capGolsM = 99; let capGolsV = 99;
-
                 if (mentM === "Retranca") { modM *= 0.7; modV *= 0.5; capGolsM = 1; }
                 if (mentM === "Ofensivo") { modM *= 1.3; modV *= 1.2; }
                 if (mentV === "Retranca") { modV *= 0.7; modM *= 0.5; capGolsV = 1; }
@@ -559,27 +819,96 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas = gkM.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0}; gkM.estatisticas.jogos = (gkM.estatisticas.jogos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
                 if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas = gkV.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0}; gkV.estatisticas.jogos = (gkV.estatisticas.jogos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
 
+                // --- CORRIGIDO: chance realista (0.18 = média 0.9 gol por time a cada 5 tentativas) ---
+                // isMataMata = true se for Copa, false se for Campeonato
+                let isCopa = isMataMata || (typeof caminhoDivisao!== 'undefined' && caminhoDivisao.includes('copa'));
+                let isCampeonato =!isCopa;
+
                 for(let i=0; i<5; i++) {
-                    if (golsM < capGolsM && Math.random() < ((forcaM / (forcaM + forcaV)) * modM * 0.6)) {
+                    if (golsM < capGolsM && Math.random() < ((statsM.ataque / (statsM.ataque + statsV.defesa)) * modM * 0.18)) {
                         golsM++;
-                        if (gkV_id) { let gkV = times[jogo.visitante].jogadores[gkV_id]; gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV; }
-                        let idA = sortearAtletaGol(jogo.mandante); let nA = idA ? times[jogo.mandante].jogadores[idA].nome : "Jogador";
+                        if (gkV_id) {
+                            let gkV = times[jogo.visitante].jogadores[gkV_id];
+                            gkV.estatisticas = gkV.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0, gols_campeonato:0, assistencias_campeonato:0, gols_sofridos_campeonato:0, jogos_campeonato:0, gols_copa:0};
+                            gkV.estatisticas.gols_sofridos = (gkV.estatisticas.gols_sofridos || 0) + 1;
+                            gkV.estatisticas.jogos = (gkV.estatisticas.jogos || 0) + (isCampeonato?1:0);
+                            if(isCampeonato){
+                                gkV.estatisticas.gols_sofridos_campeonato = (gkV.estatisticas.gols_sofridos_campeonato||0)+1;
+                                gkV.estatisticas.jogos_campeonato = (gkV.estatisticas.jogos_campeonato||0)+1;
+                            } else {
+                                gkV.estatisticas.gols_sofridos_copa = (gkV.estatisticas.gols_sofridos_copa||0)+1;
+                            }
+                            updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV_id}`] = gkV;
+                        }
+                        let idA = sortearAtletaGol(jogo.mandante); let nA = idA? times[jogo.mandante].jogadores[idA].nome : "Jogador";
                         if(idA) {
-                            let jg = times[jogo.mandante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-                            if (Math.random() > 0.4) { let idAst = sortearAtletaGol(jogo.mandante); if (idAst && idAst !== idA) { let jgAst = times[jogo.mandante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst; } }
+                            let jg = times[jogo.mandante].jogadores[idA];
+                            jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0, gols_campeonato:0, assistencias_campeonato:0, jogos_campeonato:0};
+                            jg.estatisticas.gols = (jg.estatisticas.gols||0)+1;
+                            jg.estatisticas.jogos = (jg.estatisticas.jogos||0)+1;
+                            if(isCampeonato){
+                                jg.estatisticas.gols_campeonato = (jg.estatisticas.gols_campeonato||0)+1;
+                                jg.estatisticas.jogos_campeonato = (jg.estatisticas.jogos_campeonato||0)+1;
+                            } else {
+                                jg.estatisticas.gols_copa = (jg.estatisticas.gols_copa||0)+1;
+                            }
+                            jg.valor_mercado = (jg.valor_mercado||1000000) + (isCampeonato?250000:100000);
+                            if (Math.random() > 0.5) {
+                                let idAst = sortearAtletaGol(jogo.mandante);
+                                if (idAst && idAst!== idA) {
+                                    let jgAst = times[jogo.mandante].jogadores[idAst];
+                                    jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0, gols_campeonato:0, assistencias_campeonato:0, jogos_campeonato:0};
+                                    jgAst.estatisticas.assistencias = (jgAst.estatisticas.assistencias||0)+1;
+                                    if(isCampeonato){
+                                        jgAst.estatisticas.assistencias_campeonato = (jgAst.estatisticas.assistencias_campeonato||0)+1;
+                                    } else {
+                                        jgAst.estatisticas.assistencias_copa = (jgAst.estatisticas.assistencias_copa||0)+1;
+                                    }
+                                    updates[`banco_global_times/${jogo.mandante}/jogadores/${idAst}`] = jgAst;
+                                }
+                            }
                             updates[`banco_global_times/${jogo.mandante}/jogadores/${idA}`] = jg;
                         }
                         linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_mandante", texto: `⚽ GOOOL DO ${jogo.mandante.replace(/_/g,' ')}! (${nA})` });
                     }
-                    if (golsV < capGolsV && Math.random() < ((forcaV / (forcaM + forcaV)) * modV * 0.6)) {
+                    if (golsV < capGolsV && Math.random() < ((statsV.ataque / (statsV.ataque + statsM.defesa)) * modV * 0.18)) {
                         golsV++;
-                        // 🟢 CORREÇÃO CRÍTICA: Goleiro mandante leva o gol corretamente aqui
-                        if (gkM_id) { let gkM = times[jogo.mandante].jogadores[gkM_id]; gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1; updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM; }
-
-                        let idA = sortearAtletaGol(jogo.visitante); let nA = idA ? times[jogo.visitante].jogadores[idA].nome : "Jogador";
+                        if (gkM_id) {
+                            let gkM = times[jogo.mandante].jogadores[gkM_id];
+                            gkM.estatisticas = gkM.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0, gols_campeonato:0, gols_sofridos_campeonato:0, jogos_campeonato:0};
+                            gkM.estatisticas.gols_sofridos = (gkM.estatisticas.gols_sofridos || 0) + 1;
+                            gkM.estatisticas.jogos = (gkM.estatisticas.jogos || 0) + (isCampeonato?1:0);
+                            if(isCampeonato){
+                                gkM.estatisticas.gols_sofridos_campeonato = (gkM.estatisticas.gols_sofridos_campeonato||0)+1;
+                                gkM.estatisticas.jogos_campeonato = (gkM.estatisticas.jogos_campeonato||0)+1;
+                            }
+                            updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM_id}`] = gkM;
+                        }
+                        let idA = sortearAtletaGol(jogo.visitante); let nA = idA? times[jogo.visitante].jogadores[idA].nome : "Jogador";
                         if(idA) {
-                            let jg = times[jogo.visitante].jogadores[idA]; jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0}; jg.estatisticas.gols++; jg.valor_mercado = (jg.valor_mercado||1000000) + 1000000;
-                            if (Math.random() > 0.4) { let idAst = sortearAtletaGol(jogo.visitante); if (idAst && idAst !== idA) { let jgAst = times[jogo.visitante].jogadores[idAst]; jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0}; jgAst.estatisticas.assistencias++; updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst; } }
+                            let jg = times[jogo.visitante].jogadores[idA];
+                            jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0, gols_campeonato:0, assistencias_campeonato:0, jogos_campeonato:0};
+                            jg.estatisticas.gols = (jg.estatisticas.gols||0)+1;
+                            jg.estatisticas.jogos = (jg.estatisticas.jogos||0)+1;
+                            if(isCampeonato){
+                                jg.estatisticas.gols_campeonato = (jg.estatisticas.gols_campeonato||0)+1;
+                                jg.estatisticas.jogos_campeonato = (jg.estatisticas.jogos_campeonato||0)+1;
+                            } else {
+                                jg.estatisticas.gols_copa = (jg.estatisticas.gols_copa||0)+1;
+                            }
+                            jg.valor_mercado = (jg.valor_mercado||1000000) + (isCampeonato?250000:100000);
+                            if (Math.random() > 0.5) {
+                                let idAst = sortearAtletaGol(jogo.visitante);
+                                if (idAst && idAst!== idA) {
+                                    let jgAst = times[jogo.visitante].jogadores[idAst];
+                                    jgAst.estatisticas = jgAst.estatisticas || {gols:0, assistencias:0, gols_sofridos:0, jogos:0, assistencias_campeonato:0};
+                                    jgAst.estatisticas.assistencias = (jgAst.estatisticas.assistencias||0)+1;
+                                    if(isCampeonato){
+                                        jgAst.estatisticas.assistencias_campeonato = (jgAst.estatisticas.assistencias_campeonato||0)+1;
+                                    }
+                                    updates[`banco_global_times/${jogo.visitante}/jogadores/${idAst}`] = jgAst;
+                                }
+                            }
                             updates[`banco_global_times/${jogo.visitante}/jogadores/${idA}`] = jg;
                         }
                         linhaTempo.push({ minuto: Math.floor(Math.random()*89)+1, tipo: "gol_visitante", texto: `⚽ GOOOL DO ${jogo.visitante.replace(/_/g,' ')}! (${nA})` });
@@ -743,6 +1072,47 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     });
                 }
             }
+
+            // ============================================
+            // 🏆 BÔNUS TOP 10 - GOLS, ASSISTÊNCIAS E GOLEIRO
+            // ============================================
+            // Top1 +5, Top2 +4, Top3 +3, Top4 +2, Top5-10 +1 - Aumenta OVR e valor de venda
+            let todosParaBonus = [];
+            for(let t in times){
+                if(t.startsWith("Agentes") || t==="Fantasma" || t==="Lendas_Futebol") continue;
+                if(!times[t].jogadores) continue;
+                for(let jId in times[t].jogadores){
+                    let j = times[t].jogadores[jId];
+                    if(j.estatisticas && ((j.estatisticas.gols||0)>0 || (j.estatisticas.assistencias||0)>0 || (j.posicoes && j.posicoes.p==="Goleiro"))){
+                        todosParaBonus.push({timeId:t, jogadorId:jId, dados:j});
+                    }
+                }
+            }
+            let topGols = [...todosParaBonus].filter(x=> (x.dados.estatisticas.gols||0)>0).sort((a,b)=> b.dados.estatisticas.gols - a.dados.estatisticas.gols).slice(0,10);
+            let topAsts = [...todosParaBonus].filter(x=> (x.dados.estatisticas.assistencias||0)>0).sort((a,b)=> b.dados.estatisticas.assistencias - a.dados.estatisticas.assistencias).slice(0,10);
+            let topGks = [...todosParaBonus].filter(x=> x.dados.posicoes && x.dados.posicoes.p==="Goleiro" && (x.dados.estatisticas.jogos||0)>=3).sort((a,b)=> (a.dados.estatisticas.gols_sofridos||0) - (b.dados.estatisticas.gols_sofridos||0)).slice(0,10);
+
+            function aplicarBonusTop10(lista, tipo){
+                lista.forEach((item, idx)=>{
+                    let bonus = idx===0?5: idx===1?4: idx===2?3: idx===3?2: 1;
+                    let jAtual = times[item.timeId].jogadores[item.jogadorId];
+                    if(!jAtual) return;
+                    let bonusAnt = jAtual.bonus_ranking||0;
+                    if(bonus>bonusAnt){
+                        let diff = bonus-bonusAnt;
+                        let novosAtr = {...(jAtual.atributos||{})};
+                        for(let k in novosAtr){ novosAtr[k]=Math.min(20, (novosAtr[k]||5)+diff); }
+                        let novoValor = Math.round((jAtual.valor_mercado||0)*(1+diff*0.15));
+                        updates[`banco_global_times/${item.timeId}/jogadores/${item.jogadorId}/atributos`] = novosAtr;
+                        updates[`banco_global_times/${item.timeId}/jogadores/${item.jogadorId}/valor_mercado`] = novoValor;
+                        updates[`banco_global_times/${item.timeId}/jogadores/${item.jogadorId}/bonus_ranking`] = bonus;
+                        updates[`banco_global_times/${item.timeId}/jogadores/${item.jogadorId}/bonus_tipo`] = tipo;
+                    }
+                });
+            }
+            aplicarBonusTop10(topGols, 'artilheiro');
+            aplicarBonusTop10(topAsts, 'assistencia');
+            aplicarBonusTop10(topGks, 'goleiro_menos_vazado');
 
             updates[`ligas/${liga}/calendario`] = cal;
         }
@@ -1007,6 +1377,97 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         await lockRef.set(false);
     }
 }
+
+// FIX 2: BÔNUS TOP 10 - Ranking de Gols, Assistências e Goleiro Menos Vazado
+// Adicione estas funções no FINAL do motor.js (motor_final.js) e chame dentro de processarTudo após simular a rodada
+
+// Calcula bônus: Top1 +5, Top2 +4, Top3 +3, Top4 +2, Top5 +1, Top6-10 +0.5 arredondado para 1
+function calcularBonusPorPosicao(pos){
+    if(pos===0) return 5;
+    if(pos===1) return 4;
+    if(pos===2) return 3;
+    if(pos===3) return 2;
+    if(pos===4) return 1;
+    if(pos>=5 && pos<=9) return 1;
+    return 0;
+}
+
+async function aplicarBonusRankingTop10(liga, times, updates){
+    try{
+        let todosGols = [];
+        let todosAsts = [];
+        let todosGoleiros = [];
+
+        for(let tId in times){
+            if(tId.startsWith("Agentes") || tId==="Fantasma" || tId==="Lendas_Futebol") continue;
+            let jogadores = times[tId].jogadores||{};
+            for(let jId in jogadores){
+                let j = jogadores[jId];
+                let est = j.estatisticas||{};
+                if((est.gols||0)>0){
+                    todosGols.push({timeId:tId, jogadorId:jId, nome:j.nome, gols:est.gols, asts:est.assistencias||0, valor:j.valor_mercado||0, atributos:j.atributos});
+                }
+                if((est.assistencias||0)>0){
+                    todosAsts.push({timeId:tId, jogadorId:jId, nome:j.nome, gols:est.gols||0, asts:est.assistencias, valor:j.valor_mercado||0, atributos:j.atributos});
+                }
+                // Goleiros - menos vazado: calcula GC do time / jogos do goleiro
+                if(j.posicoes && j.posicoes.p==="Goleiro" && (est.jogos||0)>=3){
+                    // GC do time
+                    let gcTime = 0;
+                    // Vamos pegar da tabela de jogos? Simplificado: usa estatística de GC do goleiro se tiver, senão usa GC do time
+                    let gcGoleiro = est.gols_sofridos || 0;
+                    todosGoleiros.push({timeId:tId, jogadorId:jId, nome:j.nome, gc:gcGoleiro, jogos:est.jogos||0, valor:j.valor_mercado||0, atributos:j.atributos});
+                }
+            }
+        }
+
+        // Ordena
+        todosGols.sort((a,b)=> b.gols - a.gols);
+        todosAsts.sort((a,b)=> b.asts - a.asts);
+        todosGoleiros.sort((a,b)=> a.gc - b.gc); // menos vazado = menor GC
+
+        let topGols = todosGols.slice(0,10);
+        let topAsts = todosAsts.slice(0,10);
+        let topGoleiros = todosGoleiros.slice(0,10);
+
+        // Aplica bônus
+        function aplicarBonus(lista, tipo){
+            lista.forEach((item, idx)=>{
+                let bonus = calcularBonusPorPosicao(idx);
+                if(bonus<=0) return;
+                let timeId = item.timeId;
+                let jId = item.jogadorId;
+                let jogadorAtual = times[timeId].jogadores[jId];
+                if(!jogadorAtual) return;
+
+                let bonusExistente = jogadorAtual.bonus_ranking || 0;
+                // Só aumenta se o novo bônus for maior que o existente (não acumula infinitamente)
+                if(bonus > bonusExistente){
+                    let diff = bonus - bonusExistente;
+                    let novosAtributos = {...(jogadorAtual.atributos||{})};
+                    // Distribui +diff em todos atributos (ataque/defesa/forca/vel/hab) proporcional
+                    for(let at in novosAtributos){
+                        novosAtributos[at] = Math.min(20, (novosAtributos[at]||5) + diff);
+                    }
+                    let novoValor = Math.round((jogadorAtual.valor_mercado||0) * (1 + diff*0.15)); // +15% por ponto de bônus
+
+                    updates[`banco_global_times/${timeId}/jogadores/${jId}/atributos`] = novosAtributos;
+                    updates[`banco_global_times/${timeId}/jogadores/${jId}/valor_mercado`] = novoValor;
+                    updates[`banco_global_times/${timeId}/jogadores/${jId}/bonus_ranking`] = bonus;
+                    updates[`banco_global_times/${timeId}/jogadores/${jId}/bonus_tipo`] = tipo;
+                }
+            });
+        }
+
+        aplicarBonus(topGols, 'artilheiro');
+        aplicarBonus(topAsts, 'assistencia');
+        aplicarBonus(topGoleiros, 'goleiro_menos_vazado');
+
+        console.log(`🏆 Bônus Top10 aplicado: ${topGols.length} artilheiros, ${topAsts.length} assistências, ${topGoleiros.length} goleiros`);
+
+    }catch(e){ console.error("Erro bônus ranking:", e); }
+}
+
 
 // ========================================================
 // 3. GRAVAR NO HALL DA FAMA (FIM DA TEMPORADA)

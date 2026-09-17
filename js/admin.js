@@ -94,7 +94,7 @@ function criarLiga() {
 // 4. MOTOR DE INJEÇÃO (BASE OFICIAL DO USUÁRIO)
 // ========================================================
 function injetarTimesIniciais() {
-    pedirConfirmacao("Segurança: Injetar a base apagará o banco de times atual e recriará os clubes oficiais da sua base de dados. Tem certeza?", () => {
+    pedirConfirmacao("Segurança: Injetar a base apagará o banco de times atual e recriará os clubes oficiais da sua base de dados. Tem certeza?", async () => {
         exibirModal("⏳ Processando", "<p style='text-align:center;'>Injetando times oficiais e reservas no servidor... Aguarde.</p>");
 
         // 1. COLE AQUI A SUA CONSTANTE DE TITULARES
@@ -389,21 +389,33 @@ function injetarTimesIniciais() {
         for(let k in timesUnicos){ baseDeTimes[k] = timesUnicos[k]; }
 
 
+                // ==========================================
+        // MOTOR DE FUSÃO (Junta os Reservas nos Titulares) - CORRIGIDO + PRESERVA RANKING
         // ==========================================
-        // MOTOR DE FUSÃO (Junta os Reservas nos Titulares) - CORRIGIDO
-        // ==========================================
+        // Busca estatísticas antigas para não zerar gols/assistências
+        const snapAntigo = await db.ref('banco_global_times').once('value');
+        const bancoAntigo = snapAntigo.val() || {};
+
         for (let timeId in baseDeReservas) {
             if (baseDeTimes[timeId] && baseDeTimes[timeId].jogadores) {
-                // Suporta 2 formatos:
-                // 1) baseDeReservas[time] = { jogador1, jogador2 }  (formato flat correto)
-                // 2) baseDeReservas[time] = { divisao, forca_base, jogadores: { ... } } (formato que voce usou e quebrou o banco)
-                let reservasParaMerge = baseDeReservas[timeId].jogadores ? baseDeReservas[timeId].jogadores : baseDeReservas[timeId];
-                // Garante que não vai injetar divisao/forca_base dentro de jogadores
+                let reservasParaMerge = baseDeReservas[timeId].jogadores? baseDeReservas[timeId].jogadores : baseDeReservas[timeId];
                 let reservasLimpas = {};
                 for(let key in reservasParaMerge){
-                    if(key === 'divisao' || key === 'forca_base' || key === 'jogadores') continue; // ignora chaves de time
+                    if(key === 'divisao' || key === 'forca_base' || key === 'jogadores') continue;
                     if(reservasParaMerge[key] && reservasParaMerge[key].nome) {
                         reservasLimpas[key] = reservasParaMerge[key];
+                    }
+                }
+                // Preserva estatísticas existentes (gols, assistências, etc)
+                for(let jogId in reservasLimpas){
+                    if(bancoAntigo[timeId] && bancoAntigo[timeId].jogadores && bancoAntigo[timeId].jogadores[jogId] && bancoAntigo[timeId].jogadores[jogId].estatisticas){
+                        reservasLimpas[jogId].estatisticas = bancoAntigo[timeId].jogadores[jogId].estatisticas;
+                    }
+                }
+                // Preserva também dos titulares existentes
+                for(let jogId in baseDeTimes[timeId].jogadores){
+                    if(bancoAntigo[timeId] && bancoAntigo[timeId].jogadores && bancoAntigo[timeId].jogadores[jogId] && bancoAntigo[timeId].jogadores[jogId].estatisticas){
+                        baseDeTimes[timeId].jogadores[jogId].estatisticas = bancoAntigo[timeId].jogadores[jogId].estatisticas;
                     }
                 }
                 Object.assign(baseDeTimes[timeId].jogadores, reservasLimpas);
@@ -759,25 +771,47 @@ async function resetarLigaCorrente() {
         exibirModal("⏳ Processando", "<p style='text-align:center;'>Limpando os dados da liga no servidor...</p>");
 
         try {
-            await db.ref(`ligas/${liga}/calendario`).set(null);
-            await db.ref(`ligas/${liga}/sistema`).set(null);
-            await db.ref(`ligas/${liga}/mercado_propostas`).set(null);
-
             const snap = await db.ref(`ligas/${liga}/usuarios`).once('value');
-            const usuarios = snap.val();
+            const usuarios = snap.val()||{};
+            const snapEmp = await db.ref(`ligas/${liga}/emprestimos_ativos`).once('value');
+            const emprestimos = snapEmp.val()||{};
 
-            if (usuarios) {
-                const updates = {};
-                for (let login in usuarios) {
-                    updates[`ligas/${liga}/usuarios/${login}/timeAtual`] = "Sem Clube";
-                    updates[`ligas/${liga}/usuarios/${login}/caixaClube`] = 50000000;
-                    updates[`ligas/${liga}/usuarios/${login}/titulares`] = null;
-                    updates[`ligas/${liga}/usuarios/${login}/formacao`] = null;
-                    updates[`ligas/${liga}/usuarios/${login}/estilo`] = null;
-                    updates[`ligas/${liga}/usuarios/${login}/mentalidade`] = null;
-                }
-                await db.ref().update(updates);
+            let updates = {};
+            updates[`ligas/${liga}/calendario`] = null;
+            updates[`ligas/${liga}/sistema`] = null;
+            updates[`ligas/${liga}/mercado_propostas`] = null;
+            updates[`ligas/${liga}/emprestimos_ativos`] = null;
+            updates[`ligas/${liga}/dividas_financeiras`] = null;
+            updates[`ligas/${liga}/caixa_mensagens`] = null;
+            updates[`ligas/${liga}/banco_investidores`] = null;
+            updates[`ligas/${liga}/historico_campeoes`] = null;
+
+            for(let idJog in emprestimos){
+              updates[`banco_global_times/${emprestimos[idJog].time_destino}/jogadores/${idJog}/status_emprestimo`] = null;
             }
+
+            for (let login in usuarios) {
+              if(login.startsWith('IA_')){
+                updates[`ligas/${liga}/usuarios/${login}`] = null; // deleta IA, motor recria
+              } else {
+                updates[`ligas/${liga}/usuarios/${login}/timeAtual`] = "Sem Clube";
+                updates[`ligas/${liga}/usuarios/${login}/caixaClube`] = 50000000;
+                updates[`ligas/${liga}/usuarios/${login}/titulares`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/formacao`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/estilo`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/mentalidade`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/moral`] = 50;
+                updates[`ligas/${liga}/usuarios/${login}/tierMetas`] = null;
+                // AQUI ESTAVA O BUG:
+                updates[`ligas/${liga}/usuarios/${login}/ultimo_bicho`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/ultimo_patrocinio`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/ultima_coletiva`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/ct_ativo`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/escudo_rodada`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/uso_olheiro`] = null;
+              }
+            }
+            await db.ref().update(updates);
 
             exibirModal("✅ Reset Concluído", `<p style='text-align:center; color: var(--verde-campo);'>A liga <strong>${liga}</strong> foi zerada com sucesso! Todos os treinadores estão 'Sem Clube'. <br><br>Agora você PODE e DEVE clicar em <strong>Realizar Sorteio Completo</strong>.</p>`);
 
@@ -788,29 +822,61 @@ async function resetarLigaCorrente() {
     });
 }
 
-// ========================================================
-// 6. FIM DE TEMPORADA (MANTER CLUBES E ELENCOS)
-// ========================================================
 function novaTemporadaManterClubes() {
-    // 🟢 CORREÇÃO: Pega o valor do dropdown da aba de Gerenciamento!
     const liga = document.getElementById('gerenciar-liga-id').value;
     if (!liga) return exibirModal("⚠️ Atenção", "<p style='text-align:center;'>Selecione a liga!</p>");
 
-    pedirConfirmacao(`Isso vai apagar a tabela e iniciar uma nova temporada para a liga ${liga}, MAS todos manterão seus clubes, táticas e caixas. Confirmar?`, async () => {
-        exibirModal("⏳ Processando", "<p style='text-align:center;'>Limpando calendário e propostas do mercado...</p>");
+    pedirConfirmacao(`Isso vai apagar a tabela e iniciar uma nova temporada para a liga ${liga}, MAS todos manterão seus clubes e caixas. Treinos, coletivas e TV serão resetados. Confirmar?`, async () => {
+        exibirModal("⏳ Processando", "<p style='text-align:center;'>Limpando calendário e iniciando nova temporada...</p>");
 
         try {
-            // Apaga o calendário, simulações e o mercado antigo
-            await db.ref(`ligas/${liga}/calendario`).set(null);
-            await db.ref(`ligas/${liga}/sistema`).set(null);
-            await db.ref(`ligas/${liga}/mercado_propostas`).set(null);
+            const snapUsers = await db.ref(`ligas/${liga}/usuarios`).once('value');
+            const usuarios = snapUsers.val() || {};
+            const snapEmp = await db.ref(`ligas/${liga}/emprestimos_ativos`).once('value');
+            const emprestimos = snapEmp.val() || {};
 
-            // Roda a geração do novo calendário imediatamente (com os times que a galera já tem)
+            let updates = {};
+            updates[`ligas/${liga}/calendario`] = null;
+            updates[`ligas/${liga}/sistema`] = null;
+            updates[`ligas/${liga}/mercado_propostas`] = null;
+            updates[`ligas/${liga}/emprestimos_ativos`] = null;
+            updates[`ligas/${liga}/caixa_mensagens`] = null;
+
+            for(let idJog in emprestimos){
+                let emp = emprestimos[idJog];
+                updates[`banco_global_times/${emp.time_destino}/jogadores/${idJog}/status_emprestimo`] = null;
+            }
+
+            for(let login in usuarios){
+                if(login.startsWith('IA_')) continue;
+                updates[`ligas/${liga}/usuarios/${login}/ultimo_bicho`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/ultimo_patrocinio`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/ultima_coletiva`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/ct_ativo`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/escudo_rodada`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/uso_olheiro`] = null;
+                updates[`ligas/${liga}/usuarios/${login}/moral`] = 50;
+                updates[`ligas/${liga}/usuarios/${login}/tierMetas`] = null;
+            }
+
+            await db.ref().update(updates);
             await gerarCalendarioOculto(liga);
 
-            exibirModal("✅ Nova Temporada Criada", `<p style='text-align:center; color: var(--verde-campo);'>A liga <strong>${liga}</strong> foi renovada! Os clubes foram mantidos e a nova tabela (com a Copa inclusa) já está pronta para jogo.</p>`);
+            exibirModal("✅ Nova Temporada Criada", `<p style='text-align:center; color: var(--verde-campo);'>A liga <strong>${liga}</strong> foi renovada! Treinos e atividades diárias resetadas, clubes mantidos.</p>`);
         } catch (erro) {
             exibirModal("❌ Erro", `<p>Falha: ${erro.message}</p>`);
         }
     });
+}
+
+function deslogar(){
+    if(typeof auth !== 'undefined' && auth.signOut){
+        auth.signOut().then(()=>{
+            localStorage.clear();
+            window.location.href = 'index.html';
+        });
+    } else {
+        localStorage.clear();
+        window.location.href = 'index.html';
+    }
 }

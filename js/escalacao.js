@@ -42,19 +42,33 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function carregarElenco(nomeTime) {
-    db.ref(`banco_global_times/${nomeTime}/jogadores`).once('value').then(snap => {
-        elencoCompleto = snap.val() || {};
+    // 🟢 NOVO: Busca Agentes Livres também
+    Promise.all([
+        db.ref(`banco_global_times/${nomeTime}/jogadores`).once('value'),
+        db.ref(`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores`).once('value')
+    ]).then(([snapElenco, snapAgentes]) => {
+        elencoCompleto = snapElenco.val() || {};
+        let agentesLivres = snapAgentes.val() || {};
+        window.bancoAgentesLivresGlobal = agentesLivres;
 
         // --- LÓGICA INTELIGENTE DE ESCALAÇÃO E VENDAS ---
         let precisaSalvar = false;
 
-        // 1. Limpa os jogadores que foram vendidos, devolvidos ou estão suando a camisa no CT
+        // 1. Limpa os jogadores que foram vendidos, no CT, nos Agentes Livres, expulso ou 3 amarelos
         for (let i = 0; i < titulares.length; i++) {
             let idT = titulares[i];
+            if(!idT) continue;
             let taNoCT = dadosUsuario.ct_ativo && dadosUsuario.ct_ativo.id_jogador === idT;
-
-            if (idT && (!elencoCompleto[idT] || taNoCT)) {
-                titulares[i] = null; // O jogador saiu ou foi treinar, a vaga abre!
+            let jog = elencoCompleto[idT];
+            let estaNosAgentes = agentesLivres[idT]!== undefined;
+            let estaSuspenso = false;
+            if(jog){
+                if(jog.suspenso || jog.expulso) estaSuspenso = true;
+                else if((jog.cartoes_amarelos||0) >= 3) estaSuspenso = true;
+                else if(jog.suspensao_rodadas && jog.suspensao_rodadas > 0) estaSuspenso = true;
+            }
+            if (!jog || taNoCT || estaNosAgentes || estaSuspenso) {
+                titulares[i] = null;
                 precisaSalvar = true;
             }
         }
@@ -210,6 +224,21 @@ function escalarJogador(idJogador) {
         return alert("TÁTICA: Clique em uma posição vazia no campinho primeiro!");
     }
 
+    // 🟢 BLOQUEIOS: Agentes Livres, CT, Suspenso
+    let j = elencoCompleto[idJogador];
+    if(window.bancoAgentesLivresGlobal && window.bancoAgentesLivresGlobal[idJogador]){
+        return alert(`🚫 ${j?.nome||'Jogador'} está nos Agentes Livres e não pode ser escalado!\n\nRemova-o dos Agentes Livres primeiro.`);
+    }
+    if(dadosUsuario.ct_ativo && dadosUsuario.ct_ativo.id_jogador === idJogador){
+        return alert(`🚫 ${j?.nome||'Jogador'} está em treinamento no CT!`);
+    }
+    if(j){
+        if(j.suspenso || j.expulso || (j.cartoes_amarelos||0)>=3 || (j.suspensao_rodadas||0)>0){
+            let motivo = j.expulso?"EXPULSO":(j.cartoes_amarelos>=3?"3 AMARELOS":j.motivo_suspensao||"SUSPENSO");
+            return alert(`🚫 ${j.nome} está ${motivo} e não pode ser escalado!`);
+        }
+    }
+
     let posicaoAntiga = titulares.indexOf(idJogador);
     if (posicaoAntiga !== -1) {
         titulares[posicaoAntiga] = null;
@@ -292,6 +321,9 @@ function renderizarTabela() {
 
         let at = j.atributos || {ataque: 0, defesa: 0, forca: 0, velocidade: 0, habilidade: 0};
         let pos = j.posicoes || {p: 'Sem', s: 'Sem', t: 'Sem'};
+        let fadiga = j.fadiga || 0;
+        let corFadiga = fadiga<=9 ? "#00b853" : fadiga<=19 ? "#ffc107" : "#dc3545";
+        let iconFadiga = fadiga<=9 ? "🔋" : fadiga<=19 ? "🟡" : "🔴";
 
         if (posicoesFiltro.length > 0) {
             let atendeFiltro = posicoesFiltro.includes(pos.p) ||
@@ -301,14 +333,24 @@ function renderizarTabela() {
             if (!atendeFiltro) continue;
         }
 
-        temAlguemNaLista = true;
+
         temAlguemNaLista = true;
         let estaEscalado = titulares.includes(id);
         let estaNoCT = (dadosUsuario.ct_ativo && dadosUsuario.ct_ativo.id_jogador === id);
+        let estaNosAgentes = window.bancoAgentesLivresGlobal && window.bancoAgentesLivresGlobal[id];
+        let estaSuspenso = false;
+        let motivoSusp = "";
+        if(j.suspenso || j.expulso){ estaSuspenso=true; motivoSusp=j.expulso?"EXPULSO":"SUSPENSO"; }
+        else if((j.cartoes_amarelos||0)>=3){ estaSuspenso=true; motivoSusp="3 AMARELOS"; }
+        else if(j.suspensao_rodadas && j.suspensao_rodadas>0){ estaSuspenso=true; motivoSusp=j.suspensao_rodadas+"J SUSP"; }
 
         let btnHtml = "";
         if (estaNoCT) {
             btnHtml = `<span style="background: #007bff; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 65px; text-align: center;">No CT 🏋️</span>`;
+        } else if (estaNosAgentes) {
+            btnHtml = `<span style="background: #666; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; width: 65px; text-align: center;">Ag. Livres</span>`;
+        } else if (estaSuspenso) {
+            btnHtml = `<span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; width: 65px; text-align: center;">${motivoSusp} 🚫</span>`;
         } else if (estaEscalado) {
             btnHtml = `<button class="btn-remover" onclick="removerJogador('${id}')" style="width: 65px;">Remover</button>`;
         } else {
@@ -316,9 +358,9 @@ function renderizarTabela() {
         }
 
         tbody.innerHTML += `
-            <tr style="${estaEscalado ? 'opacity: 0.5;' : (estaNoCT ? 'opacity: 0.6; background: rgba(0, 123, 255, 0.15);' : '')}">
-                <td style="text-align: left; font-weight: bold; color: ${estaNoCT ? '#007bff' : 'white'};">
-                    ${btnHtml} <span style="margin-left:5px; font-size: 13px;">${j.nome || 'Desconhecido'}</span>
+            <tr style="${estaEscalado ? 'opacity: 0.5;' : (estaNoCT || estaNosAgentes || estaSuspenso ? 'opacity: 0.6; background: rgba(220, 53, 69, 0.1);' : '')}">
+                <td style="text-align: left; font-weight: bold; color: ${estaNoCT ? '#007bff' : (estaSuspenso ? '#dc3545' : 'white')};">
+                    ${btnHtml} <span style="margin-left:5px; font-size: 13px;">${j.nome || 'Desconhecido'}</span> <span style="font-size:11px; color:${corFadiga};">${iconFadiga} ${fadiga}</span>
                 </td>
                 <td style="font-size: 12px;">${pos.p}</td>
                 <td style="font-size: 12px;">${at.ataque}</td>

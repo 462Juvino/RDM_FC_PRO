@@ -294,7 +294,9 @@ function carregarVisaoGeralClube() {
     carregarRadarMercado();
     carregarCentralDeAvisos(timeIdBanco);
     carregarCentroDeTreinamento(timeIdBanco);
-    criarBotaoChatSuperior(); // 💬 Cria o botão de Chat no topo!
+    criarBotaoChatSuperior();
+    // Avisa de jogadores novos nos Agentes Livres
+    carregarAvisoNovosJogadores();
 
     if(window.loopNoticias) clearInterval(window.loopNoticias);
     gerarNoticia(meuTime);
@@ -889,7 +891,6 @@ window.marcarMensagemLidaDash = function(idMsg) {
 
 // INTEGRAÇÃO COM O CALENDÁRIO
 async function buscarMeuProximoJogo(timeIdBanco) {
-    const meuTime = timeIdBanco.replace(/_/g, ' ');
     const placarContainer = document.getElementById('placar-proximo-jogo-container');
     const lblRodada = document.getElementById('lbl-rodada-dash');
     const btnIrJogo = document.getElementById('btn-ir-jogo');
@@ -897,37 +898,53 @@ async function buscarMeuProximoJogo(timeIdBanco) {
     try {
         const snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
         const cal = snapCal.val();
-
         if (!cal) {
             lblRodada.innerText = "Aguardando CBF Virtual";
             placarContainer.innerHTML = `<span style="font-size: 14px; color: #888;">Nenhum sorteio realizado ainda.</span>`;
             return;
         }
 
-        const rodada = cal.rodadaAtual || 1;
-        const rodadaKey = `rodada_${rodada}`;
+        let rodadaAtual = cal.rodadaAtual || 1;
         let meuJogo = null;
+        let rodadaEncontrada = rodadaAtual;
         let campeonatoNome = "Campeonato Nacional";
 
-        // Verifica se é dia de Copa (Sábado) para mudar o título
-        let dataHoje = new Date().getDay();
-        if (dataHoje === 6 && cal.copa) {
-            campeonatoNome = "Copa (Mata-Mata)";
-        }
-
-        // Varre a Série A
-        if (cal.serieA && cal.serieA[rodadaKey]) {
-            for (let j in cal.serieA[rodadaKey]) {
-                if (cal.serieA[rodadaKey][j].mandante === timeIdBanco || cal.serieA[rodadaKey][j].visitante === timeIdBanco) {
-                    meuJogo = cal.serieA[rodadaKey][j];
+        // Tenta achar o próximo jogo NÃO jogado deste time, a partir da rodada atual até a última
+        for(let r = rodadaAtual; r <= 38; r++){
+            let key = `rodada_${r}`;
+            let jogosRodada = null;
+            if(cal.serieA && cal.serieA[key]) jogosRodada = cal.serieA[key];
+            else if(cal.serieB && cal.serieB[key]) jogosRodada = cal.serieB[key];
+            if(!jogosRodada) continue;
+            for(let j in jogosRodada){
+                let jogo = jogosRodada[j];
+                if(jogo.mandante === timeIdBanco || jogo.visitante === timeIdBanco){
+                    if(!jogo.jogado &&!jogo.linhaDoTempo){
+                        meuJogo = jogo;
+                        rodadaEncontrada = r;
+                        break;
+                    }
+                    // Se ainda não achou nenhum não-jogado, guarda o último jogado da rodada atual
+                    if(r === rodadaAtual &&!meuJogo) {
+                        meuJogo = jogo;
+                        rodadaEncontrada = r;
+                    }
                 }
             }
+            if(meuJogo &&!meuJogo.jogado) break;
         }
-        // Varre a Série B
-        if (!meuJogo && cal.serieB && cal.serieB[rodadaKey]) {
-            for (let j in cal.serieB[rodadaKey]) {
-                if (cal.serieB[rodadaKey][j].mandante === timeIdBanco || cal.serieB[rodadaKey][j].visitante === timeIdBanco) {
-                    meuJogo = cal.serieB[rodadaKey][j];
+
+        // Fallback: se não achou nada, varre tudo (caso time trocou de divisão)
+        if(!meuJogo){
+            for(let div of ['serieA','serieB']){
+                if(!cal[div]) continue;
+                for(let key in cal[div]){
+                    for(let j in cal[div][key]){
+                        let jogo = cal[div][key][j];
+                        if(jogo.mandante === timeIdBanco || jogo.visitante === timeIdBanco){
+                            if(!meuJogo) { meuJogo = jogo; rodadaEncontrada = parseInt(key.split('_')[1])||1; }
+                        }
+                    }
                 }
             }
         }
@@ -941,14 +958,24 @@ async function buscarMeuProximoJogo(timeIdBanco) {
             const isMandante = (meuJogo.mandante === timeIdBanco);
 
             let dataHora = meuJogo.data_jogo || "Data a definir";
-            lblRodada.innerHTML = `<strong style="color: #fff;">${campeonatoNome} - Rodada ${rodada}</strong><br><span style="color: var(--verde-campo); font-size: 12px; font-weight: bold;">📅 ${dataHora}</span>`;
+            lblRodada.innerHTML = `<strong style="color: #fff;">${campeonatoNome} - Rodada ${rodadaEncontrada}</strong><br><span style="color: var(--verde-campo); font-size: 12px; font-weight: bold;">📅 ${dataHora}</span>`;
 
             btnIrJogo.style.display = "block";
             if (meuJogo.jogado || meuJogo.linhaDoTempo) {
-                lblRodada.innerHTML += ` <span style="color: #dc3545; font-size: 11px; text-transform: uppercase;">(Partida Rolando / Encerrada)</span>`;
-                btnIrJogo.innerText = "Ver Resultado e Gols";
-                btnIrJogo.style.background = "#333";
-                btnIrJogo.style.borderColor = "#555";
+                // Se já jogou esta rodada, avisa e já prepara para a próxima
+                if(rodadaEncontrada < 38){
+                    lblRodada.innerHTML += ` <span style="color: #dc3545; font-size: 11px; text-transform: uppercase;">(Encerrada)</span>`;
+                    btnIrJogo.innerText = "Ver Resultado e Gols";
+                    btnIrJogo.style.background = "#333";
+                    btnIrJogo.style.borderColor = "#555";
+                } else {
+                    lblRodada.innerHTML += ` <span style="color: #aaa; font-size: 11px;">(Fim de campeonato)</span>`;
+                    btnIrJogo.style.display = "none";
+                }
+            } else {
+                btnIrJogo.innerText = "Ir para a Transmissão ⚡";
+                btnIrJogo.style.background = "#ff8c00";
+                btnIrJogo.style.borderColor = "#ff8c00";
             }
 
             placarContainer.innerHTML = `
@@ -1116,13 +1143,13 @@ async function carregarEstatisticasGerais(meuTimeId) {
 
         if (times) {
             for (let t in times) {
-                // 🟢 FILTRO CEGO E PURO: Ignora Agentes Livres e Fantasmas!
-                // Apenas jogadores efetivos que jogaram as rodadas e não foram demitidos
-                if (times[t].divisao === minhaDivisao && times[t].jogadores && t !== "Fantasma" && !t.startsWith("Agentes_Livres")) {
+                if (times[t].jogadores && t!== "Fantasma" &&!t.startsWith("Agentes_Livres") &&!t.startsWith("Lendas_Futebol")) {
+                    // Se tiver divisão, filtra, se não tiver divisão, inclui mesmo assim (corrige bug)
+                    if (minhaDivisao && times[t].divisao && times[t].divisao!== minhaDivisao) continue;
                     for (let j in times[t].jogadores) {
                         let jog = times[t].jogadores[j];
-                        // Só adiciona quem realmente pisou em campo na simulação
-                        if (jog.estatisticas && jog.estatisticas.jogos > 0) {
+                        // CORRIGIDO: inclui quem tem gols/assist/gols_sofridos mesmo sem jogos
+                        if (jog.estatisticas && (jog.estatisticas.jogos > 0 || jog.estatisticas.gols > 0 || jog.estatisticas.assistencias > 0 || jog.estatisticas.gols_sofridos >= 0)) {
                             jog.timeOrigem = t;
                             todosJogadores.push(jog);
                         }
@@ -1238,7 +1265,7 @@ async function carregarMiniTabela(meuTimeId) {
             if (i < 4 || ehMeu) {
                 let cor = ehMeu ? "#ff8c00" : "#fff";
                 let peso = ehMeu ? "bold" : "normal";
-                let nomeDono = window.treinadoresGlobais[t.id] ? `<span style="font-size:9px; color:#aaa; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 ${window.treinadoresGlobais[t.id]}</span>` : "";
+                let nomeDono = window.treinadoresGlobais[t.id]? `<span style="font-size:9px; color:#aaa; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 ${window.treinadoresGlobais[t.id]}</span>` : `<span style="font-size:9px; color:#666; display:block; line-height:1; font-weight:normal; margin-top:2px;">👤 Diretoria ${t.id.replace(/_/g,' ')}</span>`;
 
                 // 🟢 O Botão de Olheiro!
                 let btnEspionar = !ehMeu ? `<button onclick="espionarAdversario('${t.id}')" title="Espionar Escalação" style="background:transparent; border:none; cursor:pointer; font-size:16px; margin-left:5px; padding:0; filter:grayscale(1) brightness(2); transition:0.2s;" onmouseover="this.style.filter='none'" onmouseout="this.style.filter='grayscale(1) brightness(2)'">👁️</button>` : "";
@@ -2116,17 +2143,23 @@ window.iniciarTransmissaoX1 = async function(id) {
     }
 
     let empate = (d.golsM === d.golsV);
-    let isVitoriaMinha = isDesafiante ? (d.golsM > d.golsV) : (d.golsV > d.golsM);
+    let isVitoriaMinha = isDesafiante? (d.golsM > d.golsV) : (d.golsV > d.golsM);
     let txtFim = "";
 
     if (empate) {
-        txtFim = `EMPATE! A aposta foi anulada, mas a Arena cobrou R$ 10.000 de taxa dupla do seu caixa.`;
-    } else if (d.tipo === 'dinheiro') {
-        txtFim = isVitoriaMinha ? `Você faturou ${formatarDinheiro(d.valor)} do oponente! (Taxa da Arena: R$ 5.000)` : `Você perdeu ${formatarDinheiro(d.valor)} na aposta. (Taxa da Arena: R$ 5.000)`;
+        txtFim = `EMPATE! A aposta foi anulada, mas a Arena cobrou R$ 10.000 de taxa dupla do seu caixa. Ninguém ganha Ticket.`;
     } else {
-        let nomeGanho = isDesafiante ? d.dados_adv.nome : d.dados_meu.nome;
-        let nomePerdido = isDesafiante ? d.dados_meu.nome : d.dados_adv.nome;
-        txtFim = isVitoriaMinha ? `O passe de ${nomeGanho} agora é seu! (Taxa da Arena: R$ 5.000)` : `Adeus! Seu jogador ${nomePerdido} fez as malas. (Taxa da Arena: R$ 5.000)`;
+        if (isVitoriaMinha) {
+            // GANHOU X1 - GANHA 1 TICKET DE LIBERAÇÃO (só se ganhar, empate não ganha)
+            db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/tickets_liberacao`).transaction(t=> (t||0)+1);
+        }
+        if (d.tipo === 'dinheiro') {
+            txtFim = isVitoriaMinha ? `Você faturou ${formatarDinheiro(d.valor)} do oponente! (Taxa da Arena: R$ 5.000)` : `Você perdeu ${formatarDinheiro(d.valor)} na aposta. (Taxa da Arena: R$ 5.000)`;
+        } else {
+            let nomeGanho = isDesafiante ? d.dados_adv.nome : d.dados_meu.nome;
+            let nomePerdido = isDesafiante ? d.dados_meu.nome : d.dados_adv.nome;
+            txtFim = isVitoriaMinha ? `O passe de ${nomeGanho} agora é seu! (Taxa da Arena: R$ 5.000)` : `Adeus! Seu jogador ${nomePerdido} fez as malas. (Taxa da Arena: R$ 5.000)`;
+        }
     }
 
     // Toca a transmissão! (O isIADuel aqui vai como false, pois a DB já foi atualizada acima).
@@ -2339,6 +2372,8 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                     let v = apostaValidadaIA.valor;
                     if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + v - taxaFinal;
                     else updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - v - taxaFinal;
+                    // Vitória contra IA também dá ticket
+                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/tickets_liberacao`] = (dadosUsuario.tickets_liberacao||0)+1;
                 } else {
                     updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) - taxaFinal;
                     if (venci) {
@@ -2348,6 +2383,8 @@ function reproduzirTransmissaoX1(mandante, visitante, linhaTempo, golsM_final, g
                         updates[`banco_global_times/${mandante}/jogadores/${apostaValidadaIA.id_meu}`] = null;
                         updates[`banco_global_times/${visitante}/jogadores/${apostaValidadaIA.id_meu}`] = apostaValidadaIA.dados_meu;
                     }
+                    // Vitória contra IA também dá ticket
+                    if (venci) updates[`ligas/${ligaLogada}/usuarios/${userLogado}/tickets_liberacao`] = (dadosUsuario.tickets_liberacao||0)+1;
                 }
                 await db.ref().update(updates);
             }
@@ -2600,62 +2637,125 @@ window.abrirManualDoJogo = function() {
         .accordion-btn.active:after { content: '\\2212'; color: #ff8c00; }
         .accordion-panel { padding: 0 15px; background-color: #111; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; color: #ccc; font-size: 14px; line-height: 1.6; }
         .accordion-panel p { margin: 15px 0; }
+        .accordion-panel strong { color: #fff; }
     </style>`;
 
     modal.innerHTML = style + `
         <div style="background:#1a1a1a; width:95%; max-width:700px; height:85vh; border-radius:12px; border:1px solid #444; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
-
             <div style="padding:15px 20px; border-bottom:1px solid #333; background:#111; display:flex; justify-content:space-between; align-items:center; border-radius: 12px 12px 0 0;">
                 <h2 style="color:#007bff; margin:0; font-size:18px;">📖 Manual do Treinador RDM</h2>
                 <button onclick="document.getElementById('modal-manual-jogo').remove()" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer;">&times;</button>
             </div>
-
             <div style="flex:1; overflow-y:auto; padding-bottom: 20px;">
 
-                <button class="accordion-btn">🏟️ 1. Visão Geral & Horários</button>
+                <button class="accordion-btn">🏟️ 1. Visão Geral & Horários Oficiais</button>
                 <div class="accordion-panel">
-                    <p>Todas as partidas oficiais acontecem de forma simulada no servidor. O gatilho diário de transferências e dos jogos do Campeonato bate exatamente às <strong>19h00</strong>. As Copas ocorrem às <strong>20h00</strong>.<br><br>Certifique-se de ajustar sua equipe, gerenciar táticas e despachar suas propostas antes do fechamento dos portões. Aja rápido e se programe!</p>
+                    <p>O jogo roda 100% descentralizado no Firebase. Todo dia:<br>
+                    <strong>19h00</strong> → Campeonato (Série A/B) + Mercado (propostas vencem)<br>
+                    <strong>20h00</strong> → Copa + Mundial<br>
+                    <strong>06h00</strong> → Queda de Moral + Treino do CT + Fim de suspensão<br><br>
+                    Se você não escalar, a IA escala automaticamente os 11 melhores OVR disponíveis (respeitando suspensos, CT e Agentes Livres).</p>
                 </div>
 
-                <button class="accordion-btn">📋 2. Escalação e Gestão de Elenco</button>
+                <button class="accordion-btn">📋 2. Escalação - Cada Plus Explicado</button>
                 <div class="accordion-panel">
-                    <p>A força combinada (OVR) dos seus 11 titulares é o que dita sua probabilidade de marcar e evitar gols.<br><br>
-                    <strong>Cuidado com a Exaustão:</strong> Mantenha sempre um elenco saudável e numérico. Times que abrem mão do banco de reservas e operam com plantéis curtos demais sofrem penalidades massivas de fadiga na hora do jogo.</p>
+                    <p><strong>Formação:</strong> 4-3-3, 4-4-2, etc. Muda a distribuição de ATA/MEI/DEF/GOL no campo.<br><br>
+                    <strong>Força do Time (OVR):</strong> Soma dos 5 atributos dos 11 titulares.<br>
+                    - <strong>Ataque:</strong> Chance de fazer gol. Peso 3x pra Atacante.<br>
+                    - <strong>Defesa:</strong> Evita gol. Peso 3x pra Zagueiro/Goleiro.<br>
+                    - <strong>Força:</strong> Disputa física, escanteio, bola aérea.<br>
+                    - <strong>Velocidade:</strong> Contra-ataque, drible.<br>
+                    - <strong>Habilidade:</strong> Passe, assistência, pênalti.<br><br>
+                    <strong>Improvisado:</strong> Se escalar Atacante na zaga, perde 30% da força (overall * 0.7).<br><br>
+                    <strong>FADIGA:</strong> Cada jogo como titular = +1 fadiga (máx 35). Reserva = -0.5 por rodada. Fórmula: Força Real = Base * (1 - fadiga*0.015) mínimo 50%. Com 20 fadiga = -30% força!<br>
+                    Na tabela você vê 🔋 verde 0-9, 🟡 amarela 10-19, 🔴 vermelha 20+ (precisa rotacionar).</p>
                 </div>
 
-                <button class="accordion-btn">🧠 3. Mentalidade Tática</button>
+                <button class="accordion-btn">🧠 3. Mentalidade + Estilo + Mando</button>
                 <div class="accordion-panel">
-                    <p>No vestiário (Aba Escalação), sua instrução final muda tudo:<br>
-                    ⚔️ <strong>Ofensivo:</strong> Aumenta seu ímpeto de ataque brutalmente, mas deixa o corredor aberto para os contra-ataques adversários. Ideal contra times muito fracos que jogam fechados.<br>
-                    🛡️ <strong>Retranca:</strong> Você "estaciona o ônibus". Corta as chances de ataque do oponente drasticamente, mas suas chances de marcar caem na mesma moeda (times na retranca sofrem para fazer mais de um gol).<br>
-                    ⚖️ <strong>Moderado:</strong> Uma abordagem balanceada e previsível. Jogo jogado.</p>
+                    <p><strong>Mentalidade:</strong><br>
+                    ⚔️ Ofensivo: Ataque *1.25, Defesa *0.85. Ideal vs time fraco fechado.<br>
+                    🛡️ Retranca: Ataque *0.85, Defesa *1.25. Quase não toma gol, mas faz 1 no máximo.<br>
+                    ⚖️ Moderado: Ataque *1.05, Defesa *1.05. Padrão.<br><br>
+                    <strong>Estilo:</strong><br>
+                    Posse de Bola: Meio *1.3, Ataque *1.1<br>
+                    Contra-Ataque: Ataque *1.2, Defesa *1.1, Meio *0.9<br>
+                    Bola Longa: Ataque *1.15, Defesa *1.05<br><br>
+                    <strong>Mando:</strong> Mandante ganha +10% em tudo (clima no relato).<br>
+                    <strong>Moral:</strong> 0-100. Fórmula: mult = 0.7 + (moral/100)*0.6. Moral 50 = 100%, Moral 100 = 130% força.<br>
+                    <strong>CT e Escudo:</strong> Se CT ativo +5%, Escudo ativo +8%.</p>
                 </div>
 
-                <button class="accordion-btn">💼 4. Mercado e Diretoria (IA)</button>
+                <button class="accordion-btn">🔄 4. Rotatividade, Fadiga e CT</button>
                 <div class="accordion-panel">
-                    <p>Você é livre para tentar comprar ou alugar qualquer jogador. Quando o passe pertence a um Player Humano, tudo se resolve na conversa. Porém, se pertencer a uma <strong>Inteligência Artificial</strong>, atenção:<br><br>
-                    As diretorias virtuais não são bobas. Elas <strong>blindam as grandes estrelas</strong> do time. Além disso, recusam propostas indecentes. Se não tiver dinheiro para pagar o valor de mercado justo, envolva jogadores da sua base para abater o preço.<br><br>
-                    Para empréstimos, lembre-se: a IA exigirá uma taxa inicial para liberar o atleta durante a vigência do contrato.</p>
+                    <p><strong>Como funciona:</strong><br>
+                    - Todo titular ganha +1 fadiga por jogo<br>
+                    - Reserva perde -0.5 fadiga por jogo (recupera)<br>
+                    - Fadiga 0-9 = 100% a 86% força (ok)<br>
+                    - Fadiga 10-19 = 85% a 71% (amarelo, comece a poupar)<br>
+                    - Fadiga 20-35 = 70% a 47% (vermelho, time morto)<br><br>
+                    <strong>CT (Centro de Treinamento):</strong> Você coloca 1 jogador por vez. Ele não pode ser escalado enquanto treina. Ganha atributos por hora. Se estiver escalado, é removido automático.<br><br>
+                    <strong>Dica Pro:</strong> Tenha 14-15 jogadores usáveis. Rode 2-3 por rodada pra manter fadiga abaixo de 12. Jogador com fadiga 25 é pior que reserva com 5.</p>
                 </div>
 
-                <button class="accordion-btn">🏦 5. Finanças e o Banco Central</button>
+                <button class="accordion-btn">🚫 5. Cartões, Suspensão e Agentes Livres</button>
                 <div class="accordion-panel">
-                    <p>Faltou dinheiro? A aba <strong>Cofre</strong> na "Central de Transações" é a sua saída. O Banco Central possui fundos infinitos, mas suas taxas de juros não perdoam.<br><br>
-                    Felizmente, outros treinadores podem colocar seu dinheiro sobrando no Cofre. Se eles fizerem isso, você poderá pegar empréstimos com investidores reais a taxas muito mais camaradas.<br><br>
-                    <strong style="color:#dc3545;">A Ameaça da Penhora:</strong> Planeje o pagamento de suas dívidas (descontado por rodada). Se chegar o dia do pagamento e não houver saldo no seu caixa, a justiça invadirá seu clube e levará os seus jogadores embora para quitar o débito!</p>
+                    <p><strong>Cartão Amarelo:</strong> +1 por falta dura. Com 3 amarelos = suspenso 1 jogo automático e zera os amarelos.<br>
+                    <strong>Vermelho Direto:</strong> Suspenso 2 jogos.<br>
+                    <strong>Onde ver:</strong> Na escalação aparece 🟨🟨 e badge 3 AMARELOS 🚫 ou EXPULSO 🚫. Botão Escalar some.<br>
+                    <strong>Agentes Livres:</strong> Se você mandar jogador pra Agentes Livres, ele NÃO pode ser escalado até voltar. Badge cinza Ag. Livres.<br>
+                    <strong>Se já estava escalado:</strong> Motor remove automático e escala melhor reserva.</p>
                 </div>
 
-                <button class="accordion-btn">🕵️‍♂️ 6. Olheiros e Mind Games (Espionagem)</button>
+                <button class="accordion-btn">🏆 6. Classificação - O que conta?</button>
                 <div class="accordion-panel">
-                    <p>No Dashboard, o ícone de Olho (👁️) nas tabelas permite infiltrar um olheiro para descobrir a tática e a escalação atual do oponente. Cada nova espionagem no dia custa o dobro da missão anterior.<br><br>
-                    <strong>Como se defender?</strong> Use o botão de 🛡️ <strong>Treino Secreto</strong>. Ele consome recursos, mas tranca os portões do seu CT. Qualquer olheiro adversário tentará entrar, será barrado pelos seguranças, e perderá os fundos da missão sem descobrir nada.</p>
+                    <p>Tabela só conta Campeonato (Série A/B). Copa não conta.<br>
+                    <strong>Artilharia e Assistência:</strong> Só gols_campeonato. Gols da Copa e X1 NÃO contam pro ranking.<br>
+                    <strong>Bônus Ranking:</strong> Top 3 artilheiros, assistências e goleiros menos vazados ganham +ataque/habilidade/defesa temporário.<br>
+                    Top1 +5 OVR, Top2 +4, Top3 +3, Top4 +2, Top5-10 +1. Dura até próxima rodada.</p>
                 </div>
 
-                <button class="accordion-btn">⚔️ 7. Arena X1 e Desafios</button>
+                <button class="accordion-btn">💼 7. Mercado e Diretoria IA</button>
                 <div class="accordion-panel">
-                    <p>O Campeonato é só uma parte da glória. Na Arena X1, você pode desafiar qualquer time para partidas instantâneas valendo dinheiro do caixa, ou no modo <strong>Pink Slip</strong> (Apostando o passe de um jogador!).<br><br>
-                    Para não haver trapaças, jogadores apostados não podem ter uma discrepância gigante de valor de mercado.<br>
-                    <strong>Desafiando a Máquina:</strong> Você pode desafiar a IA, mas ela calcula os riscos. Se o seu clube for uma potência inegável e ela for um clube pequeno, o desafio será rejeitado por puro medo da diretoria deles.</p>
+                    <p>Humano vs Humano = proposta direta.<br>
+                    Humano vs IA = IA avalia valor de mercado + se é estrela (blinda). Pode pedir jogador na troca pra abater preço. Empréstimo exige taxa.<br>
+                    <strong>Propostas:</strong> Vencem todo dia 19h. Se tiver 2+ propostas no mesmo jogador, vai pro leilão (quem paga mais leva).<br>
+                    <strong>Agentes Livres:</strong> Jogadores liberados ficam aqui. Você pode contratar de graça se tiver caixa.</p>
+                </div>
+
+                <button class="accordion-btn">🏦 8. Finanças e Cofre</button>
+                <div class="accordion-panel">
+                    <p>Cofre = Banco Central com juros infinitos mas caros. Outros treinadores podem investir dinheiro no cofre e você pega empréstimo com juros menores (investidor real).<br>
+                    Se não pagar dívida na data, penhora: justiça leva seus jogadores pra quitar.</p>
+                </div>
+
+                <button class="accordion-btn">🕵️‍♂️ 9. Olheiros e Treino Secreto</button>
+                <div class="accordion-panel">
+                    <p>👁️ Espiar custa R$ 50k na 1ª vez do dia, dobra a cada uso (100k, 200k...). Reseta no dia seguinte.<br>
+                    Mostra tática, formação e 11 titulares do adversário + força total.<br>
+                    🛡️ Treino Secreto = tranca CT. Olheiro paga e não vê nada.</p>
+                </div>
+
+                <button class="accordion-btn">⚔️ 10. Arena X1 - Tickets e Apostas</button>
+                <div class="accordion-panel">
+                    <p><strong>O que é:</strong> Desafio 1vs1 instantâneo, fora do calendário. Não conta pra tabela nem artilharia.<br>
+                    <strong>Tickets:</strong> Você ganha 1 ticket cada vez que VENCE X1 (empate não ganha). Ticket = moeda pra enviar olheiro atrás de Lendas (custa 1 ticket + R$ 1M por 2h, ou 1 ticket + R$ 500k por 8h). Lendas vão pros Agentes Livres.<br>
+                    <strong>Apostas:</strong><br>
+                    - Dinheiro: R$ 5k de taxa da arena + valor apostado. Vencedor leva tudo.<br>
+                    - Pink Slip (jogador): Aposta o passe de 1 jogador seu vs 1 do adversário. Se perder, perde o jogador. Valor dos jogadores não pode ter diferença absurda.<br>
+                    <strong>IA:</strong> IA aceita X1 só se forças forem parecidas. Se você é muito forte e ela muito fraca, rejeita por medo.<br>
+                    <strong>Transmissão:</strong> Jogo tem relato lance a lance, placar ao vivo e sons de torcida.</p>
+                </div>
+
+                <button class="accordion-btn">📅 11. Calendário e Rodadas</button>
+                <div class="accordion-panel">
+                    <p>Calendário mostra rodada atual, jogos já jogados (linha do tempo) e próximos. Rodada só avança após simulação das 19h/20h. Se motor travar, qualquer jogador online destrava (lock_simulacao).</p>
+                </div>
+
+                <button class="accordion-btn">👤 12. Pro Player e Pelada</button>
+                <div class="accordion-panel">
+                    <p>Pro Player = seu avatar. Outros treinadores avaliam seu OVR (média dos atributos_base). Quanto mais avaliações, mais preciso o OVR final.<br>
+                    Pelada = Sorteio de times balanceados pelo OVR. Modo Snake: distribui melhor, depois pior, etc. para equilibrar coletes. Não interfere no campeonato.</p>
                 </div>
 
             </div>
@@ -2663,7 +2763,7 @@ window.abrirManualDoJogo = function() {
     `;
     document.body.appendChild(modal);
 
-    // Faz as abas expandirem magicamente
+    // Faz as abas expandirem
     let acc = modal.querySelectorAll(".accordion-btn");
     for (let i = 0; i < acc.length; i++) {
         acc[i].addEventListener("click", function() {
@@ -2677,6 +2777,7 @@ window.abrirManualDoJogo = function() {
         });
     }
 };
+
 
 // ========================================================
 // 👁️ SISTEMA DE OLHEIRO (ESPIONAGEM ADVERSÁRIA) COM AVISO ELEGANTE
@@ -2837,4 +2938,30 @@ function mostrarAvisoElegante(texto, corBorda, icone) {
         </div>
     `;
     document.body.appendChild(cx);
+}
+
+// AVISO DE JOGADOR NOVO NOS AGENTES LIVRES
+async function carregarAvisoNovosJogadores(){
+    try{
+        let snap = await db.ref(`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores`).once('value');
+        let jogadores = snap.val()||{};
+        let novos = Object.values(jogadores).filter(j=>{
+            if(!j.data_descoberta) return false;
+            let diff = Date.now() - new Date(j.data_descoberta).getTime();
+            return diff < 24*60*60*1000; // últimas 24h
+        }).sort((a,b)=> new Date(b.data_descoberta) - new Date(a.data_descoberta)).slice(0,3);
+
+        if(novos.length===0) return;
+        let widget = document.getElementById('widget-avisos');
+        let lista = document.getElementById('lista-avisos');
+        if(!widget ||!lista) return;
+
+        widget.style.display = 'block';
+        novos.forEach(j=>{
+            let li = document.createElement('li');
+            li.style.cssText = "background:#111; border:1px solid gold; padding:8px; border-radius:6px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;";
+            li.innerHTML = `<span>⭐ Novo: <strong style="color:gold;">${j.nome}</strong> nos Agentes Livres! <small style="color:#aaa;">(descoberto há ${Math.floor((Date.now()-new Date(j.data_descoberta).getTime())/3600000)}h)</small></span><button onclick="window.location.href='mercado.html'" style="background:gold; color:#000; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Ver</button>`;
+            lista.prepend(li);
+        });
+    }catch(e){ console.log('Erro aviso novos:', e); }
 }
