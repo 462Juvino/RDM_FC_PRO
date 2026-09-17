@@ -35,8 +35,8 @@ function calcularForcaRealJogadorV2(j){
     let at = j.atributos||{ataque:5,defesa:5,forca:5,velocidade:5,habilidade:5};
     let base = (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5;
     let fadiga = j.fadiga||0;
-    let mult = 1 - (fadiga*0.015);
-    if(mult<0.5) mult=0.5;
+    let mult = 1 - (fadiga*0.006);
+    if(mult<0.6) mult=0.6;
     return base*mult;
 }
 function calcularForcaTimeComplexaV2(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo){
@@ -212,13 +212,26 @@ function aplicarFadigaMotorV2(timeId, titulares, times, updates){
     for(let id in elenco){
         let j=elenco[id];
         let ehTitular = titulares.some(t=> t.id===id || t.nome===j.nome);
+        let seq = j.jogos_seguidos||0;
         let novaFadiga = j.fadiga||0;
-        if(ehTitular){ novaFadiga+=1; if(novaFadiga>35) novaFadiga=35; }
-        else { novaFadiga-=0.5; if(novaFadiga<0) novaFadiga=0; }
+        if(ehTitular){
+            seq += 1;
+            let add = 0;
+            if(seq<=2) add = 0;
+            else if(seq===3) add = 0.5;
+            else add = 1;
+            novaFadiga += add;
+            if(novaFadiga>25) novaFadiga=25;
+            updates[`banco_global_times/${timeId}/jogadores/${id}/jogos_seguidos`]=seq;
+        } else {
+            seq = 0;
+            novaFadiga -= 1.5;
+            if(novaFadiga<0) novaFadiga=0;
+            updates[`banco_global_times/${timeId}/jogadores/${id}/jogos_seguidos`]=seq;
+        }
         updates[`banco_global_times/${timeId}/jogadores/${id}/fadiga`]=novaFadiga;
     }
 }
-
 
 function iniciarMotorDescentralizado(liga) {
     // 🟢 DESTRAVA O SISTEMA: Quebra o cadeado de segurança no Firebase caso o motor tenha travado em erros anteriores!

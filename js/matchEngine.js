@@ -778,10 +778,10 @@ function deslogar() {
 function calcularForcaRealJogador(j){
     let at = j.atributos||{ataque:5,defesa:5,forca:5,velocidade:5,habilidade:5};
     let base = (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5;
-    let fadiga = j.fadiga||0; // 0 a 100
-    let multFadiga = 1 - (fadiga*0.015); // cada 1% fadiga tira 1.5% força, max 50% perda com 33% fadiga
-    if(multFadiga<0.5) multFadiga=0.5;
-    return base * multFadiga;
+    let fadiga = j.fadiga||0;
+    let mult = 1 - (fadiga*0.006);
+    if(mult<0.6) mult=0.6;
+    return base*mult;
 }
 
 function calcularForcaTime(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo){
@@ -1059,22 +1059,21 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
             for(let id in elenco){
                 let j = elenco[id];
                 let ehTitular = titularesJogados.some(t=> t.nome===j.nome || t.id===id);
+                let seq = j.jogos_seguidos||0;
+                let novaFadiga = j.fadiga||0;
                 if(ehTitular){
-                    let fadigaAdd = 1; // padrão 1%
-                    // Se foi substituído (não está mais nos titulares finais mas estava nos iniciais)
-                    // Simplificação: 0.5% se saiu antes dos 70'
-                    let foiSubstituido = false; // detectar via linha tempo
-                    if(res.linha.some(e=> e.tipo==="substituicao" && e.texto.includes(j.nome) && e.texto.includes("Sai"))){
-                        foiSubstituido = true;
-                    }
-                    if(foiSubstituido) fadigaAdd = 0.5;
-                    let novaFadiga = (j.fadiga||0) + fadigaAdd;
-                    if(novaFadiga>35) novaFadiga=35; // max
+                    seq += 1;
+                    let foiSubstituido = res.linha.some(e=> e.tipo==="substituicao" && e.texto.includes(j.nome) && e.texto.includes("Sai"));
+                    let add = foiSubstituido? 0.3 : (seq<=2? 0 : (seq===3? 0.5 : 1));
+                    novaFadiga += add;
+                    if(novaFadiga>25) novaFadiga=25;
+                    updates[`banco_global_times/${timeId}/jogadores/${id}/jogos_seguidos`] = seq;
                     updates[`banco_global_times/${timeId}/jogadores/${id}/fadiga`] = novaFadiga;
                 } else {
-                    // Recupera 0.5% se não jogou
-                    let novaFadiga = (j.fadiga||0) - 0.5;
+                    seq = 0;
+                    novaFadiga -= 1.5;
                     if(novaFadiga<0) novaFadiga=0;
+                    updates[`banco_global_times/${timeId}/jogadores/${id}/jogos_seguidos`] = seq;
                     updates[`banco_global_times/${timeId}/jogadores/${id}/fadiga`] = novaFadiga;
                 }
             }
