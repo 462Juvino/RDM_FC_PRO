@@ -141,8 +141,20 @@ button:hover {
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,0.6);
-        backdrop-filter: blur(2px);
         z-index: 10001;
+        /* blur removido aqui porque tava borrando a própria sidebar */
+    }
+    /* Sidebar SEM blur no mobile e clicável */
+    .sidebar {
+        background-color: #1e1e1e !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        pointer-events: auto !important;
+        z-index: 10002 !important;
+    }
+    .sidebar *, .sidebar button {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
     .topbar {
         padding: 10px 15px;
@@ -672,25 +684,36 @@ div[style*="background-color: #1a1a1a; padding: 20px; border-radius: 8px; border
 /* ======================================================== */
 @media (min-width: 769px) {
     .sidebar {
-        /* Adiciona uma transição suave para não fechar de forma brusca */
-        transition: width 0.3s ease-in-out, opacity 0.2s ease-in-out;
+        transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease, opacity 0.2s ease, padding 0.3s ease;
         overflow-x: hidden;
-        white-space: nowrap; /* Impede que os botões "quebrem" de linha enquanto o menu encolhe */
+        white-space: nowrap;
     }
-
-    /* No PC, a mesma ação do botão inverte a lógica e ESCONDE o menu */
     .sidebar.aberta {
         width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        padding: 0 !important;
         border-right: none !important;
         opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
     }
-
-    /* Garante que o véu preto (overlay) do celular NÃO apareça na tela do PC */
+    .dashboard-layout:has(.sidebar.aberta) .main-content,
+    .dashboard-layout .sidebar.aberta + .main-content {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
     body.menu-aberto::after {
         display: none !important;
     }
 }
 
+/* Horizontal deitado - garante que não deixa buraco */
+@media (orientation: landscape) and (min-width: 769px) {
+    .dashboard-layout { width: 100vw; }
+    .sidebar.aberta { display: block; /* mantém no DOM mas com width 0 */ }
+}
 /* MELHORIAS DE TOQUE E SAFE AREA */
 button, .widget-btn, .btn-escalar, .btn-remover, .sidebar button {
     touch-action: manipulation;
