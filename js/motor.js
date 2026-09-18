@@ -1338,26 +1338,23 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             jog.dados.atributos.defesa = (jog.dados.atributos.defesa || 0) + bonus;
         });
 
-        // 4. A Regra de Ouro: O Valor de Mercado obedece ao OVR Dinâmico
+        // 4. A Regra de Ouro: O Valor de Mercado obedece ao OVR Dinâmico (Lenda não entra)
         todosParaRanking.forEach(jog => {
             let j = jog.dados;
+            if(j.nome && j.nome.includes("(Lenda)")) return;
+            if(jog.time === "Lendas_Futebol") return;
             let at = j.atributos || {};
 
             let atq = at.ataque || 5; let def = at.defesa || 5; let frc = at.forca || 5; let vel = at.velocidade || 5; let hab = at.habilidade || 5;
 
-            // Simula a escala oficial para precificar corretamente
-            if ((j.pro_player || (j.nome && j.nome.includes("(PRO)"))) && (atq > 20 || def > 20)) {
+            if ((j.pro_player || (j.nome && j.nome.includes("(PRO)")) ) && (atq > 20 || def > 20)) {
                 atq /= 6; def /= 6; frc /= 6; vel /= 6; hab /= 6;
             }
 
             let ovrMercado = (atq + def + frc + vel + hab) / 5;
-
-            // Ex: Se o cara ganhou +5 e o OVR subiu para 12, ele agora vale R$ 30 milhões!
             j.valor_mercado = Math.round(ovrMercado * 2500000);
-
             updates[`banco_global_times/${jog.time}/jogadores/${jog.id}`] = j;
         });
-
         // ========================================================
         // --- PASSO C.3: BANCO CENTRAL (COBRANÇAS E PENHORAS) ---
         // ========================================================

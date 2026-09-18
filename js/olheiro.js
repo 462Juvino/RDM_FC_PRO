@@ -2,6 +2,9 @@
 let olheiroInterval = null;
 
 async function carregarOlheiro(){
+    const ligaLogada = localStorage.getItem('treinadorLiga');
+    const userLogado = localStorage.getItem('treinadorUsuario');
+    if(!ligaLogada || !userLogado) return;
     // Detecta onde está: dashboard ou mercado
     let div = document.getElementById('area-olheiro') || document.getElementById('area-olheiro-mercado');
     let divStatus = document.getElementById('area-olheiro-status-mercado');

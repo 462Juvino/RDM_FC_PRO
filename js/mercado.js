@@ -1106,7 +1106,13 @@ window.carregarHistoricoMercado = function(){
         if(arr.length===0){ div.innerHTML='<p style="color:#666; text-align:center;">Nenhuma transferência ainda.</p>'; return; }
         let html = '<table style="width:100%; font-size:12px;"><tr style="color:#888;"><th>Jogador</th><th>De</th><th>Para</th><th>Valor</th></tr>';
         arr.forEach(h=>{
-            html+=`<tr style="border-bottom:1px solid #222;"><td style="color:#fff;">${h.jogador_nome}</td><td style="color:#aaa;">${h.time_origem.replace(/_/g,' ')}</td><td style="color:var(--verde-campo);">${h.time_destino.replace(/_/g,' ')}</td><td style="color:#ff8c00;">${formatarDinheiro(h.valor)}</td></tr>`;
+            let de = (h.time_origem||'').replace(/_/g,' ').replace(ligaLogada,'').replace('Agentes Livres','Agentes Livres').trim();
+            let para = (h.time_destino||'').replace(/_/g,' ').replace(ligaLogada,'').replace('Agentes Livres','Agentes Livres').trim();
+            if(de.includes('BATISTA5')) de = de.replace('BATISTA5','');
+            if(para.includes('BATISTA5')) para = para.replace('BATISTA5','');
+            if(de === '') de = 'Clube';
+            if(para === '' || para === 'Sem Clube') para = 'Sem Clube (Banco)';
+            html+=`<tr style="border-bottom:1px solid #222;"><td style="color:#fff;">${h.jogador_nome}</td><td style="color:#aaa;">${de}</td><td style="color:var(--verde-campo);">${para}</td><td style="color:#ff8c00;">${formatarDinheiro(h.valor)}</td></tr>`;
         });
         html+='</table>';
         div.innerHTML = html;
@@ -1256,6 +1262,15 @@ window.colocarEmAgentesLivres = async function(idJogador){
         updates[`banco_global_times/${timeAtual}/jogadores/${idJogador}`] = null;
         updates[`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${idJogador}`] = jogadorParaLivres;
         updates[`banco_global_times/Agentes_Livres_${ligaLogada}/divisao`] = "Livre";
+        updates[`ligas/${ligaLogada}/historico_transferencias/${Date.now()}_${idJogador}`] = {
+            jogador_nome: dadosJog.nome,
+            jogador_id: idJogador,
+            time_origem: timeAtual,
+            time_destino: `Agentes_Livres_${ligaLogada}`,
+            valor: valorComDesconto,
+            tipo: 'liberado',
+            data: new Date().toISOString()
+        };
 
         // Remove das titulares se estiver escalado
         let snapTit = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/titulares`).once('value');
