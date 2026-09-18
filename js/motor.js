@@ -720,13 +720,20 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = dadosDoAlvo;
                         updates[`ligas/${liga}/emprestimos_ativos/${idAlvo}`] = { jogador_id: idAlvo, time_origem: timeDoAlvo, time_destino: timeQueComprou, rodadas_restantes: lanceVencedor.duracao_rodadas };
                     } else {
-                        // Venda definitiva - CORRIGIDO: remove de TODOS os times antes de adicionar
+                        // Venda definitiva - CORRIGIDO: remove de TODOS os times antes de adicionar e limpa trava de livres
                         for(let tCheck in times){
                             if(times[tCheck].jogadores && times[tCheck].jogadores[idAlvo]){
                                 updates[`banco_global_times/${tCheck}/jogadores/${idAlvo}`] = null;
                             }
                         }
-                        updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = dadosDoAlvo;
+                        // Limpa campos de Agentes Livres pra não travar na escalação
+                        let jogadorLimpo = {...dadosDoAlvo};
+                        delete jogadorLimpo.origem_livre;
+                        delete jogadorLimpo.time_origem;
+                        delete jogadorLimpo.origem_olheiro;
+                        delete jogadorLimpo.data_entrada_livre;
+                        delete jogadorLimpo.data_descoberta;
+                        updates[`banco_global_times/${timeQueComprou}/jogadores/${idAlvo}`] = jogadorLimpo;
                         // Limpa todas as propostas deste jogador
                         Object.keys(lances).forEach(l=> updates[`ligas/${liga}/mercado_propostas/${idAlvo}/${l}`] = null);
 

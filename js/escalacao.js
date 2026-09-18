@@ -42,13 +42,25 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function carregarElenco(nomeTime) {
-    // 🟢 NOVO: Busca Agentes Livres também
+    // 🟢 NOVO: Busca Agentes Livres também e limpa duplicados
     Promise.all([
         db.ref(`banco_global_times/${nomeTime}/jogadores`).once('value'),
         db.ref(`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores`).once('value')
     ]).then(([snapElenco, snapAgentes]) => {
         elencoCompleto = snapElenco.val() || {};
         let agentesLivres = snapAgentes.val() || {};
+        // Se o jogador já tá no seu time, apaga dos Livres pra não travar
+        let updatesFix = {};
+        for(let id in elencoCompleto){
+            if(agentesLivres[id]){
+                updatesFix[`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${id}`] = null;
+                delete agentesLivres[id];
+                console.log(`🧹 Limpando duplicado ${id} dos Agentes Livres`);
+            }
+        }
+        if(Object.keys(updatesFix).length>0){
+            db.ref().update(updatesFix);
+        }
         window.bancoAgentesLivresGlobal = agentesLivres;
 
         // --- LÓGICA INTELIGENTE DE ESCALAÇÃO E VENDAS ---
