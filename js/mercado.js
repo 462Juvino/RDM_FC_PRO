@@ -65,9 +65,8 @@ function carregarMundo() {
 
             for (let idJog in elenco) {
                 let j = elenco[idJog];
-                // NÃO mostra Lenda dentro de Agentes Livres
-                if(time.startsWith("Agentes_Livres") && j.nome.includes("(Lenda)")) continue;
-                let isPro = j.pro_player || j.nome.includes("(PRO)");
+                if(!j ||!j.nome) continue;
+                let isPro = j.pro_player || (j.nome && j.nome.includes("(PRO)"));
                 let at = j.atributos || {ataque:5, defesa:5, forca:5, velocidade:5, habilidade:5};
 
                 let atq = at.ataque || 0; let def = at.defesa || 0; let frc = at.forca || 0; let vel = at.velocidade || 0; let hab = at.habilidade || 0;
@@ -78,7 +77,7 @@ function carregarMundo() {
 
                 let ovrAvg = Math.round((atq + def + frc + vel + hab) / 5);
 
-                let ehLenda = j.nome.includes("(Lenda)") || time === "Lendas_Futebol";
+                let ehLenda = (j.nome && j.nome.includes("(Lenda)")) || time === "Lendas_Futebol";
                 let valorBase = j.valor_mercado || 0;
                 let valorFinal = valorBase;
                 if(time.startsWith("Agentes_Livres") &&!ehLenda){
@@ -167,6 +166,10 @@ function carregarMundo() {
             if([...selectClubeExistente.options].some(o=>o.value===valorAtual)){
                 selectClubeExistente.value = valorAtual;
             }
+            // Garante que o filtro funciona
+            selectClubeExistente.onchange = () => { window.filtroForcadoAgentesLivres = false; renderizarMercado(); };
+            let selectPos = document.getElementById('filtro-posicao');
+            if(selectPos) selectPos.onchange = () => renderizarMercado();
         }
 
                 // 4. MAPEIA AS TRANSAÇÕES E PROPOSTAS (COM CONTRAPROPOSTA)
@@ -252,10 +255,12 @@ window.renderizarMercado = function(termoBusca = "") {
             if (filtroPos !== "Atacante" && filtroPos !== "PRO_PLAYERS" && j.posicao !== filtroPos) continue;
         }
 
-                // 🟢 Filtro de Clube (CORRIGIDO)
-        if (window.filtroForcadoAgentesLivres || termoBusca === "AGENTES_LIVRES") {
+                // 🟢 Filtro de Clube (CORRIGIDO - não trava)
+        if (termoBusca === "AGENTES_LIVRES") {
             if (!j.timeCru.includes("Agentes_Livres")) continue;
-        } else if (filtroClube !== "TODOS" && filtroClube !== "TODOS_CLUBES" && j.timeCru !== filtroClube) {
+        } else if (window.filtroForcadoAgentesLivres) {
+            if (!j.timeCru.includes("Agentes_Livres")) continue;
+        } else if (filtroClube!== "TODOS" && filtroClube!== "TODOS_CLUBES" && j.timeCru!== filtroClube) {
             continue;
         }
 
