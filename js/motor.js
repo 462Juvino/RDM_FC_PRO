@@ -815,7 +815,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         let ovrFinal = Math.round((finalAtq + finalDef + finalFor + finalVel + finalHab) / 5);
 
                         // Adequa o valor de mercado (Ex: OVR 10 = R$ 25.000.000)
-                        let valorMercado = ovrFinal * 2500000;
+                        let valorMercado = Math.max(40000000, ovrFinal * 4500000);
 
                         let jogadorPronto = {
                             nome: p.nome + " (PRO)",
