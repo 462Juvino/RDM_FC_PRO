@@ -465,10 +465,13 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             if(qtd > 25){
                 // Pega os 3 piores com fadiga alta ou OVR baixo
                 let piores = Object.keys(elenco).map(id=> ({id,...elenco[id]}))
-                   .sort((a,b)=>{
+                  .filter(j=> j && j.atributos)
+                  .sort((a,b)=>{
                         let fadA = a.fadiga||0, fadB = b.fadiga||0;
-                        let ovrA = (a.atributos.ataque+a.atributos.defesa+a.atributos.forca+a.atributos.velocidade+a.atributos.habilidade);
-                        let ovrB = (b.atributos.ataque+b.atributos.defesa+b.atributos.forca+b.atributos.velocidade+b.atributos.habilidade);
+                        let atA = a.atributos||{ataque:5,defesa:5,forca:5,velocidade:5,habilidade:5};
+                        let atB = b.atributos||{ataque:5,defesa:5,forca:5,velocidade:5,habilidade:5};
+                        let ovrA = (atA.ataque+atA.defesa+atA.forca+atA.velocidade+atA.habilidade);
+                        let ovrB = (atB.ataque+atB.defesa+atB.forca+atB.velocidade+atB.habilidade);
                         return (ovrA - fadA*10) - (ovrB - fadB*10);
                     }).slice(0,2);
 
@@ -695,11 +698,19 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     usuarios[loginVencedor].caixaClube -= lanceVencedor.valor_oferecido;
                     updates[`ligas/${liga}/usuarios/${loginVencedor}/caixaClube`] = usuarios[loginVencedor].caixaClube;
 
-                    // 2. Poe no Caixa da IA (Vendedora)
-                    let loginIAVendedora = `IA_${timeDoAlvo}`;
-                    if (usuarios[loginIAVendedora]) {
-                        usuarios[loginIAVendedora].caixaClube += lanceVencedor.valor_oferecido;
-                        updates[`ligas/${liga}/usuarios/${loginIAVendedora}/caixaClube`] = usuarios[loginIAVendedora].caixaClube;
+                    // 2. Paga o vendedor - Se for Agentes Livres, paga quem colocou lá
+                    if(isAgentesLivres && dadosDoAlvo.origem_livre){
+                        let loginOrigem = dadosDoAlvo.origem_livre;
+                        if(usuarios[loginOrigem]){
+                            usuarios[loginOrigem].caixaClube = (usuarios[loginOrigem].caixaClube||0) + lanceVencedor.valor_oferecido;
+                            updates[`ligas/${liga}/usuarios/${loginOrigem}/caixaClube`] = usuarios[loginOrigem].caixaClube;
+                        }
+                    } else {
+                        let loginIAVendedora = `IA_${timeDoAlvo}`;
+                        if (usuarios[loginIAVendedora]) {
+                            usuarios[loginIAVendedora].caixaClube += lanceVencedor.valor_oferecido;
+                            updates[`ligas/${liga}/usuarios/${loginIAVendedora}/caixaClube`] = usuarios[loginIAVendedora].caixaClube;
+                        }
                     }
 
                     // 3. Papelada dos Jogadores

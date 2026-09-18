@@ -1031,9 +1031,13 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
             return titularesReais;
         }
 
-        // FIX P2P: Simula TODOS os jogos da rodada, não só o meu
+        // FIX P2P: Simula TODOS os jogos da rodada - usa divisão do jogo atual
         let jogosParaSimular = [];
-        let divisaoCal = cal.serieA && cal.serieA[chave]? cal.serieA : cal.serieB;
+        let divisaoCal = null;
+        if(isMataMata) divisaoCal = cal.copa;
+        else if(caminhoDivisao.startsWith('serieA')) divisaoCal = cal.serieA;
+        else if(caminhoDivisao.startsWith('serieB')) divisaoCal = cal.serieB;
+        else divisaoCal = cal.serieA || cal.serieB;
         if(divisaoCal && divisaoCal[chave]){
             for(let jId in divisaoCal[chave]){
                 let j = divisaoCal[chave][jId];
@@ -1041,8 +1045,11 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
             }
         }
 
-        let titularesM = getTitulares(jogo.mandante);
-        let titularesV = getTitulares(jogo.visitante);
+        let titularesM = getTitulares(jogo.mandante).filter(j=> j && j.atributos);
+        let titularesV = getTitulares(jogo.visitante).filter(j=> j && j.atributos);
+        // Se vier vazio, usa elenco completo pra não ficar 0x0
+        if(titularesM.length===0) titularesM = Object.values(times[jogo.mandante]?.jogadores||{}).slice(0,11);
+        if(titularesV.length===0) titularesV = Object.values(times[jogo.visitante]?.jogadores||{}).slice(0,11);
 
         let donoMLogin = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===jogo.mandante);
         let donoVLogin = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===jogo.visitante);

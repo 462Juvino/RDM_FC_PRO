@@ -226,15 +226,30 @@ window.renderizarMercado = function(termoBusca = "") {
 
     tbody.innerHTML = "";
 
-    // Detecta se a tela é de Celular (Mobile)
+    // Detecta se a tela é de Celular (Mobile) - com scroll lateral
     let isMobile = window.innerWidth <= 768;
 
-    // Otimiza os Títulos da Tabela se for Mobile
+    // Libera arrasto pro lado no celular
+    let tabela = document.querySelector('table');
+    if(tabela){
+        tabela.style.display = 'block';
+        tabela.style.overflowX = 'auto';
+        tabela.style.whiteSpace = 'nowrap';
+        tabela.style.webkitOverflowScrolling = 'touch';
+    }
+    let wrapper = document.getElementById('tabela-mercado')?.parentElement;
+    if(wrapper){
+        wrapper.style.overflowX = 'auto';
+        wrapper.style.display = 'block';
+        wrapper.style.webkitOverflowScrolling = 'touch';
+    }
+
+    // Mantém cabeçalho completo mas com largura mínima pra poder rolar
     let theadTr = document.querySelector('thead tr');
     if (theadTr) {
         if (isMobile) {
             theadTr.innerHTML = `
-                <th style="text-align: left; padding: 12px;">Atleta</th><th>P</th><th>OVR</th><th>C</th><th>V</th>
+                <th style="text-align: left; padding: 12px; min-width:140px;">Atleta</th><th style="min-width:45px;">P</th><th style="min-width:45px;">OVR</th><th style="min-width:80px;">Clube</th><th style="min-width:80px;">Valor</th><th style="min-width:90px;">Ação</th>
             `;
         } else {
             theadTr.innerHTML = `
