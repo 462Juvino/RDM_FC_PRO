@@ -117,6 +117,9 @@ async function enviarOlheiro(horas){
 }
 
 async function resgatarLendaOlheiro(){
+    const ligaLogada = localStorage.getItem('treinadorLiga');
+    const userLogado = localStorage.getItem('treinadorUsuario');
+    if(!ligaLogada || !userLogado) return alert('Liga não encontrada');
     let snap = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/olheiro_ativo`).once('value');
     let ativo = snap.val(); if(!ativo) return;
     let lenda = BANCO_LENDAS[ativo.lendaId];
@@ -131,6 +134,7 @@ async function resgatarLendaOlheiro(){
             origem_olheiro: userLogado,
             data_descoberta: new Date().toISOString()
         },
+        [`banco_global_times/Agentes_Livres_${ligaLogada}/divisao`]: "Livre",
         [`ligas/${ligaLogada}/usuarios/${userLogado}/olheiro_ativo`]: null
     });
     alert(`⭐ ${lenda.nome} liberado nos Agentes Livres! Corre no Mercado!`);

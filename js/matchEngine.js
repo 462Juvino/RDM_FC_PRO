@@ -20,7 +20,7 @@ const canalTorcidaM = new Audio();
 const canalTorcidaV = new Audio();
 const canalEfeitos = new Audio();
 const canalHino = new Audio();
-const somApito = new Audio();
+const somApito = { play:()=>Promise.resolve(), pause:()=>{}, addEventListener:()=>{} };
 try{ somApito.src = 'sounds/apito_arbitro.mp3'; }catch(e){}
 somApito.addEventListener('error', ()=>{ try{ somApito.src=''; }catch(e){} });
 
