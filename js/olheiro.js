@@ -90,6 +90,9 @@ async function pedirConfirmacaoOlheiro(msg, onSim){
 }
 
 async function enviarOlheiro(horas){
+    const ligaLogada = localStorage.getItem('treinadorLiga');
+    const userLogado = localStorage.getItem('treinadorUsuario');
+    if(!ligaLogada || !userLogado) return alert('Liga não encontrada');
     let custo = horas===2? 1000000 : 500000;
     let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
     let dados = snapUser.val()||{};
