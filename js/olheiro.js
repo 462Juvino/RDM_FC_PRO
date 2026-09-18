@@ -121,8 +121,9 @@ async function resgatarLendaOlheiro(){
     // Joga a lenda nos Agentes Livres da liga para TODOS poderem comprar
     await db.ref().update({
         [`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${ativo.lendaId}_LENDA_${Date.now()}`]: {
-           ...lenda,
-            valor_mercado: Math.round(lenda.valor_mercado * 0.4),
+          ...lenda,
+            nome: lenda.nome + (lenda.nome.includes('(Lenda)')?'':' (Lenda)'),
+            valor_mercado: lenda.valor_mercado,
             pro_player: false,
             origem_olheiro: userLogado,
             data_descoberta: new Date().toISOString()

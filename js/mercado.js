@@ -65,6 +65,8 @@ function carregarMundo() {
 
             for (let idJog in elenco) {
                 let j = elenco[idJog];
+                // NÃO mostra Lenda dentro de Agentes Livres
+                if(time.startsWith("Agentes_Livres") && j.nome.includes("(Lenda)")) continue;
                 let isPro = j.pro_player || j.nome.includes("(PRO)");
                 let at = j.atributos || {ataque:5, defesa:5, forca:5, velocidade:5, habilidade:5};
 
