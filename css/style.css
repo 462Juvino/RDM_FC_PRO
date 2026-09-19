@@ -752,34 +752,30 @@ input, select { font-size: 16px !important; } /* evita zoom no iOS */
 
 /* FIX MODAL CORTADO NO VERTICAL - X1 E COMPRAR JOGADOR */
 @media (max-width: 768px) {
-  div[id^="modal-"], #modal-arena-x1 {
+  div[id^="modal-"], #modal-arena-x1, #modal-transacoes-ativas, #modal-proposta-dinamico {
     align-items: flex-start !important;
-    justify-content: flex-start !important;
+    justify-content: center !important;
     overflow-y: auto !important;
     padding: 10px !important;
     padding-top: max(10px, env(safe-area-inset-top)) !important;
-    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
-  }
-  div[id^="modal-"] > div, #modal-arena-x1 > div {
-    width: 95vw !important;
-    max-width: 95vw !important;
-    max-height: none !important;
-    height: auto !important;
-    margin: 0 auto !important;
-  }
-  #conteudo-x1 {
-    overflow-y: auto !important;
-    max-height: 70dvh !important;
+    padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
     -webkit-overflow-scrolling: touch;
   }
-  #conteudo-x1 button[onclick*="enviarDesafioX1"],
-  #conteudo-x1 button[onclick*="comprar"],
-  div[id^="modal-"] button[style*="background:#ff8c00"],
-  div[id^="modal-"] button[style*="background:#00b853"] {
-    position: sticky !important;
-    bottom: 0 !important;
-    min-height: 48px !important;
-    z-index: 5 !important;
-    margin-top: 15px !important;
+  div[id^="modal-"] > div, #modal-arena-x1 > div, #modal-transacoes-ativas > div, #modal-proposta-dinamico > div {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: calc(100dvh - 30px) !important;
+    height: auto !important;
+    margin: auto !important;
+    overflow-y: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+  }
+  #conteudo-x1, #lista-transacoes-conteudo, #conteudo-proposta {
+    overflow-y: auto !important;
+    max-height: 65dvh !important;
+    flex: 1 !important;
+    -webkit-overflow-scrolling: touch;
   }
 }
