@@ -39,7 +39,7 @@ function calcularForcaRealJogadorV2(j){
     if(mult<0.6) mult=0.6;
     return base*mult;
 }
-function calcularForcaTimeComplexaV2(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo){
+function calcularForcaTimeComplexaV2(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo, donoObj){
     let atk=0, def=0, meio=0;
     titulares.forEach(j=>{
         let at=j.atributos||{}; let fReal=calcularForcaRealJogadorV2(j); let pos=j.posicoes?.p||"Meia";
@@ -53,7 +53,17 @@ function calcularForcaTimeComplexaV2(titulares, mentalidade, estilo, moral, isMa
     if(isMandante){ atk*=1.10; def*=1.10; meio*=1.10; }
     if(ctAtivo){ atk*=1.05; def*=1.05; meio*=1.05; }
     if(escudoAtivo){ atk*=1.08; def*=1.08; }
-    return {ataque:atk, defesa:def, meio:meio, total:atk+def+meio};
+    // ESCALAÇÃO ATÉ 18:59 -15%
+    let multEscalacao = 1;
+    if(donoObj &&!String(donoObj.timeAtual||'').startsWith('IA_')){
+        let ultima = donoObj.ultima_escalacao_confirmada? new Date(donoObj.ultima_escalacao_confirmada) : null;
+        let hoje = new Date();
+        if(!ultima || ultima.toDateString()!== hoje.toDateString() || (ultima.getHours()+ultima.getMinutes()/60) >= 18.983){
+            multEscalacao = 0.85;
+        }
+    }
+    atk*=multEscalacao; def*=multEscalacao; meio*=multEscalacao;
+    return {ataque:atk, defesa:def, meio:meio, total:atk+def+meio, penalidadeEscalacao: multEscalacao < 1};
 }
 function montarEscalacaoIAInteligenteV2(timeId, elencoObj){
     let elenco = Object.values(elencoObj||{}).map((j, idx)=> ({...j, id: Object.keys(elencoObj)[idx]}));
@@ -300,31 +310,34 @@ async function checarRotinas(liga) {
             }catch(e){ console.warn('Erro checagem atrasados', e); }
         }
 
-        // 🔍 OLHEIRO DO MERCADO: Verifica se há propostas pendentes que já passaram das 19h ou são de ontem
+        // 🔍 JANELAS CRUZADAS 12-13 -> 19-20 e 19-20 -> 12-13
         const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
         const propostasPendentes = snapPropostas.val() || {};
         let temMercadoPendente = false;
-
-        if (Object.keys(propostasPendentes).length > 0) {
-            console.log(`📦 [MOTOR] Encontradas ${Object.keys(propostasPendentes).length} propostas na mesa. Verificando as datas...`);
-            for (let id in propostasPendentes) {
-                let objLances = propostasPendentes[id];
-                let primeiraDataStr = Object.values(objLances)[0].data_proposta;
-
-                if (!primeiraDataStr) {
-                    temMercadoPendente = true;
-                    break;
-                }
-
-                let dataProp = new Date(primeiraDataStr);
-                let isHoje = dataProp.getDate() === agora.getDate() && dataProp.getMonth() === agora.getMonth() && dataProp.getFullYear() === agora.getFullYear();
-
-                if (!isHoje || (isHoje && hora >= 19)) {
-                    temMercadoPendente = true;
-                    break;
+        let propostasParaProcessar = {};
+        const agoraCheck = new Date();
+        const horaCheck = agoraCheck.getHours();
+        const isJanela12 = horaCheck >= 12 && horaCheck < 13;
+        const isJanela19 = horaCheck >= 19 && horaCheck < 20;
+        if ((isJanela12 || isJanela19) && Object.keys(propostasPendentes).length > 0) {
+            for (let idJog in propostasPendentes) {
+                let lances = propostasPendentes[idJog];
+                for (let loginComprador in lances) {
+                    let lance = lances[loginComprador];
+                    if (!lance.data_proposta) continue;
+                    let dataProp = new Date(lance.data_proposta);
+                    let hProp = dataProp.getHours();
+                    let origemManha = hProp >= 12 && hProp < 13;
+                    let origemNoite = hProp >= 19 && hProp < 20;
+                    let isHoje = dataProp.getDate() === agoraCheck.getDate() && dataProp.getMonth() === agoraCheck.getMonth() && dataProp.getFullYear() === agoraCheck.getFullYear();
+                    let ontem = new Date(agoraCheck); ontem.setDate(ontem.getDate()-1);
+                    let isOntem = dataProp.getDate() === ontem.getDate() && dataProp.getMonth() === ontem.getMonth() && dataProp.getFullYear() === ontem.getFullYear();
+                    if (isJanela12 && origemNoite && isOntem) { temMercadoPendente = true; propostasParaProcessar[idJog] = true; }
+                    if (isJanela19 && origemManha && isHoje) { temMercadoPendente = true; propostasParaProcessar[idJog] = true; }
                 }
             }
         }
+        window._propostasParaProcessar = propostasParaProcessar;
 
         // Se já rodou tudo na hora certa, ele descansa.
         if (!rodarCampHoje && !rodarCopaHoje && !rodarAtrasados && !temMercadoPendente && !rodarQuedaMoral) return;
@@ -349,7 +362,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         const snapTimesGlobais = await db.ref('banco_global_times').once('value');
         const times = snapTimesGlobais.val() || {};
 
-        // 🔍 AUDITOR AUTOMÁTICO - restaura quem sumiu
+        // 🔍 AUDITOR AUTOMÁTICO - restaura quem sumiu + quem tá com SEM indevido
         try{
             const snapBackup = await db.ref('banco_original_backup').once('value');
             const baseADM = snapBackup.val() || null;
@@ -361,6 +374,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 }
                 let fix = {};
                 let qtd = 0;
+                // 1 - Quem sumiu de tudo
                 for(let timeOrig in baseADM){
                     if(timeOrig.startsWith('Agentes_Livres')||timeOrig==='Fantasma'||timeOrig==='Lendas_Futebol') continue;
                     let elenco = baseADM[timeOrig].jogadores || baseADM[timeOrig];
@@ -373,14 +387,42 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         }
                     }
                 }
+                // 2 - Quem tá em Agentes Livres com SEM mas NÃO é do Banco (tem que voltar pro time original)
+                let chaveLivres = `Agentes_Livres_${liga}`;
+                let livres = times[chaveLivres] && times[chaveLivres].jogadores? times[chaveLivres].jogadores : {};
+                for(let idLivre in livres){
+                    let j = livres[idLivre];
+                    if(j.origem_banco || j.clube_banco) continue; // é penhora do Banco, deixa com dono Banco
+                    // Acha time original no backup
+                    let timeOriginal = null;
+                    let dadosOriginais = null;
+                    for(let tOrig in baseADM){
+                        if(tOrig.startsWith('Agentes_Livres')||tOrig==='Fantasma'||tOrig==='Lendas_Futebol') continue;
+                        let elenco = baseADM[tOrig].jogadores || baseADM[tOrig];
+                        if(elenco[idLivre]){ timeOriginal = tOrig; dadosOriginais = elenco[idLivre]; break; }
+                    }
+                    if(timeOriginal && dadosOriginais){
+                        fix[`banco_global_times/${chaveLivres}/jogadores/${idLivre}`] = null;
+                        fix[`banco_global_times/${timeOriginal}/jogadores/${idLivre}`] = dadosOriginais;
+                        qtd++;
+                    }
+                }
                 if(qtd>0){
-                    console.log(`♻️ AUDITOR: ${qtd} sumidos restaurados`);
+                    console.log(`♻️ AUDITOR: ${qtd} restaurados (sumidos + SEM)`);
                     await db.ref().update(fix);
                     for(let p in fix){
+                        if(fix[p]===null) continue;
                         let t = p.split('/')[1]; let id = p.split('/')[3];
                         if(!times[t]) times[t]={jogadores:{}};
                         if(!times[t].jogadores) times[t].jogadores={};
                         times[t].jogadores[id]=fix[p];
+                    }
+                    // Limpa nulls dos livres
+                    for(let p in fix){
+                        if(fix[p]===null){
+                            let t = p.split('/')[1]; let id = p.split('/')[3];
+                            if(times[t] && times[t].jogadores) delete times[t].jogadores[id];
+                        }
                     }
                 }
             }
@@ -585,6 +627,9 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             let dataExecucaoFormatada = `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
 
             for (let idAlvo in propostas) {
+                if (window._propostasParaProcessar && Object.keys(window._propostasParaProcessar).length > 0) {
+                    if (!window._propostasParaProcessar[idAlvo]) continue;
+                }
                 let lances = propostas[idAlvo];
                 let timeDoAlvo = null;
                 let dadosDoAlvo = null;
@@ -952,7 +997,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     if(titularesObjs.length===0){
                         titularesObjs = montarEscalacaoIAInteligenteV2(timeId, time.jogadores);
                     }
-                    let res = calcularForcaTimeComplexaV2(titularesObjs, dono?.mentalidade||"Moderado", dono?.estilo||"Equilibrado", dono?.moral||50, false, dono?.ct_ativo, dono?.escudo_rodada);
+                    let res = calcularForcaTimeComplexaV2(titularesObjs, dono?.mentalidade||"Moderado", dono?.estilo||"Equilibrado", dono?.moral||50, false, dono?.ct_ativo, dono?.escudo_rodada, dono);
                     return {ataque: Math.round(res.ataque), defesa: Math.round(res.defesa), forcaTotal: Math.round(res.total)};
                 }
 
@@ -1494,10 +1539,15 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                                 if (idBagre) {
                                     updates[`banco_global_times/${devedor}/jogadores/${idBagre}`] = null; // Tira do devedor
 
-                                    // Para onde vai o jogador? Se for Banco Central, vira Agente Livre. Se for Player, vai pro time dele!
-                                    let destinoPenhora = credor === 'Banco Central da Liga' ? `Agentes_Livres_${liga}` : credor;
-                                    updates[`banco_global_times/${destinoPenhora}/jogadores/${idBagre}`] = piorJogador;
-
+                                    // Para onde vai o jogador? Se for Banco Central, vira Agente Livre com dono Banco. Se for Player, vai pro time dele!
+                                    let destinoPenhora = credor === 'Banco Central da Liga'? `Agentes_Livres_${liga}` : credor;
+                                    let jogadorPenhora = {...piorJogador};
+                                    if(credor === 'Banco Central da Liga'){
+                                        jogadorPenhora.origem_banco = true;
+                                        jogadorPenhora.clube_banco = 'Banco Central da Liga';
+                                        jogadorPenhora.data_penhora = new Date().toISOString();
+                                    }
+                                    updates[`banco_global_times/${destinoPenhora}/jogadores/${idBagre}`] = jogadorPenhora;
                                     let valorAbatido = piorJogador.valor_mercado || 1000000;
                                     div.valor_total -= valorAbatido;
 

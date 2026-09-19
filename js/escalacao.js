@@ -199,7 +199,9 @@ function salvarEscalacao() {
         formacao: document.getElementById('select-formacao').value || "4-4-2",
         estilo: document.getElementById('select-estilo').value || "Posse de Bola",
         mentalidade: document.getElementById('select-mentalidade').value || "Moderado",
-        forcaAtual: parseInt(document.getElementById('forca-time').innerText || "0")
+        forcaAtual: parseInt(document.getElementById('forca-time').innerText || "0"),
+        ultima_escalacao_confirmada: new Date().toISOString(),
+        escalacao_dia: new Date().toISOString().split('T')[0]
     }).then(() => alert("✅ Tática, Estilo e Mentalidade salvas com sucesso!"))
       .catch(erro => alert("Erro ao salvar: " + erro.message));
 }

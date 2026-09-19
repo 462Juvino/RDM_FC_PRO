@@ -3,7 +3,13 @@
 const ligaLogada = localStorage.getItem('treinadorLiga');
 const userLogado = localStorage.getItem('treinadorUsuario');
 
-if (!ligaLogada || !userLogado) window.location.href = "index.html";
+// JANELAS 12-13 -> 19-20 e 19-20 -> 12-13
+const JANELAS_MERCADO = { manha: { inicio: 12, fim: 13 }, noite: { inicio: 19, fim: 20 } };
+function getJanelaAtual(){ const h=new Date().getHours(); if(h>=12&&h<13) return 'manha'; if(h>=19&&h<20) return 'noite'; return 'fechado'; }
+function isMercadoAberto(){ return getJanelaAtual()!=='fechado'; }
+function getProximaJanelaTexto(){ const h=new Date().getHours(); if(h<12) return `abre às 12:00 (em ${12-h}h)`; if(h<13) return `aberta agora!`; if(h<19) return `abre às 19:00 (em ${19-h}h)`; if(h<20) return `aberta agora!`; return `abre amanhã 12:00`; }
+
+if (!ligaLogada ||!userLogado) window.location.href = "index.html";
 
 let dadosUsuario = {};
 let todosJogadores = [];
@@ -337,6 +343,14 @@ function pesquisarJogador() {
 let propostaPendente = { idJogador: null, nome: "", valorBase: 0, clubeDono: "", tipoAtual: "compra", rodadas: 5 };
 
 function fazerProposta(idJogador) {
+    if(!isMercadoAberto()){
+        const modal=document.getElementById('modal-proposta-dinamico')||document.createElement('div');
+        modal.id='modal-proposta-dinamico';
+        modal.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;display:flex;justify-content:center;align-items:center;";
+        document.body.appendChild(modal);
+        modal.innerHTML=`<div style="background:#1a1a1a;width:90%;max-width:400px;border-radius:12px;border:2px solid #ff8c00;padding:25px;text-align:center;"><div style="font-size:40px;">🔒</div><h2 style="color:#ff8c00;">Mercado Fechado</h2><p style="color:#ccc;">Abre só 12:00-13:00 e 19:00-20:00</p><p style="color:#aaa;font-size:13px;">${getProximaJanelaTexto()}<br><br>12-13 → resposta 19-20<br>19-20 → resposta 12-13 do dia seguinte</p><button onclick="document.getElementById('modal-proposta-dinamico').style.display='none'" style="width:100%;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:6px;margin-top:15px;cursor:pointer;">Fechar</button></div>`;
+        modal.style.display='flex'; return;
+    }
     let j = todosJogadores.find(x => x.id_banco === idJogador);
     if (!j) return;
 
