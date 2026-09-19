@@ -152,6 +152,27 @@ function carregarElenco(nomeTime) {
         for(let i=0; i < titulares.length; i++) atualizarVisualSlot(i);
         calcularForcaTime();
 
+        // SELO DE CONFIRMAÇÃO - AGORA DENTRO DA PRANCHETA, NÃO NO TOPO
+        setTimeout(()=>{
+          let old = document.getElementById('status-escalacao');
+          if(old) old.remove();
+          const ultima = dadosUsuario.ultima_escalacao_confirmada? new Date(dadosUsuario.ultima_escalacao_confirmada) : null;
+          const hoje = new Date();
+          const pendente =!ultima || ultima.toDateString()!==hoje.toDateString() || (ultima.getHours()+ultima.getMinutes()/60)>=18.983;
+          let container = document.getElementById('area-status-escalacao');
+          if(!container){
+            container = document.createElement('div');
+            container.id='area-status-escalacao';
+            container.style.cssText='margin:10px 0; display:flex; justify-content:flex-start;';
+            let btnSalvar = document.querySelector('button[onclick=\"salvarEscalacao()\"]') || document.getElementById('btn-salvar-tatica');
+            if(btnSalvar && btnSalvar.parentNode) btnSalvar.parentNode.insertBefore(container, btnSalvar.nextSibling);
+            else document.body.appendChild(container);
+          }
+          container.innerHTML = pendente
+            ? `<span id="status-escalacao" style="background:rgba(220,53,69,0.15); color:#dc3545; border:1px solid #dc3545; padding:6px 10px; border-radius:20px; font-size:11px; font-weight:bold;">⚠️ Não confirmado hoje -15% até 18:59</span>`
+            : `<span id="status-escalacao" style="background:rgba(0,184,83,0.15); color:#00b853; border:1px solid #00b853; padding:6px 10px; border-radius:20px; font-size:11px; font-weight:bold;">✅ Confirmado às ${ultima.getHours()}:${String(ultima.getMinutes()).padStart(2,'0')} → 100%</span>`;
+        },500);
+
     }).catch(erro => {
         console.error("Erro ao buscar elenco:", erro);
         document.getElementById('tabela-jogadores').innerHTML = `<tr><td colspan="8" style="color: #dc3545; padding: 20px;">❌ Falha na conexão com o servidor.</td></tr>`;

@@ -783,13 +783,15 @@ async function carregarCentralDeAvisos(meuTimeId) {
     let avisos = [];
 
     try {
-        // 🟢 Adicionado a busca da Arena X1 na lista de promessas
-        const [snapMsgs, snapMercado, snapPros, snapTime, snapX1] = await Promise.all([
+        // 🟢 Agora busca também dívidas e usuario pra checar escalação 18:59
+        const [snapMsgs, snapMercado, snapPros, snapTime, snapX1, snapDividas, snapMeuUser] = await Promise.all([
             db.ref(`ligas/${ligaLogada}/caixa_mensagens/${userLogado}`).once('value'),
             db.ref(`ligas/${ligaLogada}/mercado_propostas`).once('value'),
             db.ref(`ligas/${ligaLogada}/pro_players`).once('value'),
             db.ref(`banco_global_times/${meuTimeId}`).once('value'),
-            db.ref(`ligas/${ligaLogada}/x1_desafios`).once('value')
+            db.ref(`ligas/${ligaLogada}/x1_desafios`).once('value'),
+            db.ref(`ligas/${ligaLogada}/dividas_financeiras`).once('value'),
+            db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value')
         ]);
 
         // Estilo blindado para os botões da central (Evita herdar botões gigantes do layout principal)
@@ -890,7 +892,34 @@ async function carregarCentralDeAvisos(meuTimeId) {
         if (numJogadores > 0 && numJogadores < 11) {
             avisos.push(`
                 <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444;">
-                    <strong style="color:#dc3545;">🚨 Plantel Incompleto:</strong> <span style="color:#ccc;">Atenção! Seu time tem apenas ${numJogadores} jogadores. Se o campeonato rodar, você perderá por W.O. Vá ao mercado agora!</span>
+                    <strong style="color:#dc3545;">🚨 Plantel Incompleto:</strong> <span style="color:#ccc;">Seu time tem apenas ${numJogadores} jogadores. Vai perder por W.O.!</span>
+                </li>
+            `);
+        }
+
+        // 5. ESCALAÇÃO 18:59 - se não confirmou hoje
+        const meuUser = snapMeuUser.val()||{};
+        let ultima = meuUser.ultima_escalacao_confirmada? new Date(meuUser.ultima_escalacao_confirmada) : null;
+        let hoje = new Date();
+        let pendenteEscalacao =!ultima || ultima.toDateString()!==hoje.toDateString() || (ultima.getHours()+ultima.getMinutes()/60)>=18.983;
+        if(pendenteEscalacao){
+            avisos.push(`
+                <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong style="color:#dc3545;">⚠️ Escalação Pendente:</strong> <span style="color:#ccc;">Confirme até 18:59 ou -15% no jogo.</span></div>
+                    <button onclick="window.location.href='escalacao.html'" style="${btnStyle} background:#dc3545; color:#fff;">Escalar</button>
+                </li>
+            `);
+        }
+
+        // 6. DÍVIDA PENDENTE
+        const dividas = snapDividas.val()||{};
+        let totalDividas=0;
+        for(let id in dividas){ if(dividas[id].devedor===meuTimeId) totalDividas++; }
+        if(totalDividas>0){
+            avisos.push(`
+                <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong style="color:#dc3545;">💸 Dívida Pendente:</strong> <span style="color:#ccc;">${totalDividas} dívida(s). Parcela todo jogo 19h.</span></div>
+                    <button onclick="window.location.href='mercado.html'" style="${btnStyle} background:#dc3545; color:#fff;">Pagar</button>
                 </li>
             `);
         }

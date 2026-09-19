@@ -1760,12 +1760,15 @@ function toggleNotificacoes() {
 }
 
 async function carregarNotificacoesGlobais() {
-    const badge = document.getElementById('badge-notificacao');
-    const lista = document.getElementById('lista-notificacoes-drop');
+    let badge = document.getElementById('badge-notificacao');
+    let lista = document.getElementById('lista-notificacoes-drop');
 
-    // Só roda a função se a página atual possuir o ícone do sino nela
-    if(!badge || !lista) return;
-
+    // Se não tem sino, NÃO CRIA NADA NO TOPO - deixa dashboard.js cuidar do #widget-avisos
+    if(!badge ||!lista){
+        // Se o dashboard existe, ele já mostra tudo no circulado
+        if(document.getElementById('widget-avisos')) return;
+        return;
+    }
     db.ref(`ligas/${ligaMotor}`).on('value', async snapLiga => {
         const ligaDados = snapLiga.val();
         if(!ligaDados) return;
@@ -1865,13 +1868,45 @@ async function carregarNotificacoesGlobais() {
             }
         }
 
+        // ESCALAÇÃO 18:59
+        if (ligaDados.usuarios && ligaDados.usuarios[userLogadoMotor]) {
+            let meuUser = ligaDados.usuarios[userLogadoMotor];
+            let ultima = meuUser.ultima_escalacao_confirmada? new Date(meuUser.ultima_escalacao_confirmada) : null;
+            let hoje = new Date();
+            let pendente =!ultima || ultima.toDateString()!==hoje.toDateString() || (ultima.getHours()+ultima.getMinutes()/60)>=18.983;
+            if(pendente){
+                countNotif++;
+                htmlNotif += `<div onclick="window.location.href='escalacao.html'" style="background:#1a0a0a; padding:10px; border-radius:6px; border-left:3px solid #dc3545; cursor:pointer; border:1px solid #dc3545;">
+                    <strong style="color:#dc3545; font-size:12px;">⚠️ Escalação Pendente</strong><br>
+                    <span style="color:#ccc; font-size:11px;">Confirme até 18:59 ou time joga com -15%. Clique para escalar.</span>
+                </div>`;
+            }
+        }
+        // DÍVIDA PENDENTE
+        if (ligaDados.dividas_financeiras) {
+            let meuTime = ligaDados.usuarios && ligaDados.usuarios[userLogadoMotor]? ligaDados.usuarios[userLogadoMotor].timeAtual : null;
+            let totalDividas=0;
+            for(let id in ligaDados.dividas_financeiras){ if(ligaDados.dividas_financeiras[id].devedor===meuTime) totalDividas++; }
+            if(totalDividas>0){
+                countNotif++;
+                htmlNotif += `<div onclick="window.location.href='mercado.html'" style="background:#1a0a0a; padding:10px; border-radius:6px; border-left:3px solid #dc3545; cursor:pointer; border:1px solid #dc3545;">
+                    <strong style="color:#dc3545; font-size:12px;">💸 Dívida Pendente (${totalDividas})</strong><br>
+                    <span style="color:#ccc; font-size:11px;">Parcela desconta todo jogo 19h. Clique em Cofre para pagar.</span>
+                </div>`;
+            }
+        }
+
         if (countNotif > 0) {
-            badge.style.display = 'block';
-            badge.innerText = countNotif;
+            if(!isFallback){
+                badge.style.display = 'block';
+                badge.innerText = countNotif;
+            }
             lista.innerHTML = htmlNotif;
         } else {
-            badge.style.display = 'none';
-            lista.innerHTML = `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
+            if(!isFallback){
+                badge.style.display = 'none';
+            }
+            lista.innerHTML = isFallback? '' : `<span style="color:#888; font-size:12px;">Nenhuma novidade.</span>`;
         }
     });
 }

@@ -638,22 +638,22 @@ function abrirModalTransacoes() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'modal-transacoes-ativas';
-        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:center;";
+        modal.style.cssText = "position:fixed; inset:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:flex-start; padding:15px; box-sizing:border-box; overflow-y:auto;";
         document.body.appendChild(modal);
     }
 
     modal.innerHTML = `
-        <div style="background:#1a1a1a; width:90%; max-width:550px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; max-height:80vh;">
-            <div style="padding:15px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+        <div style="background:#1a1a1a; width:100%; max-width:550px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; max-height:calc(100vh - 30px); margin:auto; box-sizing:border-box;">
+            <div style="padding:15px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
                 <h2 style="color:#ff8c00; margin:0; font-size:18px;">💼 Central de Negociações</h2>
                 <button onclick="document.getElementById('modal-transacoes-ativas').style.display='none'" style="background:transparent; border:none; color:#aaa; font-size:22px; cursor:pointer;">&times;</button>
             </div>
-            <div style="display:flex; border-bottom:1px solid #333; overflow-x: auto; white-space: nowrap;">
-                <button id="tab-env" onclick="renderListaTransacoes('env')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s; min-width: 120px;">📤 Enviadas</button>
-                <button id="tab-rec" onclick="renderListaTransacoes('rec')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s; min-width: 120px;">📥 Recebidas</button>
-                <button id="tab-banco" onclick="renderListaTransacoes('banco')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; transition:0.2s; min-width: 120px;">🏦 Cofre</button>
+            <div style="display:flex; border-bottom:1px solid #333; overflow-x:auto; white-space:nowrap; flex-shrink:0;">
+                <button id="tab-env" onclick="renderListaTransacoes('env')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; min-width:100px;">📤 Enviadas</button>
+                <button id="tab-rec" onclick="renderListaTransacoes('rec')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; min-width:100px;">📥 Recebidas</button>
+                <button id="tab-banco" onclick="renderListaTransacoes('banco')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; min-width:100px;">🏦 Cofre</button>
             </div>
-            <div id="lista-transacoes-conteudo" style="padding:15px; overflow-y:auto; flex:1; min-height: 250px;">
+            <div id="lista-transacoes-conteudo" style="padding:15px; overflow-y:auto; flex:1; min-height:100px; max-height:60vh; box-sizing:border-box;">
             </div>
         </div>
     `;
