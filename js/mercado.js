@@ -346,9 +346,9 @@ function fazerProposta(idJogador) {
     if(!isMercadoAberto()){
         const modal=document.getElementById('modal-proposta-dinamico')||document.createElement('div');
         modal.id='modal-proposta-dinamico';
-        modal.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;display:flex;justify-content:center;align-items:center;";
+        modal.style.cssText="position:fixed; inset:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:flex-start; padding:15px; box-sizing:border-box; overflow-y:auto;";
         document.body.appendChild(modal);
-        modal.innerHTML=`<div style="background:#1a1a1a;width:90%;max-width:400px;border-radius:12px;border:2px solid #ff8c00;padding:25px;text-align:center;"><div style="font-size:40px;">🔒</div><h2 style="color:#ff8c00;">Mercado Fechado</h2><p style="color:#ccc;">Abre só 12:00-13:00 e 19:00-20:00</p><p style="color:#aaa;font-size:13px;">${getProximaJanelaTexto()}<br><br>12-13 → resposta 19-20<br>19-20 → resposta 12-13 do dia seguinte</p><button onclick="document.getElementById('modal-proposta-dinamico').style.display='none'" style="width:100%;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:6px;margin-top:15px;cursor:pointer;">Fechar</button></div>`;
+        modal.innerHTML=`<div style="background:#1a1a1a;width:100%;max-width:400px;border-radius:12px;border:2px solid #ff8c00;padding:25px;text-align:center; margin:auto; box-sizing:border-box; max-height:calc(100vh - 30px); overflow-y:auto;"><div style="font-size:40px;">🔒</div><h2 style="color:#ff8c00;">Mercado Fechado</h2><p style="color:#ccc;">Abre só 12:00-13:00 e 19:00-20:00</p><p style="color:#aaa;font-size:13px;">${getProximaJanelaTexto()}<br><br>12-13 → resposta 19-20<br>19-20 → resposta 12-13 do dia seguinte</p><button onclick="document.getElementById('modal-proposta-dinamico').style.display='none'" style="width:100%;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:6px;margin-top:15px;cursor:pointer;">Fechar</button></div>`;
         modal.style.display='flex'; return;
     }
     let j = todosJogadores.find(x => x.id_banco === idJogador);
@@ -361,7 +361,7 @@ function fazerProposta(idJogador) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'modal-proposta-dinamico';
-        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:center;";
+        modal.style.cssText = "position:fixed; inset:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; justify-content:center; align-items:flex-start; padding:15px; box-sizing:border-box; overflow-y:auto;";
         document.body.appendChild(modal);
     }
 
@@ -370,21 +370,21 @@ function fazerProposta(idJogador) {
         optionsTroca += `<option value="${meuJ.id_banco}">${meuJ.nome} (OVR: ${meuJ.forca})</option>`;
     });
 
-    // Layout Moderno com Abas de Negociação
+    // Layout Moderno com Abas de Negociação - CORRIGIDO ID + ESTOURO
     modal.innerHTML = `
-        <div style="background:#1a1a1a; width:90%; max-width:450px; border-radius:8px; border:1px solid #444; overflow:hidden;">
-            <div style="padding:15px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111;">
-                <h2 style="color:#ff8c00; margin:0; font-size:18px;">Negociar: ${j.nome}</h2>
-                <button onclick="fecharModalProposta()" style="background:transparent; border:none; color:#aaa; font-size:22px; cursor:pointer;">&times;</button>
+        <div style="background:#1a1a1a; width:100%; max-width:450px; border-radius:8px; border:1px solid #444; overflow:hidden; max-height:calc(100vh - 30px); display:flex; flex-direction:column; margin:auto; box-sizing:border-box;">
+            <div style="padding:15px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111; flex-shrink:0;">
+                <h2 style="color:#ff8c00; margin:0; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80%;">Negociar: ${j.nome}</h2>
+                <button onclick="fecharModalProposta()" style="background:transparent; border:none; color:#aaa; font-size:22px; cursor:pointer; flex-shrink:0;">&times;</button>
             </div>
 
-            <div style="display:flex; border-bottom:1px solid #333;">
-                <button id="aba-compra" onclick="mudarAbaProposta('compra')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333; transition:0.2s;">💰 Compra Definitiva</button>
-                <button id="aba-emp" onclick="mudarAbaProposta('emprestimo')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold; transition:0.2s;">🤝 Empréstimo</button>
+            <div style="display:flex; border-bottom:1px solid #333; flex-shrink:0;">
+                <button id="aba-compra" onclick="mudarAbaProposta('compra')" style="flex:1; padding:12px; background:#2a2a2a; color:#fff; border:none; cursor:pointer; font-weight:bold; border-right:1px solid #333;">💰 Compra</button>
+                <button id="aba-emp" onclick="mudarAbaProposta('emprestimo')" style="flex:1; padding:12px; background:#111; color:#888; border:none; cursor:pointer; font-weight:bold;">🤝 Empréstimo</button>
             </div>
 
-            <div id="conteudo-proposta" style="padding:20px;">
-                <!-- O JavaScript vai preencher isso baseado na aba clicada -->
+            <div id="conteudo-proposta" style="padding:15px; overflow-y:auto; flex:1; box-sizing:border-box;">
+                <!-- conteúdo injetado aqui -->
             </div>
         </div>
     `;
