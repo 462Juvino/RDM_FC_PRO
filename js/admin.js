@@ -431,10 +431,21 @@ function injetarTimesIniciais() {
         serieA_correta.forEach(t => { if(baseDeTimes[t]) baseDeTimes[t].divisao = "A"; });
         serieB_correta.forEach(t => { if(baseDeTimes[t]) baseDeTimes[t].divisao = "B"; });
 
-        // Envia o SUPER ELENCO e salva backup pra auditoria automática
-        db.ref('banco_global_times').set(baseDeTimes);
-        db.ref('banco_original_backup').set(baseDeTimes).then(() => {
-            exibirModal("✅ Banco Atualizado", "<p style='text-align:center; color: var(--verde-campo);'>Base injetada + backup da auditoria salvo!</p>");
+        // Envia backup SEMPRE, mas só injeta times se for a primeira vez
+        db.ref('banco_global_times').once('value').then(snapAtual=>{
+            let jaTemCampeonato = snapAtual.exists() && Object.keys(snapAtual.val()||{}).length > 30;
+            if(jaTemCampeonato){
+                // Campeonato já rodando com vendas - NÃO apaga, só salva backup pro auditor
+                db.ref('banco_original_backup').set(baseDeTimes).then(() => {
+                    exibirModal("✅ Backup Salvo", "<p style='text-align:center; color: var(--verde-campo);'>Campeonato preservado!<br>Só o backup da auditoria foi salvo, nenhuma venda foi apagada.</p>");
+                });
+            } else {
+                // Primeira vez - pode injetar tudo
+                db.ref('banco_global_times').set(baseDeTimes);
+                db.ref('banco_original_backup').set(baseDeTimes).then(() => {
+                    exibirModal("✅ Banco Atualizado", "<p style='text-align:center; color: var(--verde-campo);'>Base injetada + backup salvo!</p>");
+                });
+            }
         }).catch(e => exibirModal("❌ Erro", `<p>Falha: ${e.message}</p>`));
     });
 }
