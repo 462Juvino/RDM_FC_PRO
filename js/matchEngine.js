@@ -136,8 +136,26 @@ window.mudarRodadaTransmissao = function(novaRodada) {
 function renderizarPartida() {
     const topoRodada = document.getElementById('lbl-rodada-top');
 
-    // 1️⃣ MÁGICA DO FILTRO: Define a rodada atual ANTES de gerar o HTML do Dropdown!
-    if (!rodadaExibicao) rodadaExibicao = `camp_rodada_${rodadaSistema}`;
+    // 1️⃣ MÁGICA DO FILTRO: Se hoje tem Copa do seu time, já abre na Copa
+    if (!rodadaExibicao) {
+        let hojeStr = new Date().toLocaleDateString('pt-BR').slice(0,5);
+        let faseCopaHoje = null;
+        if(calGlobal.copa){
+            for(let fase in calGlobal.copa){
+                let jogos = calGlobal.copa[fase];
+                for(let j in jogos){
+                    let jogo = jogos[j];
+                    if((jogo.mandante === dadosUsuario.timeAtual || jogo.visitante === dadosUsuario.timeAtual) && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)){
+                        faseCopaHoje = fase;
+                        break;
+                    }
+                }
+                if(faseCopaHoje) break;
+            }
+        }
+        if(faseCopaHoje){ rodadaExibicao = `copa_${faseCopaHoje}`; }
+        else { rodadaExibicao = `camp_rodada_${rodadaSistema}`; }
+    }
 
     if (topoRodada && (!document.getElementById('select-rodada-transmissao'))) {
         let selectHtml = `<select id="select-rodada-transmissao" onchange="mudarRodadaTransmissao(this.value)" style="background:#1a1a1a; color:var(--verde-campo); border:1px solid #444; padding:2px 5px; border-radius:4px; font-weight:bold; outline:none; margin-left: 5px; cursor: pointer;">`;

@@ -932,7 +932,26 @@ async function buscarMeuProximoJogo(timeIdBanco) {
         let rodadaEncontrada = rodadaAtual;
         let campeonatoNome = "Campeonato Nacional";
 
-        // Tenta achar o próximo jogo NÃO jogado deste time, a partir da rodada atual até a última
+        // 🏆 Se hoje tem Copa, mostra Copa primeiro
+        let hojeStr = new Date().toLocaleDateString('pt-BR').slice(0,5);
+        if(cal.copa){
+            for(let fase in cal.copa){
+                let jogosFase = cal.copa[fase];
+                for(let j in jogosFase){
+                    let jogo = jogosFase[j];
+                    if((jogo.mandante === timeIdBanco || jogo.visitante === timeIdBanco) && jogo.data_jogo && jogo.data_jogo.includes(hojeStr)){
+                        meuJogo = jogo;
+                        rodadaEncontrada = fase;
+                        campeonatoNome = `Copa Nacional - ${fase.charAt(0).toUpperCase()+fase.slice(1)}`;
+                        break;
+                    }
+                }
+                if(meuJogo) break;
+            }
+        }
+
+        // Se não é Copa hoje, tenta achar o próximo jogo NÃO jogado deste time, a partir da rodada atual até a última
+        if(!meuJogo){
         for(let r = rodadaAtual; r <= 38; r++){
             let key = `rodada_${r}`;
             let jogosRodada = null;
@@ -955,6 +974,7 @@ async function buscarMeuProximoJogo(timeIdBanco) {
                 }
             }
             if(meuJogo &&!meuJogo.jogado) break;
+            }
         }
 
         // Fallback: se não achou nada, varre tudo (caso time trocou de divisão)
