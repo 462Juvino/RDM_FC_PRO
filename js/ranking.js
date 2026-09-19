@@ -43,7 +43,24 @@ window.mudarDivisao = function(div){
     document.getElementById('btn-div-B').classList.toggle('ativo', div==='B');
     renderTabela(div);
     renderArtilharia(div);
+    carregarRankingConquistas();
 };
+
+async function carregarRankingConquistas(){
+    let div = document.getElementById('ranking-conquistas');
+    if(!div) return;
+    let snap = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+    let usuarios = snap.val()||{};
+    let rank = [];
+    for(let id in usuarios){
+        if(id.startsWith('IA_')) continue;
+        let u = usuarios[id];
+        let total = Object.keys(u.conquistas||{}).length;
+        rank.push({ nome: u.nome||id, time: (u.timeAtual||'').replace(/_/g,' '), total: total, caixa: u.caixaClube||0 });
+    }
+    rank.sort((a,b)=> b.total - a.total || b.caixa - a.caixa);
+    div.innerHTML = rank.length ? rank.slice(0,10).map((r,i)=>`<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333;"><span>${i+1}º ${r.nome} (${r.time})</span><strong style="color:#00ff88;">${r.total} 🏆</strong></div>`).join('') : '<div style="color:#666; padding:10px;">Nenhum treinador com conquistas ainda</div>';
+}
 
 function renderTabela(div){
     let tabela = {};

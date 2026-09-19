@@ -22,12 +22,83 @@ window.addEventListener('DOMContentLoaded', async () => {
         checarMeuProPlayer();
         carregarAvaliacoesPendentes();
         carregarHistoricoCampeoes();
+        verificarEConquistar();
     } catch (e) { console.error(e); }
 });
 
 // ========================================================
 // 0. CARREGAR HALL DA FAMA (HISTÓRICO)
 // ========================================================
+// 🏆 SISTEMA DE CONQUISTAS - VICIANTE
+const CONQUISTAS_BASE = {
+  primeira_vitoria: { nome: "Primeira Vitória", desc: "Venceu a primeira partida", icone: "🥇", bonus: 500000 },
+  streak_3: { nome: "Embalado", desc: "3 vitórias seguidas", icone: "🔥", bonus: 1000000 },
+  streak_7_dias: { nome: "Viciado", desc: "7 dias logando", icone: "📅", bonus: 1500000 },
+  venda_10m: { nome: "Vendedor Nato", desc: "Vendeu por +10M", icone: "💰", bonus: 0 },
+  comprou_10: { nome: "Comprador Compulsivo", desc: "10 compras no mercado", icone: "🛒", bonus: 0 },
+  pro_criado: { nome: "Pai da Base", desc: "Criou seu PRO Player", icone: "👶", bonus: 2000000 },
+  pro_ovr10: { nome: "Lenda Viva", desc: "Seu PRO chegou no OVR 10", icone: "⭐", nome_real: "Rafael Batista (PRO)", bonus: 5000000 },
+  campeao_a: { nome: "Campeão Série A", desc: "Ganhou a Série A", icone: "🏆", bonus: 10000000 },
+  campeao_copa: { nome: "Rei da Copa", desc: "Ganhou a Copa", icone: "🏆", bonus: 7000000 },
+  goleada: { nome: "Goleada Histórica", desc: "Venceu por 4+ gols", icone: "⚽", bonus: 1000000 },
+  time_100: { nome: "Time Galáctico", desc: "Força do time > 100", icone: "📈", bonus: 2000000 }
+};
+
+async function verificarEConquistar(){
+  let snap = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+  let u = snap.val()||{};
+  let conquistas = u.conquistas || {};
+  let novas = [];
+
+  function unlock(id){
+    if(conquistas[id]) return;
+    conquistas[id] = {...CONQUISTAS_BASE[id], data: new Date().toISOString() };
+    novas.push(CONQUISTAS_BASE[id]);
+  }
+
+  if((u.vitorias||0) >= 1) unlock('primeira_vitoria');
+  if((u.sequencia_vitorias||0) >= 3) unlock('streak_3');
+  if((u.streak||0) >= 7) unlock('streak_7_dias');
+  if((u.total_vendas_valor||0) >= 10000000) unlock('venda_10m');
+  if((u.total_compras||0) >= 10) unlock('comprou_10');
+  if(u.pro_player_id) unlock('pro_criado');
+  if(meuProPlayer && (meuProPlayer.ovr||0) >= 10) unlock('pro_ovr10');
+  if((u.titulos_serie_a||0) >= 1) unlock('campeao_a');
+  if((u.titulos_copa||0) >= 1) unlock('campeao_copa');
+  if((u.maior_goleada||0) >= 4) unlock('goleada');
+  if((u.forcaAtual||0) >= 100) unlock('time_100');
+
+  if(novas.length>0){
+    let bonusTotal = novas.reduce((s,c)=>s+(c.bonus||0),0);
+    let updates = { conquistas: conquistas };
+    if(bonusTotal>0) updates.caixaClube = (u.caixaClube||0)+bonusTotal;
+    await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update(updates);
+    novas.forEach(c=>{
+      alert(`🏆 CONQUISTA DESBLOQUEADA!\n${c.icone} ${c.nome}\n${c.desc}${c.bonus?`\n+${c.bonus.toLocaleString('pt-BR')}`:''}`);
+    });
+  }
+  renderConquistas(conquistas);
+}
+
+function renderConquistas(conquistas){
+  let div = document.getElementById('lista-conquistas');
+  if(!div) return;
+  let ids = Object.keys(CONQUISTAS_BASE);
+  let html = "";
+  ids.forEach(id=>{
+    let tem = conquistas[id];
+    let base = CONQUISTAS_BASE[id];
+    html += `<div style="background:${tem?'#1a3a1a':'#111'}; border:1px solid ${tem?'#00b853':'#333'}; border-radius:8px; padding:10px; text-align:center; opacity:${tem?'1':'0.4'};">
+      <div style="font-size:28px;">${base.icone}</div>
+      <div style="font-size:12px; font-weight:bold; color:${tem?'#00ff88':'#888'};">${base.nome}</div>
+      <div style="font-size:10px; color:#aaa;">${base.desc}</div>
+      ${tem?`<div style="font-size:9px; color:#00b853; margin-top:4px;">✅ ${new Date(tem.data).toLocaleDateString()}</div>`:''}
+    </div>`;
+  });
+  div.innerHTML = html;
+  document.getElementById('total-conquistas').innerText = `${Object.keys(conquistas||{}).length}/${ids.length}`;
+}
+
 function carregarHistoricoCampeoes() {
     db.ref(`ligas/${ligaLogada}/historico_campeoes`).on('value', snap => {
         const listaDiv = document.getElementById('lista-historico');

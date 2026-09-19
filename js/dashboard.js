@@ -40,8 +40,21 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('nome-treinador').innerText = dadosUsuario.nome;
         document.getElementById('nome-liga').innerText = ligaLogada;
         document.getElementById('saldo-treinador').innerText = formatarDinheiro(dadosUsuario.caixaClube);
+        // 🔥 STREAK DIÁRIO - bônus viciante
+        let hoje = new Date().toISOString().split('T')[0];
+        let ultimo = dadosUsuario.ultimo_login || "";
+        if(ultimo!== hoje){
+            let streak = (dadosUsuario.streak||0) + 1;
+            if(ultimo){
+                let diff = (new Date(hoje) - new Date(ultimo))/86400000;
+                if(diff > 1) streak = 1; // perdeu streak
+            }
+            let bonus = streak >= 7? 1000000 : streak >= 3? 300000 : 100000;
+            db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({ultimo_login: hoje, streak: streak, caixaClube: (dadosUsuario.caixaClube||0)+bonus});
+            setTimeout(()=>alert(`🔥 STREAK ${streak} dias! +${formatarDinheiro(bonus)}`), 1000);
+        }
 
-        if (dadosUsuario.timeAtual === "Sem Clube" || !dadosUsuario.timeAtual) {
+        if (dadosUsuario.timeAtual === "Sem Clube" ||!dadosUsuario.timeAtual) {
            tentarAssumirTimeIA(); // 🟢 Chama a nova inteligência em vez de travar direto!
         } else {
             carregarVisaoGeralClube();
@@ -164,8 +177,9 @@ function carregarVisaoGeralClube() {
     const area = document.getElementById('area-trabalho');
     const timeIdBanco = dadosUsuario.timeAtual;
     const meuTime = timeIdBanco.replace(/_/g, ' ');
-
     document.body.style.backgroundImage = `linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.95)), url('${getEstadio(timeIdBanco)}')`;
+    // Atualiza contadores pra conquista
+    db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/forcaAtual`).set(dadosUsuario.forcaAtual||0);
 
     let moral = dadosUsuario.moral !== undefined ? dadosUsuario.moral : 50;
     let corMoral = moral >= 70 ? "#00b853" : (moral <= 30 ? "#dc3545" : "#ff8c00");

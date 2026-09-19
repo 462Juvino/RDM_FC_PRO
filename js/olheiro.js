@@ -140,7 +140,8 @@ async function resgatarLendaOlheiro(){
         [`banco_global_times/Agentes_Livres_${ligaLogada}/divisao`]: "Livre",
         [`ligas/${ligaLogada}/usuarios/${userLogado}/olheiro_ativo`]: null
     });
-    alert(`⭐ ${lenda.nome} liberado nos Agentes Livres! Corre no Mercado!`);
+    alert(`⭐ ${lenda.nome} liberado nos Agentes Livres! Leilão de 5min! Corre no Mercado!`);
+    db.ref(`banco_global_times/Agentes_Livres_${ligaLogada}/jogadores/${ativo.lendaId}_LENDA_${Date.now()}/leilao_ate`).set(Date.now()+5*60*1000);
     if(olheiroInterval){ clearInterval(olheiroInterval); olheiroInterval=null; }
     carregarOlheiro();
 }
