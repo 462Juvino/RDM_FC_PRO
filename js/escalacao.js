@@ -35,6 +35,23 @@ window.addEventListener('DOMContentLoaded', () => {
 
         desenharCampinho(false);
         carregarElenco(timeSeguro);
+        // STATUS 18:59
+        setTimeout(()=>{
+          const el = document.getElementById('forca-time');
+          if(!el) return;
+          const ultima = dadosUsuario.ultima_escalacao_confirmada? new Date(dadosUsuario.ultima_escalacao_confirmada) : null;
+          const div = document.createElement('div');
+          div.id='status-escalacao';
+          div.style.cssText='font-size:11px;margin-top:6px;padding:6px;border-radius:4px;text-align:center;';
+          if(!ultima || ultima.toDateString()!==new Date().toDateString() || (ultima.getHours()+ultima.getMinutes()/60)>=18.983){
+            div.style.background='rgba(220,53,69,0.15)'; div.style.color='#dc3545'; div.style.border='1px solid #dc3545';
+            div.innerHTML='⚠️ Não confirmado hoje até 18:59 → -15% no jogo da noite';
+          } else {
+            div.style.background='rgba(0,184,83,0.15)'; div.style.color='#00b853'; div.style.border='1px solid #00b853';
+            div.innerHTML=`✅ Confirmado às ${ultima.getHours()}:${String(ultima.getMinutes()).padStart(2,'0')} → 100%`;
+          }
+          el.parentNode.appendChild(div);
+        },800);
     }).catch(e => {
         console.error(e);
         alert("Erro ao carregar dados. Tente atualizar a página.");
