@@ -349,6 +349,43 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         const snapTimesGlobais = await db.ref('banco_global_times').once('value');
         const times = snapTimesGlobais.val() || {};
 
+        // 🔍 AUDITOR AUTOMÁTICO - restaura quem sumiu
+        try{
+            const snapBackup = await db.ref('banco_original_backup').once('value');
+            const baseADM = snapBackup.val() || null;
+            if(baseADM){
+                let todosIds = {};
+                for(let t in times){
+                    if(t==='Fantasma') continue;
+                    for(let id in (times[t].jogadores||{})) todosIds[id]=t;
+                }
+                let fix = {};
+                let qtd = 0;
+                for(let timeOrig in baseADM){
+                    if(timeOrig.startsWith('Agentes_Livres')||timeOrig==='Fantasma'||timeOrig==='Lendas_Futebol') continue;
+                    let elenco = baseADM[timeOrig].jogadores || baseADM[timeOrig];
+                    for(let idJog in elenco){
+                        let dados = elenco[idJog];
+                        if(!dados?.nome) continue;
+                        if(!todosIds[idJog]){
+                            fix[`banco_global_times/${timeOrig}/jogadores/${idJog}`] = dados;
+                            qtd++;
+                        }
+                    }
+                }
+                if(qtd>0){
+                    console.log(`♻️ AUDITOR: ${qtd} sumidos restaurados`);
+                    await db.ref().update(fix);
+                    for(let p in fix){
+                        let t = p.split('/')[1]; let id = p.split('/')[3];
+                        if(!times[t]) times[t]={jogadores:{}};
+                        if(!times[t].jogadores) times[t].jogadores={};
+                        times[t].jogadores[id]=fix[p];
+                    }
+                }
+            }
+        }catch(e){ console.warn('Auditor falhou', e); }
+
         const snapUsuarios = await db.ref(`ligas/${liga}/usuarios`).once('value');
         const usuarios = snapUsuarios.val() || {};
 
@@ -487,6 +524,29 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                 }
             }
         }
+
+        // 🔍 AUDITOR ADM - Restaura jogadores sumidos
+        try{
+          if(window.BANCO_ADM){
+            let jogadoresNoBanco = {};
+            for(let t in times){
+              if(t==='Fantasma') continue;
+              for(let id in (times[t].jogadores||{})) jogadoresNoBanco[id]=t;
+            }
+            for(let timeOrig in window.BANCO_ADM){
+              if(timeOrig.startsWith('Agentes_Livres')||timeOrig==='Fantasma') continue;
+              let elencoADM = window.BANCO_ADM[timeOrig].jogadores || window.BANCO_ADM[timeOrig];
+              for(let idJog in elencoADM){
+                let dados = elencoADM[idJog];
+                if(!dados?.nome) continue;
+                if(!jogadoresNoBanco[idJog]){
+                  console.log(`♻️ Auditor: ${dados.nome} sumiu, voltando pra ${timeOrig}`);
+                  updates[`banco_global_times/${timeOrig}/jogadores/${idJog}`] = dados;
+                }
+              }
+            }
+          }
+        }catch(e){ console.warn('Auditor falhou', e); }
 
         // IA tenta comprar dos Agentes Livres com 50% do valor
         let snapLivres = await db.ref(`banco_global_times/Agentes_Livres_${liga}/jogadores`).once('value');

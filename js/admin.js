@@ -431,9 +431,10 @@ function injetarTimesIniciais() {
         serieA_correta.forEach(t => { if(baseDeTimes[t]) baseDeTimes[t].divisao = "A"; });
         serieB_correta.forEach(t => { if(baseDeTimes[t]) baseDeTimes[t].divisao = "B"; });
 
-        // Envia o SUPER ELENCO para o Firebase
-        db.ref('banco_global_times').set(baseDeTimes).then(() => {
-            exibirModal("✅ Banco Atualizado", "<p style='text-align:center; color: var(--verde-campo);'>A base oficial completa (Titulares + Reservas) foi injetada com sucesso!</p>");
+        // Envia o SUPER ELENCO e salva backup pra auditoria automática
+        db.ref('banco_global_times').set(baseDeTimes);
+        db.ref('banco_original_backup').set(baseDeTimes).then(() => {
+            exibirModal("✅ Banco Atualizado", "<p style='text-align:center; color: var(--verde-campo);'>Base injetada + backup da auditoria salvo!</p>");
         }).catch(e => exibirModal("❌ Erro", `<p>Falha: ${e.message}</p>`));
     });
 }
