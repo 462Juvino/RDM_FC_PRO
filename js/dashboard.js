@@ -4,11 +4,13 @@
 const ligaLogada = localStorage.getItem('treinadorLiga');
 const userLogado = localStorage.getItem('treinadorUsuario');
 
-window.x1Audios = { torcidaM: new Audio(), torcidaV: new Audio(), hino: new Audio(), gol: new Audio(), fim: new Audio(), apito: new Audio() };
 
 if (!ligaLogada || !userLogado) {
     window.location.href = "index.html";
 }
+
+window.x1Audios = { torcidaM: new Audio(), torcidaV: new Audio(), hino: new Audio(), gol: new Audio(), fim: new Audio(), apito: new Audio() };
+
 
 let dadosUsuario = {};
 window.treinadoresGlobais = {}; // 🟢 Mapeamento global de quem controla quem

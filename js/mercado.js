@@ -517,32 +517,6 @@ function confirmarProposta() {
         `;
     }).catch(erro => console.error("Erro ao enviar proposta:", erro));
 }
-
-window.pagarDividaCompleta = async function(idDivida){
-  if(!confirm('💵 Pagar essa dívida completa agora? O valor será descontado do seu caixa.')) return;
-  const snapDiv = await db.ref(`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`).once('value');
-  const div = snapDiv.val();
-  if(!div) return alert('Dívida não existe mais');
-  if(div.devedor!==dadosUsuario.timeAtual) return alert('Essa dívida não é sua');
-  if(saldoAtual < div.valor_total) return alert(`Saldo insuficiente. Você tem ${formatarDinheiro(saldoAtual)} e precisa de ${formatarDinheiro(div.valor_total)}`);
-  let updates={};
-  updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual - div.valor_total;
-  updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`] = null;
-  // devolve pro credor se for player
-  const snapUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
-  const users = snapUsers.val()||{};
-  let loginCredor = Object.keys(users).find(u=> users[u].timeAtual===div.credor);
-  if(loginCredor){
-    updates[`ligas/${ligaLogada}/usuarios/${loginCredor}/caixaClube`] = (users[loginCredor].caixaClube||0) + div.valor_total;
-  } else if(fundosInvestimentoGlobais[div.credor]){
-    // se credor é Banco, volta pro cofre dele
-    updates[`ligas/${ligaLogada}/banco_investidores/${div.credor}/saldo`] = (fundosInvestimentoGlobais[div.credor].saldo||0) + div.valor_total;
-  }
-  await db.ref().update(updates);
-  alert('✅ Dívida paga!');
-  carregarMundo();
-};
-
 window.pagarParcelaDivida = async function(idDivida){
   const snapDiv = await db.ref(`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`).once('value');
   const div = snapDiv.val();
@@ -733,6 +707,11 @@ window.renderListaTransacoes = function(aba) {
         let htmlBanco = `
             <div id="area-dividas" style="background:#1a0a0a; border:1px solid #dc3545; padding:15px; border-radius:6px; margin-bottom:15px;">
                 <h3 style="color:#dc3545; margin-top:0; font-size:16px;">📉 Minhas Dívidas</h3>
+                <div id="lista-dividas-ativas">Carregando...</div>
+            </div>
+
+            <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
+                <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
                 <div id="lista-dividas-ativas">Carregando...</div>
             </div>
 
@@ -959,9 +938,14 @@ window.aceitarProposta = async function(idAlvo, loginComprador, nomeAlvo) {
 
         let updates = {};
 
-        // 1. O Dinheiro troca de mãos (Igual para Compra ou Empréstimo)
-        updates[`ligas/${ligaLogada}/usuarios/${loginComprador}/caixaClube`] = comprador.caixaClube - lance.valor_oferecido;
-        updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = (dadosUsuario.caixaClube || 0) + lance.valor_oferecido;
+        // 1. Dinheiro com transaction pra não duplicar
+        await db.ref(`ligas/${ligaLogada}/usuarios/${loginComprador}/caixaClube`).transaction(saldo => {
+          if(saldo===null) return saldo;
+          if(saldo < lance.valor_oferecido) { alert('Comprador sem saldo'); return; }
+          return saldo - lance.valor_oferecido;
+        });
+        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`).transaction(s => (s||0)+lance.valor_oferecido);
+        // remove do updates as 2 linhas de caixaClube
 
         // Limpa a mesa de leilão
         updates[`ligas/${ligaLogada}/mercado_propostas/${idAlvo}`] = null;

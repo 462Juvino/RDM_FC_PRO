@@ -13,9 +13,13 @@ const firebaseConfig = {
 
 // Inicializa o Firebase (formato compatível)
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database(); // Conecta ao Realtime Database
-const auth = firebase.auth();   // Conecta ao Sistema de Autenticação
-
+const db = firebase.database();
+const auth = firebase.auth();
+auth.onAuthStateChanged(user => {
+  if(!user &&!localStorage.getItem('treinadorUsuario')){
+    window.location.href="index.html";
+  }
+});
 // ========================================================
 // REFINAMENTO VISUAL GLOBAL: CABEÇALHO FINO E DELICADO
 // ========================================================
