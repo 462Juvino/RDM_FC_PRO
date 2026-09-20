@@ -154,8 +154,13 @@ function gerarLinhaTempoComplexaV2(jogo, forcaM, forcaV, titularesM, titularesV)
             let timeNome = timeAt==="M"? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
             let timeDefNome = timeDef==="M"? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
             // filtra expulsos
-            titulares = titulares.filter(j=>!j.expulso &&!expulsosM.includes(j.nome) &&!expulsosV.includes(j.nome));
-            titularesDef = titularesDef.filter(j=>!j.expulso);
+            if(timeAt==="M"){
+                titulares = titulares.filter(j=>!j.expulso &&!expulsosM.includes(j.nome));
+                titularesDef = titularesDef.filter(j=>!j.expulso &&!expulsosV.includes(j.nome));
+            } else {
+                titulares = titulares.filter(j=>!j.expulso &&!expulsosV.includes(j.nome));
+                titularesDef = titularesDef.filter(j=>!j.expulso &&!expulsosM.includes(j.nome));
+            }
             if(titulares.length===0){ minuto++; continue; }
             let jogador = titulares[Math.floor(Math.random()*titulares.length)];
             let defensor = titularesDef[Math.floor(Math.random()*titularesDef.length)] || {nome:"zagueiro"};

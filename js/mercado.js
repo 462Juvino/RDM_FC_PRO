@@ -543,6 +543,59 @@ window.pagarDividaCompleta = async function(idDivida){
   carregarMundo();
 };
 
+window.pagarParcelaDivida = async function(idDivida){
+  const snapDiv = await db.ref(`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`).once('value');
+  const div = snapDiv.val();
+  if(!div) return alert('Dívida não existe');
+  if(div.devedor!==dadosUsuario.timeAtual) return alert('Não é sua');
+  if(saldoAtual < div.parcela_rodada) return alert(`Saldo insuficiente. Parcela ${formatarDinheiro(div.parcela_rodada)} e você tem ${formatarDinheiro(saldoAtual)}`);
+  if(!confirm(`Pagar 1 parcela de ${formatarDinheiro(div.parcela_rodada)} para ${div.credor.replace(/_/g,' ')}? Restam ${div.rodadas_restantes}`)) return;
+  let novoTotal = div.valor_total - div.parcela_rodada;
+  let novasRodadas = div.rodadas_restantes -1;
+  let updates={};
+  updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual - div.parcela_rodada;
+  // devolve pro credor
+  const snapUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+  const users = snapUsers.val()||{};
+  let loginCredor = Object.keys(users).find(u=> users[u].timeAtual===div.credor);
+  if(loginCredor){
+    updates[`ligas/${ligaLogada}/usuarios/${loginCredor}/caixaClube`] = (users[loginCredor].caixaClube||0) + div.parcela_rodada;
+  } else if(fundosInvestimentoGlobais[div.credor]){
+    updates[`ligas/${ligaLogada}/banco_investidores/${div.credor}/saldo`] = (fundosInvestimentoGlobais[div.credor].saldo||0) + div.parcela_rodada;
+  }
+  if(novoTotal<=0 || novasRodadas<=0){
+    updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`]=null;
+  } else {
+    updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}/valor_total`]=novoTotal;
+    updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}/rodadas_restantes`]=novasRodadas;
+  }
+  await db.ref().update(updates);
+  alert('✅ Parcela paga!');
+  carregarMundo();
+};
+
+window.pagarDividaCompleta = async function(idDivida){
+  const snapDiv = await db.ref(`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`).once('value');
+  const div = snapDiv.val();
+  if(!div) return alert('Dívida não existe');
+  if(saldoAtual < div.valor_total) return alert(`Saldo insuficiente. Precisa ${formatarDinheiro(div.valor_total)}`);
+  if(!confirm(`Pagar TUDO ${formatarDinheiro(div.valor_total)} para ${div.credor.replace(/_/g,' ')}?`)) return;
+  let updates={};
+  updates[`ligas/${ligaLogada}/usuarios/${userLogado}/caixaClube`] = saldoAtual - div.valor_total;
+  updates[`ligas/${ligaLogada}/dividas_financeiras/${idDivida}`]=null;
+  const snapUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
+  const users = snapUsers.val()||{};
+  let loginCredor = Object.keys(users).find(u=> users[u].timeAtual===div.credor);
+  if(loginCredor){
+    updates[`ligas/${ligaLogada}/usuarios/${loginCredor}/caixaClube`] = (users[loginCredor].caixaClube||0) + div.valor_total;
+  } else if(fundosInvestimentoGlobais[div.credor]){
+    updates[`ligas/${ligaLogada}/banco_investidores/${div.credor}/saldo`] = (fundosInvestimentoGlobais[div.credor].saldo||0) + div.valor_total;
+  }
+  await db.ref().update(updates);
+  alert('✅ Dívida quitada!');
+  carregarMundo();
+};
+
 function formatarDinheiro(valor) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 }
@@ -679,12 +732,12 @@ window.renderListaTransacoes = function(aba) {
 
         let htmlBanco = `
             <div id="area-dividas" style="background:#1a0a0a; border:1px solid #dc3545; padding:15px; border-radius:6px; margin-bottom:15px;">
-                <h3 style="color:#dc3545; margin-top:0; font-size:16px;">📉 Minhas Dívidas - Pagar Primeiro</h3>
-                <div id="lista-dividas-ativas" style="font-size:12px; color:#ccc;">Carregando dívidas...</div>
+                <h3 style="color:#dc3545; margin-top:0; font-size:16px;">📉 Minhas Dívidas</h3>
+                <div id="lista-dividas-ativas">Carregando...</div>
             </div>
 
             <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
-                <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre</h3>
+                <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <span style="color:#ccc; font-size:14px;">Guardado:</span>
                     <strong style="color:#fff; font-size:18px;">${formatarDinheiro(meuSaldoCofre)}</strong>
@@ -696,10 +749,10 @@ window.renderListaTransacoes = function(aba) {
             </div>
 
             <h3 style="color:#ff8c00; font-size:14px; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">🤝 Bancos para Pegar Emprestado</h3>
-            <p style="color:#666; font-size:11px;">Depois de pagar, pegue emprestado aqui.</p>
+            <p style="color:#666; font-size:11px;">Clubes com dinheiro no cofre.</p>
         `;
 
-        // DÍVIDAS CARREGA AGORA - PRIMEIRO
+        // DÍVIDAS - 1 PARCELA + TOTAL - ÚNICO LOADER
         db.ref(`ligas/${ligaLogada}/dividas_financeiras`).once('value').then(snapDiv=>{
           const dividas = snapDiv.val()||{};
           let htmlDiv='';
@@ -708,9 +761,12 @@ window.renderListaTransacoes = function(aba) {
             let d=dividas[id];
             if(d.devedor!==meuTime) continue;
             tem=true;
-            htmlDiv+=`<div style="background:#111; border:1px solid #dc3545; padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-              <div style="color:#ccc; font-size:12px;">💸 Para <strong style="color:#fff;">${d.credor.replace(/_/g,' ')}</strong><br>Total: ${formatarDinheiro(d.valor_total)}<br>Parcela: ${formatarDinheiro(d.parcela_rodada)} | Restam: <strong style="color:#ff8c00;">${d.rodadas_restantes} rod</strong></div>
-              <button onclick="pagarDividaCompleta('${id}')" style="padding:8px 12px; background:#00b853; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">💵 Pagar</button>
+            htmlDiv+=`<div style="background:#111; border:1px solid #dc3545; padding:10px; border-radius:6px; margin-bottom:8px;">
+              <div style="color:#ccc; font-size:12px;">💸 Para <strong style="color:#fff;">${d.credor.replace(/_/g,' ')}</strong><br>Total: ${formatarDinheiro(d.valor_total)} | Parcela: ${formatarDinheiro(d.parcela_rodada)} | Restam: <strong style="color:#ff8c00;">${d.rodadas_restantes} rod</strong></div>
+              <div style="display:flex; gap:6px; margin-top:8px;">
+                <button onclick="pagarParcelaDivida('${id}')" style="flex:1; padding:6px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pagar 1 Parcela</button>
+                <button onclick="pagarDividaCompleta('${id}')" style="flex:1; padding:6px; background:#00b853; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Quitar Tudo</button>
+              </div>
             </div>`;
           }
           if(!tem) htmlDiv='<p style="color:#666; font-size:11px;">Nenhuma dívida.</p>';
@@ -735,26 +791,33 @@ window.renderListaTransacoes = function(aba) {
             </div>`;
         }
 
-        // LISTA SUAS DÍVIDAS
-        htmlBanco += `<h3 style="color:#dc3545; font-size:14px; margin-top:20px; border-bottom:1px solid #333; padding-bottom:5px;">📉 Minhas Dívidas</h3>`;
-        db.ref(`ligas/${ligaLogada}/dividas_financeiras`).once('value').then(snapDiv=>{
-          const dividas = snapDiv.val()||{};
-          let htmlDiv = '';
-          for(let id in dividas){
-            let d = dividas[id];
-            if(d.devedor!== meuTime) continue;
-            htmlDiv += `<div style="background:#1a1a1a; border:1px solid #dc3545; padding:8px; border-radius:6px; margin-bottom:8px; font-size:12px; color:#ccc;">
-              💸 Deve para <strong style="color:#fff;">${d.credor.replace(/_/g,' ')}</strong><br>
-              Total: ${formatarDinheiro(d.valor_total)} | Parcela: ${formatarDinheiro(d.parcela_rodada)}<br>
-              Restam: <strong style="color:#ff8c00;">${d.rodadas_restantes} rodadas</strong> (desconta automático todo jogo 19h)
-            </div>`;
-          }
-          if(!htmlDiv) htmlDiv = `<p style="color:#666; font-size:11px;">Nenhuma dívida. Você está limpo.</p>`;
-          document.getElementById('lista-dividas-render')?.insertAdjacentHTML('beforeend', htmlDiv);
-        });
-        htmlBanco += `<div id="lista-dividas-render"></div>`;
+
 
         div.innerHTML = htmlBanco;
+
+        // Carrega dívidas primeiro
+        db.ref(`ligas/${ligaLogada}/dividas_financeiras`).once('value').then(snapDiv=>{
+          const dividas = snapDiv.val()||{};
+          let htmlDiv='';
+          let tem=false;
+          for(let id in dividas){
+            let d=dividas[id];
+            if(d.devedor!==meuTime) continue;
+            tem=true;
+            htmlDiv+=`<div style="background:#111; border:1px solid #dc3545; padding:10px; border-radius:6px; margin-bottom:8px;">
+              <div style="font-size:12px; color:#ccc;">💸 Para <strong style="color:#fff;">${d.credor.replace(/_/g,' ')}</strong><br>
+              Total: ${formatarDinheiro(d.valor_total)} | Parcela: ${formatarDinheiro(d.parcela_rodada)} | Restam: <strong style="color:#ff8c00;">${d.rodadas_restantes}</strong></div>
+              <div style="display:flex; gap:6px; margin-top:8px;">
+                <button onclick="pagarParcelaDivida('${id}')" style="flex:1; padding:6px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pagar 1 Parcela</button>
+                <button onclick="pagarDividaCompleta('${id}')" style="flex:1; padding:6px; background:#00b853; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Pagar Tudo</button>
+              </div>
+            </div>`;
+          }
+          if(!tem) htmlDiv='<p style="color:#666; font-size:11px;">Nenhuma dívida. Você está limpo.</p>';
+          let el = document.getElementById('lista-dividas-ativas');
+          if(el) el.innerHTML=htmlDiv;
+        });
+
         return;
     }
 
