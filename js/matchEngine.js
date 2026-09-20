@@ -116,13 +116,42 @@ function iniciarTransmissao() {
         renderizarPartida();
     });
 
-    // 🟢 GATILHO AUTOMÁTICO: Atualiza a tela sozinho a cada 5 segundos.
-    // Assim, quando der 19:00 exatas, o botão aparece sem precisar dar F5!
+    // GATILHO: só atualiza se NÃO estiver narrando ao vivo
     if (!window.loopDestravaTV) {
         window.loopDestravaTV = setInterval(() => {
-            if (calGlobal) renderizarPartida();
-        }, 5000);
+            if (calGlobal &&!window.narrandoAoVivo) renderizarPartida();
+        }, 10000);
     }
+}
+
+let ultimoJogoNarrado = null;
+function reproduzirLinhaDoTempo(linha, horaInicio, pm, pv){
+    if(ultimoJogoNarrado === meuJogoId && document.getElementById('narracao-container')?.children.length>0) return; // já está narrando
+    ultimoJogoNarrado = meuJogoId;
+    window.narrandoAoVivo = true;
+    let el = document.getElementById('narracao-container');
+    if(el) el.innerHTML = '';
+    let idx=0;
+    placarNarracaoM = 0; placarNarracaoV = 0;
+    function tocarProx(){
+        if(idx>=linha.length){ window.narrandoAoVivo=false; return; }
+        let ev = linha[idx];
+        if(el){
+            let div = document.createElement('div');
+            div.style.cssText = "border-left:3px solid "+(ev.tipo.includes('gol')?'gold':'#444')+"; padding:5px 10px; margin:5px 0; background:#111;";
+            div.innerHTML = `<strong>${ev.minuto}'</strong> - ${ev.texto}`;
+            el.appendChild(div); // append, não prepend, pra linha do tempo ir na ordem
+            if(ev.tipo.includes('gol')){
+                if(ev.tipo.includes('mandante')) placarNarracaoM++; else placarNarracaoV++;
+                document.getElementById('gols-mandante').innerText = placarNarracaoM;
+                document.getElementById('gols-visitante').innerText = placarNarracaoV;
+                mostrarLetreiroGol(ev.texto.includes('MANDANTE')||ev.texto.includes(jogoAtual.mandante.replace(/_/g,' '))? jogoAtual.mandante : jogoAtual.visitante);
+            }
+        }
+        idx++;
+        setTimeout(tocarProx, 1500);
+    }
+    tocarProx();
 }
 
 window.mudarRodadaTransmissao = function(novaRodada) {
@@ -473,86 +502,6 @@ function processarNarradorOficial() {
         setTimeout(() => { atualizarTorcidasOficiais(); narradorOficialOcupado = false; processarNarradorOficial(); }, 3500);
     }
 }
-
-function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFinal) {
-    if (window.transmissaoOficialLoop) clearInterval(window.transmissaoOficialLoop);
-
-    // MÁGICA: Se o cara entrou 1 minuto atrasado, descarrega os gols velhos instantaneamente na tela!
-    const diferencaMsInit = Date.now() - horaInicioTstamp;
-    let minutoInicial = Math.max(0, Math.floor(diferencaMsInit / 1333));
-
-    let lancesPassados = linha.filter(l => l.minuto <= minutoInicial);
-    lancesPassados.forEach(evento => {
-        let idEvento = `${evento.minuto}_${evento.tipo}`;
-        if (!eventosJaTocados.has(idEvento)) {
-            eventosJaTocados.add(idEvento);
-            let cor = '#ccc';
-            if (evento.tipo.includes('ataque_mandante')) cor = 'var(--verde-campo)';
-            if (evento.tipo.includes('ataque_visitante')) cor = '#ffc107';
-            if (evento.tipo.includes('gol_mandante')) cor = 'var(--verde-campo)';
-            if (evento.tipo.includes('gol_visitante')) cor = '#dc3545';
-            if (evento.tipo === 'penaltis') cor = '#ff8c00';
-            if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
-
-            let escudoID = evento.tipo.includes("mandante") ? jogoAtual.mandante : jogoAtual.visitante;
-            let escudoHTML = `<img src="${getEscudo(escudoID)}" onerror="this.src='esculdos/default.png'" class="escudo-mini">`;
-
-            adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
-
-            if (evento.tipo.includes('gol_mandante')) placarNarracaoM++;
-            if (evento.tipo.includes('gol_visitante')) placarNarracaoV++;
-        }
-    });
-
-    document.getElementById('gols-mandante').innerText = placarNarracaoM;
-    document.getElementById('gols-visitante').innerText = placarNarracaoV;
-    document.getElementById('tempo-jogo').innerText = minutoInicial + "'";
-
-    // INICIA O CRONÔMETRO AO VIVO A PARTIR DO MINUTO ATUAL
-    window.transmissaoOficialLoop = setInterval(() => {
-        if (narradorOficialOcupado) return; // Se estiver tocando Hino, o cronômetro trava!
-
-        const diferencaMs = Date.now() - horaInicioTstamp;
-        let minutoAtualJogo = Math.floor(diferencaMs / 1333);
-
-        if (minutoAtualJogo > 95) {
-            clearInterval(window.transmissaoOficialLoop);
-            document.getElementById('tempo-jogo').innerText = "FIM";
-            document.getElementById('tempo-jogo').style.color = "#dc3545";
-            document.getElementById('gols-mandante').innerText = placarMFinal;
-            document.getElementById('gols-visitante').innerText = placarVFinal;
-
-            if(!eventosJaTocados.has("fim") && audioLiberado) {
-                canalEfeitos.src = 'sounds/final_do_jogo.mp3'; canalEfeitos.play().catch(()=>{});
-                canalTorcidaM.volume = 0.1; canalTorcidaV.volume = 0.1;
-
-                setTimeout(() => {
-                    if (placarMFinal !== placarVFinal) { // 🟢 Toca o hino apenas se não for empate!
-                        let somCampeao = (placarMFinal > placarVFinal) ? getHino(jogoAtual.mandante) : getHino(jogoAtual.visitante);
-                        canalHino.src = somCampeao; canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
-                        canalHino.play().catch(()=>{});
-                    }
-                }, 1500);
-                eventosJaTocados.add("fim");
-            }
-            return;
-        }
-
-        document.getElementById('tempo-jogo').innerText = minutoAtualJogo + "'";
-
-        let lancesAgora = linha.filter(l => l.minuto === minutoAtualJogo);
-        lancesAgora.forEach(evento => {
-            let idEvento = `${evento.minuto}_${evento.tipo}`;
-            if (!eventosJaTocados.has(idEvento)) {
-                eventosJaTocados.add(idEvento);
-                filaNarracaoOficial.push(evento);
-            }
-        });
-
-        processarNarradorOficial();
-    }, 300); // Roda rápido para injetar os lances na fila instantaneamente!
-}
-
 function adicionarNarraçao(tempo, texto, cor = "#ccc", escudoID = null) {
     const narracao = document.getElementById('narracao-container');
     if(!narracao) return;
@@ -631,99 +580,7 @@ function processarNarradorOficial() {
 let oficialLoopTimeout;
 window.velocidadeSimulacao = 1;
 
-function reproduzirLinhaDoTempo(linha, horaInicioTstamp, placarMFinal, placarVFinal) {
-    if (oficialLoopTimeout) clearTimeout(oficialLoopTimeout);
 
-    const diferencaMsInit = Date.now() - horaInicioTstamp;
-    let minutoInicial = Math.max(0, Math.floor(diferencaMsInit / 1333));
-
-    let lancesPassados = linha.filter(l => l.minuto <= minutoInicial);
-    lancesPassados.forEach(evento => {
-        let idEvento = `${evento.minuto}_${evento.tipo}`;
-        if (!eventosJaTocados.has(idEvento)) {
-            eventosJaTocados.add(idEvento);
-            let cor = '#ccc';
-            if (evento.tipo.includes('ataque_mandante')) cor = 'var(--verde-campo)';
-            if (evento.tipo.includes('ataque_visitante')) cor = '#ffc107';
-            if (evento.tipo.includes('gol_mandante')) cor = 'var(--verde-campo)';
-            if (evento.tipo.includes('gol_visitante')) cor = '#dc3545';
-            if (evento.tipo === 'penaltis') cor = '#ff8c00';
-            if (evento.tipo === 'intervalo' || evento.tipo === 'inicio') cor = '#007bff';
-
-            let escudoID = evento.tipo.includes("mandante") ? jogoAtual.mandante : jogoAtual.visitante;
-            adicionarNarraçao(`${evento.minuto}'`, evento.texto, cor, (evento.tipo !== 'intervalo' && evento.tipo !== 'inicio' && evento.tipo !== 'penaltis') ? escudoID : null);
-
-            if (evento.tipo.includes('gol_mandante')) placarNarracaoM++;
-            if (evento.tipo.includes('gol_visitante')) placarNarracaoV++;
-        }
-    });
-
-    document.getElementById('gols-mandante').innerText = placarNarracaoM;
-    document.getElementById('gols-visitante').innerText = placarNarracaoV;
-    document.getElementById('tempo-jogo').innerText = minutoInicial + "'";
-
-    // ⌚ LOOP DINÂMICO
-    function tickRelogioOficial() {
-        if (narradorOficialOcupado) {
-            oficialLoopTimeout = setTimeout(tickRelogioOficial, 100);
-            return;
-        }
-
-        let velo = window.velocidadeSimulacao || 1;
-        const diferencaMs = Date.now() - horaInicioTstamp;
-
-        // Se estiver acelerado, simulamos o tempo passando mais rápido internamente
-        let minutoAtualJogo;
-        if (velo > 1) {
-            minutoAtualJogo = parseInt(document.getElementById('tempo-jogo').innerText) || 0;
-            minutoAtualJogo++;
-        } else {
-            minutoAtualJogo = Math.floor(diferencaMs / 1333);
-        }
-
-        if (minutoAtualJogo > 95) {
-            document.getElementById('tempo-jogo').innerText = "FIM";
-            document.getElementById('tempo-jogo').style.color = "#dc3545";
-            document.getElementById('gols-mandante').innerText = placarMFinal;
-            document.getElementById('gols-visitante').innerText = placarVFinal;
-
-            let statusTransmissao = document.getElementById('status-transmissao');
-            if(statusTransmissao) {
-                statusTransmissao.innerText = "Partida Encerrada 🏁";
-                statusTransmissao.style.animation = "none";
-            }
-
-            if(!eventosJaTocados.has("fim") && audioLiberado && velo === 1) {
-                canalEfeitos.src = 'sounds/final_do_jogo.mp3'; canalEfeitos.play().catch(()=>{});
-                canalTorcidaM.volume = 0.1; canalTorcidaV.volume = 0.1;
-
-                setTimeout(() => {
-                    let somCampeao = (placarMFinal > placarVFinal) ? getHino(jogoAtual.mandante) : getHino(jogoAtual.visitante);
-                    canalHino.src = somCampeao; canalHino.currentTime = 0; canalHino.volume = 0.2; canalHino.loop = true;
-                    canalHino.play().catch(()=>{});
-                }, 1500);
-                eventosJaTocados.add("fim");
-            }
-            return;
-        }
-
-        document.getElementById('tempo-jogo').innerText = minutoAtualJogo + "'";
-
-        let lancesAgora = linha.filter(l => l.minuto === minutoAtualJogo);
-        lancesAgora.forEach(evento => {
-            let idEvento = `${evento.minuto}_${evento.tipo}`;
-            if (!eventosJaTocados.has(idEvento)) {
-                eventosJaTocados.add(idEvento);
-                filaNarracaoOficial.push(evento);
-            }
-        });
-
-        processarNarradorOficial();
-        oficialLoopTimeout = setTimeout(tickRelogioOficial, velo === 1 ? 300 : 150 / velo);
-    }
-
-    tickRelogioOficial();
-}
 
 function adicionarNarraçao(tempo, texto, cor = "#ccc", escudoID = null) {
     const narracao = document.getElementById('narracao-container');
@@ -1015,9 +872,10 @@ function gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV
     return {linha: unicos, golsM, golsV, substituicoes, cartoes, expulsos, lesoes};
 }
 
-// Função chamada pelo botão da partida.html
 window.gerarPartida = async function(idJ, chave, isMataMata){
     try{
+        if(window._travouSimulacao) return;
+        window._travouSimulacao = true;
         let snapCal = await db.ref(`ligas/${ligaLogada}/calendario`).once('value');
         let cal = snapCal.val();
         let snapUsers = await db.ref(`ligas/${ligaLogada}/usuarios`).once('value');
@@ -1025,136 +883,60 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
         let snapTimes = await db.ref('banco_global_times').once('value');
         let times = snapTimes.val()||{};
 
-        let jogo = null; let caminhoDivisao="";
-        if(isMataMata){
-            jogo = cal.copa[chave][idJ]; caminhoDivisao = `copa/${chave}`;
-        } else {
-            if(cal.serieA && cal.serieA[chave] && cal.serieA[chave][idJ]){ jogo = cal.serieA[chave][idJ]; caminhoDivisao = `serieA/${chave}`; }
-            else if(cal.serieB && cal.serieB[chave] && cal.serieB[chave][idJ]){ jogo = cal.serieB[chave][idJ]; caminhoDivisao = `serieB/${chave}`; }
-        }
-        if(!jogo || jogo.jogado) return alert("Jogo já realizado!");
-
         function getTitulares(timeId){
             let donoLogin = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===timeId);
             let dono = donoLogin? usuarios[donoLogin] : null;
-            let titularesIds = dono?.titulares||[];
             let elenco = times[timeId]?.jogadores||{};
-            if(titularesIds.length===0){
-                return montarEscalacaoIAInteligente(timeId, elenco);
-            }
-            let titularesReais = titularesIds.map(id=> { let j = elenco[id]; return j? {...j, id} : null; }).filter(j=>j);
-            if(titularesReais.length < 11){
-                return montarEscalacaoIAInteligente(timeId, elenco);
-            }
-            return titularesReais;
+            if((dono?.titulares||[]).length<11) return montarEscalacaoIAInteligente(timeId, elenco);
+            let reais = (dono.titulares||[]).map(id=> elenco[id]? {...elenco[id], id}:null).filter(j=>j&&j.atributos);
+            return reais.length>=11? reais : montarEscalacaoIAInteligente(timeId, elenco);
         }
 
-        // FIX P2P: Simula TODOS os jogos da rodada - usa divisão do jogo atual
-        let jogosParaSimular = [];
-        let divisaoCal = null;
-        if(isMataMata) divisaoCal = cal.copa;
-        else if(caminhoDivisao.startsWith('serieA')) divisaoCal = cal.serieA;
-        else if(caminhoDivisao.startsWith('serieB')) divisaoCal = cal.serieB;
-        else divisaoCal = cal.serieA || cal.serieB;
-        if(divisaoCal && divisaoCal[chave]){
-            for(let jId in divisaoCal[chave]){
-                let j = divisaoCal[chave][jId];
-                if(!j.jogado) jogosParaSimular.push({id: jId, dados: j, div: cal.serieA && cal.serieA[chave]? 'serieA' : 'serieB'});
+        let jogosParaSimular=[];
+        if(isMataMata){
+            for(let j in (cal.copa?.[chave]||{})){
+                if(!cal.copa[chave][j].jogado) jogosParaSimular.push({id:j, caminho:`copa/${chave}`});
+            }
+        } else {
+            let divNome = cal.serieA && cal.serieA[chave]? 'serieA':'serieB';
+            let divObj = divNome==='serieA'? cal.serieA:cal.serieB;
+            for(let j in (divObj?.[chave]||{})){
+                if(!divObj[chave][j].jogado) jogosParaSimular.push({id:j, caminho:`${divNome}/${chave}`});
             }
         }
+        if(jogosParaSimular.length===0){ window._travouSimulacao=false; return alert("Rodada já realizada!"); }
 
-        let titularesM = getTitulares(jogo.mandante).filter(j=> j && j.atributos);
-        let titularesV = getTitulares(jogo.visitante).filter(j=> j && j.atributos);
-        // Se vier vazio, usa elenco completo pra não ficar 0x0
-        if(titularesM.length===0) titularesM = Object.values(times[jogo.mandante]?.jogadores||{}).slice(0,11);
-        if(titularesV.length===0) titularesV = Object.values(times[jogo.visitante]?.jogadores||{}).slice(0,11);
+        let updates={};
+        let tsAgora=Date.now();
 
-        let donoMLogin = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===jogo.mandante);
-        let donoVLogin = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===jogo.visitante);
-        let donoM = donoMLogin? usuarios[donoMLogin] : null;
-        let donoV = donoVLogin? usuarios[donoVLogin] : null;
-
-        let forcaM = calcularForcaTime(titularesM, donoM?.mentalidade||"Equilibrado", donoM?.estilo||"Equilibrado", donoM?.moral||50, true, donoM?.ct_ativo, donoM?.escudo_rodada);
-        let forcaV = calcularForcaTime(titularesV, donoV?.mentalidade||"Equilibrado", donoV?.estilo||"Equilibrado", donoV?.moral||50, false, donoV?.ct_ativo, donoV?.escudo_rodada);
-
-        let res = gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV, forcaM, forcaV);
-
-        let updates = {};
-        let tsAgora = Date.now();
-
-        // Fadiga: titulares 1%, substituídos 0.5%
-        function aplicarFadiga(timeId, titularesJogados, substituicoesInfo){
-            let elenco = times[timeId]?.jogadores||{};
-            for(let id in elenco){
-                let j = elenco[id];
-                let ehTitular = titularesJogados.some(t=> t.nome===j.nome || t.id===id);
-                let seq = j.jogos_seguidos||0;
-                let novaFadiga = j.fadiga||0;
-                if(ehTitular){
-                    seq += 1;
-                    let foiSubstituido = res.linha.some(e=> e.tipo==="substituicao" && e.texto.includes(j.nome) && e.texto.includes("Sai"));
-                    let add = foiSubstituido? 0.3 : (seq<=2? 0 : (seq===3? 0.5 : 1));
-                    novaFadiga += add;
-                    if(novaFadiga>25) novaFadiga=25;
-                    updates[`banco_global_times/${timeId}/jogadores/${id}/jogos_seguidos`] = seq;
-                    updates[`banco_global_times/${timeId}/jogadores/${id}/fadiga`] = novaFadiga;
-                } else {
-                    seq = 0;
-                    novaFadiga -= 1.5;
-                    if(novaFadiga<0) novaFadiga=0;
-                    updates[`banco_global_times/${timeId}/jogadores/${id}/jogos_seguidos`] = seq;
-                    updates[`banco_global_times/${timeId}/jogadores/${id}/fadiga`] = novaFadiga;
-                }
-            }
-        }
-        aplicarFadiga(jogo.mandante, titularesM, res.substituicoes.M);
-        aplicarFadiga(jogo.visitante, titularesV, res.substituicoes.V);
-
-        // Moral
-        if(res.golsM > res.golsV){
-            if(donoMLogin) updates[`ligas/${ligaLogada}/usuarios/${donoMLogin}/moral`] = Math.min(100, (usuarios[donoMLogin].moral||50)+5);
-            if(donoVLogin) updates[`ligas/${ligaLogada}/usuarios/${donoVLogin}/moral`] = Math.max(0, (usuarios[donoVLogin].moral||50)-5);
-        } else if(res.golsV > res.golsM){
-            if(donoVLogin) updates[`ligas/${ligaLogada}/usuarios/${donoVLogin}/moral`] = Math.min(100, (usuarios[donoVLogin].moral||50)+5);
-            if(donoMLogin) updates[`ligas/${ligaLogada}/usuarios/${donoMLogin}/moral`] = Math.max(0, (usuarios[donoMLogin].moral||50)-5);
-        }
-
-        // Renda mandante
-        let pub = 15000 + ((usuarios[donoMLogin]?.moral||50)*400);
-        let ren = pub*60;
-        if(donoMLogin) updates[`ligas/${ligaLogada}/usuarios/${donoMLogin}/caixaClube`] = (usuarios[donoMLogin].caixaClube||0)+ren;
-        res.linha.unshift({minuto:0, tipo:"renda", texto:`🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes) - Mando: +10% força`});
-
-        jogo.linhaDoTempo = res.linha;
-        jogo.horaInicio = tsAgora;
-        jogo.placarMandante = res.golsM;
-        jogo.placarVisitante = res.golsV;
-        jogo.jogado = true;
-        updates[`ligas/${ligaLogada}/calendario/${caminhoDivisao}/${idJ}`] = jogo;
-
-        // P2P: Simula os outros jogos da mesma rodada que ainda não foram jogados (IA x IA)
         for(let item of jogosParaSimular){
-            if(item.id === idJ) continue;
-            let outroJogo = item.dados;
-            let titM2 = getTitulares(outroJogo.mandante);
-            let titV2 = getTitulares(outroJogo.visitante);
-            let donoM2Login = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===outroJogo.mandante);
-            let donoV2Login = Object.keys(usuarios).find(u=> usuarios[u].timeAtual===outroJogo.visitante);
-            let donoM2 = donoM2Login? usuarios[donoM2Login] : null;
-            let donoV2 = donoV2Login? usuarios[donoV2Login] : null;
-            let fM2 = calcularForcaTime(titM2, donoM2?.mentalidade||"Equilibrado", donoM2?.estilo||"Equilibrado", donoM2?.moral||50, true, donoM2?.ct_ativo, donoM2?.escudo_rodada);
-            let fV2 = calcularForcaTime(titV2, donoV2?.mentalidade||"Equilibrado", donoV2?.estilo||"Equilibrado", donoV2?.moral||50, false, donoV2?.ct_ativo, donoV2?.escudo_rodada);
-            let res2 = gerarLinhaDoTempoComplexa(outroJogo, times, usuarios, titM2, titV2, fM2, fV2);
-            outroJogo.linhaDoTempo = res2.linha;
-            outroJogo.horaInicio = tsAgora;
-            outroJogo.placarMandante = res2.golsM;
-            outroJogo.placarVisitante = res2.golsV;
-            outroJogo.jogado = true;
-            updates[`ligas/${ligaLogada}/calendario/${item.div}/${chave}/${item.id}`] = outroJogo;
-        }
+            let caminhoDivisao=item.caminho;
+            let idJAtual=item.id;
+            let jogo = isMataMata? cal.copa[chave][idJAtual] : (caminhoDivisao.startsWith('serieA')? cal.serieA[chave][idJAtual] : cal.serieB[chave][idJAtual]);
+            if(!jogo || jogo.jogado) continue;
 
+            let titularesM=getTitulares(jogo.mandante);
+            let titularesV=getTitulares(jogo.visitante);
+            let donoMLogin=Object.keys(usuarios).find(u=> usuarios[u].timeAtual===jogo.mandante);
+            let donoVLogin=Object.keys(usuarios).find(u=> usuarios[u].timeAtual===jogo.visitante);
+            let donoM=donoMLogin? usuarios[donoMLogin]:null;
+            let donoV=donoVLogin? usuarios[donoVLogin]:null;
+            let forcaM=calcularForcaTime(titularesM, donoM?.mentalidade||"Equilibrado", donoM?.estilo||"Equilibrado", donoM?.moral||50, true, donoM?.ct_ativo, donoM?.escudo_rodada);
+            let forcaV=calcularForcaTime(titularesV, donoV?.mentalidade||"Equilibrado", donoV?.estilo||"Equilibrado", donoV?.moral||50, false, donoV?.ct_ativo, donoV?.escudo_rodada);
+            let res=gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV, forcaM, forcaV);
+
+            jogo.linhaDoTempo=res.linha;
+            jogo.horaInicio=tsAgora;
+            jogo.placarMandante=res.golsM;
+            jogo.placarVisitante=res.golsV;
+            jogo.jogado=true;
+            updates[`ligas/${ligaLogada}/calendario/${caminhoDivisao}/${idJAtual}`]=jogo;
+        }
         await db.ref().update(updates);
-    }catch(e){ console.error(e); alert("Erro: "+e.message); }
+        window._travouSimulacao=false;
+        alert(`✅ ${jogosParaSimular.length} jogos simulados!`);
+        location.reload();
+    }catch(e){ window._travouSimulacao=false; console.error(e); alert("Erro: "+e.message); }
 };
 
 // IA INTELIGENTE - monta melhor 11 considerando fadiga
@@ -1181,33 +963,6 @@ function montarEscalacaoIAInteligente(timeId, elencoObj){
         if(restantes[0]) titulares.push(restantes[0]); else break;
     }
     return titulares.slice(0,11);
-}
-
-// Funções auxiliares de narração e placar (mantidas do original)
-function reproduzirLinhaDoTempo(linha, horaInicio, pm, pv){
-    let el = document.getElementById('narracao-container');
-    if(el) el.innerHTML = '';
-    linha = [...linha].sort((a,b)=>a.minuto-b.minuto);
-    let idx=0;
-    function tocarProx(){
-        if(idx>=linha.length) return;
-        let ev = linha[idx];
-        if(el){
-            let div = document.createElement('div');
-            div.style.cssText = "border-left:3px solid "+(ev.tipo.includes('gol')?'gold':'#444')+"; padding:5px 10px; margin:5px 0; background:#111;";
-            div.innerHTML = `<strong>${ev.minuto}'</strong> - ${ev.texto}`;
-            el.appendChild(div);
-            el.scrollTop = el.scrollHeight;
-            if(ev.tipo.includes('gol')){
-                if(ev.tipo.includes('mandante')) placarNarracaoM++; else placarNarracaoV++;
-                atualizarTorcidasOficiais();
-                mostrarLetreiroGol(ev.texto.includes('MANDANTE')?'mandante':'visitante');
-            }
-        }
-        idx++;
-        setTimeout(tocarProx, 2000);
-    }
-    tocarProx();
 }
 window.mostrarLetreiroGol = function(nomeTime) {
     let div = document.createElement('div');
