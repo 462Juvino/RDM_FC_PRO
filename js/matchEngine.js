@@ -640,236 +640,194 @@ function deslogar() {
     window.location.href = "index.html";
 }
 
-// ========================================================
-// 🧠 GERADOR P2P: O PRIMEIRO QUE CLICA SIMULA O JOGO E SALVA NA NUVEM!
-// ========================================================
-
-
-// ====== MOTOR V2 COMPLEXO INJETADO - MANTENDO TUDO ANTIGO ======
 // ==========================================
-// NOVO MOTOR COMPLEXO
+// 🧠 MOTOR DE SIMULAÇÃO TÁTICA (ESTILO OSM)
 // ==========================================
 
 function calcularForcaRealJogador(j){
-    let at = j.atributos||{ataque:5,defesa:5,forca:5,velocidade:5,habilidade:5};
-    let base = (at.ataque+at.defesa+at.forca+at.velocidade+at.habilidade)/5;
-    let fadiga = j.fadiga||0;
-    let mult = 1 - (fadiga*0.006);
-    if(mult<0.6) mult=0.6;
-    return base*mult;
+    let at = j.atributos || {ataque:5, defesa:5, forca:5, velocidade:5, habilidade:5};
+    let base = (at.ataque + at.defesa + at.forca + at.velocidade + at.habilidade) / 5;
+    let fadiga = j.fadiga || 0;
+    let mult = 1 - (fadiga * 0.006); // Fadiga penaliza duramente
+    return Math.max(base * mult, base * 0.6); // Máximo de 40% de perda por fadiga
 }
 
-function calcularForcaTime(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo){
-    let forcaAtaque=0, forcaDefesa=0, forcaMeio=0;
-    titulares.forEach(j=>{
-        let at = j.atributos||{};
+function calcularForcaTime(titulares, mentalidade, estilo, moral, isMandante, ctAtivo, escudoAtivo) {
+    let atk = 0, def = 0, meio = 0;
+    let numJogadores = titulares.length || 1;
+
+    // 1. Cálculo Base Setorizado
+    titulares.forEach(j => {
         let fReal = calcularForcaRealJogador(j);
-        let pos = j.posicoes?.p||"Meia";
-        if(["Atacante","Centroavante","Ponta"].includes(pos)){
-            forcaAtaque += (at.ataque*1.5 + at.velocidade + at.habilidade)/3 * (fReal/10);
-        } else if(["Zagueiro","Lateral","Goleiro"].includes(pos)){
-            forcaDefesa += (at.defesa*1.5 + at.forca + at.velocidade*0.5)/3 * (fReal/10);
-        } else {
-            forcaMeio += (at.habilidade*1.2 + at.ataque*0.8 + at.defesa*0.8)/3 * (fReal/10);
+        let pos = j.posicoes?.p || "Meia";
+
+        if (["Atacante", "Centroavante", "Ponta"].includes(pos)) {
+            atk += fReal * 1.6;
+            meio += fReal * 0.3;
+        } else if (["Zagueiro", "Lateral"].includes(pos)) {
+            def += fReal * 1.6;
+            meio += fReal * 0.2;
+        } else if (pos === "Goleiro") {
+            def += fReal * 2.0; // Goleiro tem peso duplo na Defesa
+        } else { // Meia, Volante
+            meio += fReal * 1.5;
+            atk += fReal * 0.5;
+            def += fReal * 0.5;
         }
     });
-    // Mentalidade
-    if(mentalidade==="Ofensivo"){ forcaAtaque*=1.25; forcaDefesa*=0.85; }
-    else if(mentalidade==="Defensivo"){ forcaAtaque*=0.85; forcaDefesa*=1.25; }
-    else if(mentalidade==="Equilibrado"){ forcaAtaque*=1.05; forcaDefesa*=1.05; }
 
-    // Estilo
-    if(estilo==="Posse de Bola"){ forcaMeio*=1.3; forcaAtaque*=1.1; }
-    else if(estilo==="Contra-Ataque"){ forcaAtaque*=1.2; forcaDefesa*=1.1; forcaMeio*=0.9; }
-    else if(estilo==="Bola Longa"){ forcaAtaque*=1.15; forcaDefesa*=1.05; }
+    // Tira a média para não bugar o motor
+    atk = atk / (numJogadores/11);
+    def = def / (numJogadores/11);
+    meio = meio / (numJogadores/11);
 
-    // Moral
-    let multMoral = 0.7 + (moral/100)*0.6; // 50 moral = 1.0, 100 = 1.3, 0 = 0.7
-    forcaAtaque*=multMoral; forcaDefesa*=multMoral; forcaMeio*=multMoral;
+    // 2. Modificadores de Tática (Pedra, Papel e Tesoura)
+    if (mentalidade === "Ofensivo" || mentalidade === "Ultra Ofensiva") { atk *= 1.30; def *= 0.80; }
+    else if (mentalidade === "Defensivo" || mentalidade === "Retranca") { atk *= 0.80; def *= 1.30; }
 
-    // Mando + Clima/Estádio +10%
-    if(isMandante){ forcaAtaque*=1.10; forcaDefesa*=1.10; forcaMeio*=1.10; }
+    if (estilo === "Posse de Bola") { meio *= 1.30; atk *= 1.05; }
+    else if (estilo === "Contra-Ataque") { atk *= 1.20; def *= 1.15; meio *= 0.80; }
 
-    // CT e Escudo
-    if(ctAtivo){ forcaAtaque*=1.05; forcaDefesa*=1.05; forcaMeio*=1.05; }
-    if(escudoAtivo){ forcaAtaque*=1.08; forcaDefesa*=1.08; }
+    // 3. Modificadores de Condição (Moral e Mando de Campo)
+    let multMoral = 0.6 + (moral/100) * 0.6; // 0 moral = 0.6x, 100 moral = 1.2x
+    atk *= multMoral; def *= multMoral; meio *= multMoral;
 
-    return {ataque: forcaAtaque, defesa: forcaDefesa, meio: forcaMeio, total: forcaAtaque+forcaDefesa+forcaMeio};
+    if (isMandante) { atk *= 1.15; def *= 1.15; meio *= 1.15; } // Caldeirão Ferve
+
+    if (ctAtivo) { atk *= 1.05; def *= 1.05; meio *= 1.05; }
+    if (escudoAtivo) { def *= 1.10; } // Treino Secreto foca em fechamento
+
+    return { ataque: atk, defesa: def, meio: meio, total: atk + def + meio };
 }
 
-function escolherGoleador(titulares, tipoGol){
-    // Filtra apenas titulares em campo (remove expulsos depois)
-    let candidatos = titulares.filter(j=>!j.expulso);
-    if(candidatos.length===0) return null;
+// Inteligência Artificial para Escolher Jogadores na Narração baseada no Setor
+function escolherAtor(titulares, setor) {
+    let validos = titulares.filter(j => !j.expulso);
+    if(validos.length === 0) return { nome: "Jogador Desconhecido" };
 
-    // Regra Rogério Ceni: só goleiro pode fazer gol se for pênalti e nome for Rogério Ceni
-    if(tipoGol==="penalti"){
-        let ceni = candidatos.find(j=> j.nome.toLowerCase().includes("rogerio ceni") || j.nome.toLowerCase().includes("rogério ceni"));
-        if(ceni && Math.random()<0.3) return ceni; // 30% chance Ceni bater pênalti
-    }
-
-    // Goleiro não faz gol em outros lances
-    candidatos = candidatos.filter(j=> j.posicoes?.p!=="Goleiro" || j.nome.toLowerCase().includes("ceni"));
-
-    if(tipoGol==="cabecada_escanteio" || tipoGol==="cabecada_falta"){
-        // Zagueiros têm mais chance de cabeça
-        let zagueiros = candidatos.filter(j=> ["Zagueiro","Volante","Centroavante"].includes(j.posicoes?.p));
-        if(zagueiros.length>0 && Math.random()<0.6) return zagueiros[Math.floor(Math.random()*zagueiros.length)];
-    }
-
-    // Atacantes têm mais chance geral
-    let pesos = candidatos.map(j=>{
-        let pos = j.posicoes?.p||"Meia";
-        let peso = 1;
-        if(["Atacante","Centroavante","Ponta"].includes(pos)) peso = 3;
-        else if(["Meia"].includes(pos)) peso = 1.8;
-        else if(["Volante","Lateral"].includes(pos)) peso = 0.8;
-        else if(["Zagueiro"].includes(pos)) peso = 0.5;
-        // Bônus habilidade/ataque
-        peso *= (j.atributos?.ataque||5)/10 + (j.atributos?.habilidade||5)/20;
-        return peso;
+    let pesos = validos.map(j => {
+        let p = j.posicoes?.p || "Meia";
+        if (setor === "Ataque" && ["Atacante", "Centroavante", "Ponta"].includes(p)) return 10;
+        if (setor === "Ataque" && ["Meia"].includes(p)) return 3;
+        if (setor === "Meio" && ["Meia", "Volante"].includes(p)) return 10;
+        if (setor === "Defesa" && ["Zagueiro", "Lateral", "Volante"].includes(p)) return 10;
+        if (setor === "Goleiro" && p === "Goleiro") return 100;
+        return 1;
     });
-    let totalPeso = pesos.reduce((a,b)=>a+b,0);
-    let r = Math.random()*totalPeso;
-    for(let i=0;i<candidatos.length;i++){
-        r-=pesos[i];
-        if(r<=0) return candidatos[i];
+
+    let total = pesos.reduce((a,b) => a+b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < validos.length; i++) {
+        r -= pesos[i];
+        if (r <= 0) return validos[i];
     }
-    return candidatos[0];
+    return validos[0];
 }
 
-function gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV, forcaM, forcaV){
+function gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV, forcaM, forcaV) {
     let linha = [];
-    let golsM=0, golsV=0;
-    let cartoes = {M:[], V:[]}; // amarelos
-    let expulsos = {M:[], V:[]};
-    let substituicoes = {M:0, V:0};
-    let lesoes = [];
+    let golsM = 0, golsV = 0;
+    let cartoes = { M: [], V: [] };
+    let expulsos = { M: [], V: [] };
 
-    // Clima aleatório
-    let climas = ["☀️ Céu limpo", "⛅ Parcialmente nublado", "🌧️ Chuva fina", "🌧️ Chuva forte"];
-    let clima = climas[Math.floor(Math.random()*climas.length)];
-    linha.push({minuto:0, tipo:"clima", texto:`🌤️ Clima: ${clima}. Gramado em boas condições.`});
-
-    // 15 tipos de lance
-    let tiposLance = [
-        {id:"posse", texto: (t,n)=>`🔄 ${t} troca passes no meio-campo com ${n}.`},
-        {id:"chute_fora", texto: (t,n)=>`💥 ${n} (${t}) arrisca de fora da área! Passa perto!`},
-        {id:"cruzamento", texto: (t,n)=>`↗️ Cruzamento de ${n} (${t}) na área!`},
-        {id:"escanteio", texto: (t,n)=>`🚩 Escanteio para ${t}. ${n} vai para cobrança.`},
-        {id:"falta", texto: (t,n)=>`⚠️ Falta de ${n} (${t}) no meio-campo. Jogo parado.`},
-        {id:"falta_perigosa", texto: (t,n)=>`😨 Falta perigosa! ${n} (${t}) na entrada da área!`},
-        {id:"cabecada", texto: (t,n)=>`🧠 Cabeçada de ${n} (${t})! Defendeu o goleiro!`},
-        {id:"defesa", texto: (t,n)=>`🧤 Grande defesa! ${n} salva ${t}!`},
-        {id:"contra_ataque", texto: (t,n)=>`⚡ Contra-ataque rápido de ${t}! ${n} puxa!`},
-        {id:"desarme", texto: (t,n)=>`🦶 Desarme preciso de ${n} (${t})!`},
-        {id:"impedimento", texto: (t,n)=>`🚩 Impedimento! ${n} (${t}) estava adiantado.`},
-        {id:"cartao_amarelo", texto: (t,n)=>`🟨 Cartão amarelo para ${n} (${t})!`},
-        {id:"cartao_vermelho", texto: (t,n)=>`🟥 VERMELHO! ${n} (${t}) expulso!`},
-        {id:"lesao", texto: (t,n)=>`🤕 ${n} (${t}) caiu e parece lesionado!`},
-        {id:"substituicao", texto: (t,n,n2)=>`🔄 Substituição em ${t}: Sai ${n} entra ${n2}.`},
-        {id:"penalti", texto: (t,n)=>`🎯 PÊNALTI para ${t}! Falta em ${n} dentro da área!`},
-        {id:"var", texto: (t,n)=>`📺 VAR em ação! Lance de ${n} (${t}) em revisão...`},
-    ];
+    let climas = ["☀️ Dia ensolarado perfeito para o futebol", "⛅ Clima agradável, gramado impecável", "🌧️ Chuva forte, o campo está escorregadio!", "❄️ Frio intenso, jogo truncado"];
+    linha.push({minuto: 0, tipo: "clima", texto: `🏟️ Estádio lotado! ${climas[Math.floor(Math.random()*climas.length)]}. O ${jogo.mandante.replace(/_/g,' ')} tem a força da torcida a seu favor!`});
 
     let minuto = 1;
-    while(minuto<=90){
-        // Decide se acontece evento ou gol
-        let probEvento = 0.35; // 35% chance de evento por minuto
-        if(Math.random()<probEvento){
-            // Decide time atacante baseado em força meio+ataque
-            let forcaTotalM = forcaM.meio + forcaM.ataque;
-            let forcaTotalV = forcaV.meio + forcaV.ataque;
-            let timeAtacante = Math.random() < forcaTotalM/(forcaTotalM+forcaTotalV) ? "M" : "V";
-            let titulares = timeAtacante==="M"? titularesM : titularesV;
-            let timeNome = timeAtacante==="M"? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
-            if(titulares.length===0) { minuto++; continue; }
-            let jogador = titulares[Math.floor(Math.random()*titulares.length)];
+    while (minuto <= 90) {
+        minuto += Math.floor(Math.random() * 5) + 3; // Jogo avança de 3 a 7 minutos
+        if (minuto > 90) break;
 
-            // Tipos especiais
-            let roll = Math.random();
-            if(roll<0.04 && minuto>15){ // 4% gol
-                let tipoGol = "normal";
-                if(Math.random()<0.2) tipoGol="cabecada_escanteio";
-                else if(Math.random()<0.15) tipoGol="penalti";
-                let goleador = escolherGoleador(titulares, tipoGol);
-                if(!goleador){ minuto++; continue; }
-                if(tipoGol==="penalti"){
-                    linha.push({minuto, tipo: timeAtacante==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL! ${goleador.nome} (${timeNome}) cobra pênalti e marca!`, jogador: goleador.nome});
-                } else if(tipoGol.includes("cabecada")){
-                    linha.push({minuto, tipo: timeAtacante==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL DE CABEÇA! ${goleador.nome} (${timeNome}) sobe mais que a zaga!`, jogador: goleador.nome});
+        // ==========================================
+        // FASE 1: BATALHA DO MEIO CAMPO (POSSE DE BOLA)
+        // ==========================================
+        let dominioTotal = forcaM.meio + forcaV.meio;
+        let chanceMandanteAtacar = (forcaM.meio / (dominioTotal || 1));
+
+        let atacanteLetra = Math.random() < chanceMandanteAtacar ? "M" : "V";
+        let defensorLetra = atacanteLetra === "M" ? "V" : "M";
+
+        // Prepara os Status da Disputa
+        let fAtk = atacanteLetra === "M" ? forcaM.ataque : forcaV.ataque;
+        let fDef = atacanteLetra === "M" ? forcaV.defesa : forcaM.defesa;
+
+        let titsAtk = atacanteLetra === "M" ? titularesM : titularesV;
+        let titsDef = atacanteLetra === "M" ? titularesV : titularesM;
+
+        let nomeAtk = atacanteLetra === "M" ? jogo.mandante.replace(/_/g,' ') : jogo.visitante.replace(/_/g,' ');
+        let nomeDef = atacanteLetra === "M" ? jogo.visitante.replace(/_/g,' ') : jogo.mandante.replace(/_/g,' ');
+
+        // Sorteia os Atores da Jogada
+        let atorAtaque = escolherAtor(titsAtk, "Ataque");
+        let atorMeio = escolherAtor(titsAtk, "Meio");
+        let atorDefesa = escolherAtor(titsDef, "Defesa");
+        let atorGK = escolherAtor(titsDef, "Goleiro") || {nome: "Goleiro"};
+
+        // ==========================================
+        // FASE 2: RESOLUÇÃO DO LANCE (ATAQUE VS DEFESA)
+        // ==========================================
+        let razaoForca = fAtk / (fDef || 1);
+        razaoForca = Math.max(0.4, Math.min(razaoForca, 2.5)); // Limita absurdos matemáticos
+
+        let RNG = Math.random(); // Fator Sorte (0 a 1)
+        let poderOfensivoDoLance = razaoForca * RNG; // Equação Final do Lance!
+
+        // 🏆 AVALIAÇÃO DO RESULTADO (Estilo OSM)
+        if (poderOfensivoDoLance > 0.82) {
+            // GOAL: O Ataque superou completamente a defesa
+            let tipoGol = Math.random();
+            let txtGol = "";
+            if (tipoGol < 0.3) txtGol = `⚽ GOOOL! Que leitura de jogo de ${atorMeio.nome}, enfiando a bola para ${atorAtaque.nome}. Ele sai cara a cara e marca para o ${nomeAtk}!`;
+            else if (tipoGol < 0.6) txtGol = `⚽ GOOOL DE CABEÇA! Cruzamento teleguiado pela lateral, ${atorAtaque.nome} sobe no terceiro andar e estufa a rede de ${atorGK.nome}!`;
+            else if (tipoGol < 0.85) txtGol = `⚽ GOOOL! Bobeira inacreditável de ${atorDefesa.nome} na saída de bola, ${atorAtaque.nome} intercepta e manda uma bomba de fora da área!`;
+            else txtGol = `🎯 PÊNALTI MARCADO! ${atorDefesa.nome} chega atrasado na área. ${atorAtaque.nome} vai para a cobrança, desloca ${atorGK.nome} e é ⚽ GOOOL do ${nomeAtk}!`;
+
+            linha.push({minuto, tipo: atacanteLetra === "M" ? "gol_mandante" : "gol_visitante", texto: txtGol, jogador: atorAtaque.nome});
+            if (atacanteLetra === "M") golsM++; else golsV++;
+
+        } else if (poderOfensivoDoLance > 0.65) {
+            // CHANCE PERIGOSA: Defesa do Goleiro ou Trave
+            let txtQuase = Math.random() < 0.5 ?
+                `🧤 DEFESAÇA! ${atorAtaque.nome} (${nomeAtk}) entra na área batendo forte, mas ${atorGK.nome} se estica todo e salva o ${nomeDef} com as pontas dos dedos!` :
+                `💥 UUUHH! O ${nomeAtk} troca passes rápidos, ${atorAtaque.nome} arrisca um foguete de longe e a bola explode no travessão!`;
+            linha.push({minuto, tipo: "posse", texto: txtQuase});
+
+        } else if (poderOfensivoDoLance > 0.40) {
+            // BATALHA FÍSICA: Faltas e Cartões no meio-campo
+            if (Math.random() < 0.35) {
+                let jaTemAmarelo = cartoes[defensorLetra].includes(atorDefesa.nome);
+                if (jaTemAmarelo && Math.random() < 0.4) {
+                    linha.push({minuto, tipo: "cartao_vermelho", texto: `🟥 VERMELHO! Segundo cartão! ${atorDefesa.nome} (${nomeDef}) faz falta tática e é expulso de campo!`, jogador: atorDefesa.nome});
+                    expulsos[defensorLetra].push(atorDefesa.nome);
+                    atorDefesa.expulso = true;
+                    // A equipe com a menos é fortemente penalizada!
+                    if (defensorLetra === "M") { forcaM.defesa *= 0.8; forcaM.meio *= 0.8; } else { forcaV.defesa *= 0.8; forcaV.meio *= 0.8; }
                 } else {
-                    linha.push({minuto, tipo: timeAtacante==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL DO ${timeNome}! ${goleador.nome} balança as redes!`, jogador: goleador.nome});
-                }
-                if(timeAtacante==="M") golsM++; else golsV++;
-            } else if(roll<0.07){ // cartão
-                if(!cartoes[timeAtacante].includes(jogador.nome)){
-                    linha.push({minuto, tipo:"cartao_amarelo", texto: tiposLance.find(t=>t.id==="cartao_amarelo").texto(timeNome, jogador.nome)});
-                    cartoes[timeAtacante].push(jogador.nome);
-                } else if(!expulsos[timeAtacante].includes(jogador.nome) && Math.random()<0.5){
-                    linha.push({minuto, tipo:"cartao_vermelho", texto: tiposLance.find(t=>t.id==="cartao_vermelho").texto(timeNome, jogador.nome)});
-                    expulsos[timeAtacante].push(jogador.nome);
-                    jogador.expulso = true;
-                }
-            } else if(roll<0.09 && substituicoes[timeAtacante]<3 && minuto>45){ // substituição
-                // Pega reserva
-                let timeId = timeAtacante==="M"? jogo.mandante : jogo.visitante;
-                let elenco = times[timeId]?.jogadores||{};
-                let reservas = Object.values(elenco).filter(j=> !titulares.some(t=>t.nome===j.nome) ).slice(0,5);
-                if(reservas.length>0){
-                    let reserva = reservas[Math.floor(Math.random()*reservas.length)];
-                    let sai = titulares[Math.floor(Math.random()*titulares.length)];
-                    linha.push({minuto, tipo:"substituicao", texto: tiposLance.find(t=>t.id==="substituicao").texto(timeNome, sai.nome, reserva.nome)});
-                    // Troca
-                    let idx = titulares.indexOf(sai);
-                    if(idx!==-1) titulares[idx]=reserva;
-                    substituicoes[timeAtacante]++;
-                }
-            } else if(roll<0.11){ // pênalti (sem gol ainda, vai gerar gol depois)
-                linha.push({minuto, tipo:"penalti", texto: tiposLance.find(t=>t.id==="penalti").texto(timeNome, jogador.nome)});
-                // 75% vira gol no próximo minuto
-                if(Math.random()<0.75){
-                    minuto++;
-                    let goleador = escolherGoleador(titulares, "penalti");
-                    if(goleador){
-                        linha.push({minuto, tipo: timeAtacante==="M"?"gol_mandante":"gol_visitante", texto:`⚽ GOOOL DE PÊNALTI! ${goleador.nome} (${timeNome})!`, jogador: goleador.nome});
-                        if(timeAtacante==="M") golsM++; else golsV++;
-                    }
-                    continue;
-                }
-            } else if(roll<0.13){ // VAR
-                linha.push({minuto, tipo:"var", texto: tiposLance.find(t=>t.id==="var").texto(timeNome, jogador.nome)});
-                if(Math.random()<0.5){
-                    minuto++;
-                    linha.push({minuto, tipo:"var_decisao", texto:`📺 VAR confirma! Gol validado!`});
-                } else {
-                    minuto++;
-                    linha.push({minuto, tipo:"var_decisao", texto:`📺 VAR anula o lance! Segue o jogo.`});
+                    linha.push({minuto, tipo: "cartao_amarelo", texto: `🟨 CARTÃO! ${atorDefesa.nome} (${nomeDef}) entra forte em ${atorAtaque.nome} para matar a jogada no meio.`, jogador: atorDefesa.nome});
+                    cartoes[defensorLetra].push(atorDefesa.nome);
                 }
             } else {
-                // Lance comum
-                let tiposComuns = ["posse","chute_fora","cruzamento","escanteio","falta","cabecada","defesa","contra_ataque","desarme","impedimento"];
-                let tipo = tiposComuns[Math.floor(Math.random()*tiposComuns.length)];
-                let tmpl = tiposLance.find(t=>t.id===tipo);
-                if(tmpl) linha.push({minuto, tipo, texto: tmpl.texto(timeNome, jogador.nome)});
+                linha.push({minuto, tipo: "falta", texto: `⚠️ ${atorMeio.nome} cadencia o jogo para o ${nomeAtk}, mas é parado com falta dura por ${atorDefesa.nome}.`});
             }
+        } else {
+            // DOMÍNIO DEFENSIVO: Desarme ou Impedimento
+            let txtDefesa = Math.random() < 0.5 ?
+                `🧱 Zaga impenetrável! ${atorAtaque.nome} tenta o drible em velocidade, mas ${atorDefesa.nome} (${nomeDef}) faz o desarme no tempo certo.` :
+                `🚩 Impedimento! ${atorMeio.nome} encontra um belo passe, mas ${atorAtaque.nome} estava um passo à frente da linha do ${nomeDef}.`;
+            linha.push({minuto, tipo: "posse", texto: txtDefesa});
         }
-        minuto += Math.floor(Math.random()*3)+1; // avança 1-3 min
     }
 
-    linha.push({minuto:45, tipo:'intervalo', texto:`⏱️ Fim do Primeiro Tempo! ${golsM} x ${golsV}`});
-    linha.push({minuto:46, tipo:'inicio', texto:`🟢 Rola a bola para a etapa complementar!`});
-    linha.push({minuto:94, tipo:'fim', texto:`🏁 APITO FINAL! ${jogo.mandante.replace(/_/g,' ')} ${golsM} x ${golsV} ${jogo.visitante.replace(/_/g,' ')}`});
+    linha.push({minuto: 45, tipo: 'intervalo', texto: `⏱️ Fim do Primeiro Tempo! Análise tática nos vestiários. O placar marca ${golsM} x ${golsV}.`});
+    linha.push({minuto: 46, tipo: 'inicio', texto: `🟢 Rola a bola para a etapa complementar! Veremos mudanças na postura das equipes?`});
+    linha.push({minuto: 94, tipo: 'fim', texto: `🏁 APITO FINAL! As táticas e a força física decidiram o resultado: ${jogo.mandante.replace(/_/g,' ')} ${golsM} x ${golsV} ${jogo.visitante.replace(/_/g,' ')}.`});
 
-    // FIX: remove duplicados e ordena cronológico
-    let unicos = [];
-    let vistos = new Set();
-    for(let ev of linha){
-        let chave = ev.minuto + '_' + ev.texto;
-        if(!vistos.has(chave)){ vistos.add(chave); unicos.push(ev); }
-    }
-    unicos.sort((a,b)=>a.minuto-b.minuto);
-    return {linha: unicos, golsM, golsV, substituicoes, cartoes, expulsos, lesoes};
+    // Organiza a linha cronologicamente e remove falhas
+    let unicos = []; let vistos = new Set();
+    for(let ev of linha){ let chave = ev.minuto + '_' + ev.texto; if(!vistos.has(chave)){ vistos.add(chave); unicos.push(ev); } }
+    unicos.sort((a,b)=> a.minuto - b.minuto);
+
+    return {linha: unicos, golsM, golsV};
 }
 
 window.gerarPartida = async function(idJ, chave, isMataMata){
@@ -1030,6 +988,21 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
                 }
             });
         }
+
+        // 🛡️ BLINDAGEM ANTI-NAN: Evita o crash de dados antes de enviar para o Firebase!
+        for (let chaveUpdate in updates) {
+            let valorUpdate = updates[chaveUpdate];
+            if (valorUpdate && typeof valorUpdate === "object") {
+                if (valorUpdate.estatisticas) {
+                    for (let propEstat in valorUpdate.estatisticas) {
+                        if (isNaN(valorUpdate.estatisticas[propEstat])) {
+                            valorUpdate.estatisticas[propEstat] = 0; // Transforma o veneno em 0!
+                        }
+                    }
+                }
+            }
+        }
+
         await db.ref().update(updates);
         window._travouSimulacao=false;
         alert(`✅ Jogo Oficial Finalizado! Estatísticas, Caixa e Copa foram atualizados!`);
