@@ -179,13 +179,32 @@ function renderizarRodada() {
 
         let ehMeuJogo = (jogo.mandante === dadosUsuario.timeAtual || jogo.visitante === dadosUsuario.timeAtual);
         let corBorda = ehMeuJogo ? "#ff8c00" : "#444";
-        let destaqueBackground = ehMeuJogo ? "background: linear-gradient(135deg, #2a2a2a, #3a2510);" : "background: #2a2a2a;";
 
         let subTitulo = modoAtual === "camp" ? "Campeonato Nacional" : "Copa Nacional";
 
         // 🟢 PREVINE O ERRO DA IA E DO ESCUDO NO TEXTO "Vencedor"
         let isMandanteDefinido = !jogo.mandante.includes("Vencedor");
         let isVisitanteDefinido = !jogo.visitante.includes("Vencedor");
+
+        // 🏟️ FUNDO DE ESTÁDIO DINÂMICO COM FALLBACK AUTOMÁTICO DO CSS
+        let urlEstadio = isMandanteDefinido ? (typeof getEstadio === 'function' ? getEstadio(jogo.mandante) : `estadios/${jogo.mandante}.jpg`) : "estadios/default.jpg";
+
+        let estadiosFallback = [
+            "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=80&w=800",
+            "https://images.unsplash.com/photo-1508344928928-7165b67de128?auto=format&fit=crop&q=80&w=800",
+            "https://images.unsplash.com/photo-1518605368461-1ee7e54363f8?auto=format&fit=crop&q=80&w=800",
+            "https://images.unsplash.com/photo-1459865264687-595d652de67e?auto=format&fit=crop&q=80&w=800"
+        ];
+
+        // Pega um dos estadios bonitos de fallback com base no tamanho do nome do time
+        let idxFall = jogo.mandante.length % estadiosFallback.length;
+        let urlFallback = estadiosFallback[idxFall];
+
+        // Camada escura por cima da foto. Deixa levemente mais escura pra destacar os escudos.
+        let overlay = ehMeuJogo ? "rgba(42, 20, 0, 0.88), rgba(58, 37, 16, 0.95)" : "rgba(20, 20, 20, 0.88), rgba(15, 15, 15, 0.95)";
+
+        // Magia do CSS: O primeiro URL tenta carregar. Se der 404, ele fica transparente e mostra o segundo URL (unsplash)!
+        let destaqueBackground = `background: linear-gradient(${overlay}), url('${urlEstadio}'), url('${urlFallback}'); background-size: cover, cover, cover; background-position: center, center, center;`;
 
         let donoM = "";
         let donoV = "";
@@ -195,36 +214,49 @@ function renderizarRodada() {
         let escudoVisitante = isVisitanteDefinido ? getEscudo(jogo.visitante) : "esculdos/default.png";
 
         if (isMandanteDefinido) {
-            donoM = window.treinadoresGlobais[jogo.mandante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.mandante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+            donoM = window.treinadoresGlobais[jogo.mandante] ? `<span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.mandante]}</span>` : `<span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
         }
 
         if (isVisitanteDefinido) {
-            donoV = window.treinadoresGlobais[jogo.visitante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.visitante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+            donoV = window.treinadoresGlobais[jogo.visitante] ? `<span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.visitante]}</span>` : `<span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
         }
 
         container.innerHTML += `
-            <div style="${destaqueBackground} border: 1px solid ${corBorda}; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+            <div style="${destaqueBackground} border: 1px solid ${corBorda}; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.5);">
 
-                <div style="width: 100%; display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
-                    <span>${ehMeuJogo ? `<strong style="color: #ff8c00;">⭐ Seu Jogo - ${subTitulo}</strong>` : subTitulo}</span>
-                    <span style="color: var(--verde-campo); font-weight: bold;">📅 ${jogo.data_jogo || "Data a definir"}</span>
+                <div style="width: 100%; display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;">
+                    <span>${ehMeuJogo ? `<strong style="color: #ff8c00; text-shadow:0 0 5px #000;">⭐ Seu Jogo - ${subTitulo}</strong>` : `<span style="text-shadow:0 0 5px #000;">${subTitulo}</span>`}</span>
+                    <span style="color: var(--verde-campo); font-weight: bold; text-shadow:0 0 5px #000;">📅 ${jogo.data_jogo || "Data a definir"}</span>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
-                    <div style="flex: 1; text-align: right; font-weight: bold; color: ${jogo.mandante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px; line-height:1.2;">
-                        ${timeMandante} ${donoM} <img src="${escudoMandante}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/1126/1126135.png';" class="escudo-mini" style="vertical-align:top;">
+
+                    <!-- MANDANTE -->
+                    <div style="flex: 1; text-align: right; font-weight: bold; color: ${jogo.mandante === dadosUsuario.timeAtual ? '#fff' : '#eee'}; font-size: 16px; line-height:1.2; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
+                        <div style="display: flex; flex-direction: column; text-shadow:0 2px 4px #000;">
+                            <span>${timeMandante}</span>
+                            ${donoM}
+                        </div>
+                        <img src="${escudoMandante}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/1126/1126135.png';" style="width: 45px; height: 45px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.8)); flex-shrink: 0;">
                     </div>
 
-                    <div style="background: #111; padding: 5px 12px; border-radius: 6px; font-weight: bold; color: #555; border: 1px solid #333;">X</div>
+                    <!-- VERSUS -->
+                    <div style="background: rgba(0,0,0,0.6); padding: 6px 14px; border-radius: 6px; font-weight: bold; color: #888; border: 1px solid #333; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">X</div>
 
-                    <div style="flex: 1; text-align: left; font-weight: bold; color: ${jogo.visitante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px; line-height:1.2;">
-                        <img src="${escudoVisitante}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/1126/1126135.png';" class="escudo-mini" style="vertical-align:top;"> ${timeVisitante} ${donoV}
+                    <!-- VISITANTE -->
+                    <div style="flex: 1; text-align: left; font-weight: bold; color: ${jogo.visitante === dadosUsuario.timeAtual ? '#fff' : '#eee'}; font-size: 16px; line-height:1.2; display: flex; align-items: center; justify-content: flex-start; gap: 12px;">
+                        <img src="${escudoVisitante}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/1126/1126135.png';" style="width: 45px; height: 45px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.8)); flex-shrink: 0;">
+                        <div style="display: flex; flex-direction: column; text-shadow:0 2px 4px #000;">
+                            <span>${timeVisitante}</span>
+                            ${donoV}
+                        </div>
                     </div>
+
                 </div>
 
                 ${jogo.jogado || jogo.linhaDoTempo
-                    ? `<div style="margin-top: 10px; font-size: 12px; color: var(--verde-campo); background: rgba(0,184,83,0.1); padding: 3px 8px; border-radius: 4px;">Placar Oficial: ${jogo.placarMandante} x${jogo.placarVisitante}</div>`
-                    : `<div style="margin-top: 10px; font-size: 12px; color: #aaa;">Aguardando Simulação</div>`
+                    ? `<div style="margin-top: 15px; font-size: 13px; color: var(--verde-campo); background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 6px; font-weight:bold; border: 1px solid var(--verde-campo); box-shadow:0 2px 5px rgba(0,0,0,0.5);">Placar Oficial: ${jogo.placarMandante} x${jogo.placarVisitante}</div>`
+                    : `<div style="margin-top: 15px; font-size: 12px; color: #aaa; background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 4px;">Aguardando Simulação</div>`
                 }
             </div>
         `;
