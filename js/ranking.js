@@ -69,28 +69,43 @@ function renderTabela(div){
             tabela[t] = { id:t, nome:t.replace(/_/g,' '), Pts:0, J:0, V:0, E:0, D:0, GP:0, GC:0, SG:0 };
         }
     }
-    // CORRIGIDO: lê serieA / serieB igual ao dashboard.js
-    let jogosDivisao = div === 'A'? calendarioGlobal.serieA : calendarioGlobal.serieB;
-    if(jogosDivisao){
-        for(let rodada in jogosDivisao){
-            for(let idJogo in jogosDivisao[rodada]){
-                let jogo = jogosDivisao[rodada][idJogo];
-                if(!jogo.jogado &&!jogo.linhaDoTempo) continue;
-                let m = jogo.mandante; let v = jogo.visitante;
-                let gm = jogo.placarMandante?? jogo.golsM?? 0;
-                let gv = jogo.placarVisitante?? jogo.golsV?? 0;
-                if(m==="Fantasma" || v==="Fantasma") continue;
-                if(!tabela[m]) tabela[m] = { id:m, nome:m.replace(/_/g,' '), Pts:0, J:0, V:0, E:0, D:0, GP:0, GC:0, SG:0 };
-                if(!tabela[v]) tabela[v] = { id:v, nome:v.replace(/_/g,' '), Pts:0, J:0, V:0, E:0, D:0, GP:0, GC:0, SG:0 };
-                tabela[m].J++; tabela[v].J++;
-                tabela[m].GP += gm; tabela[m].GC += gv;
-                tabela[v].GP += gv; tabela[v].GC += gm;
-                if(gm > gv){ tabela[m].V++; tabela[m].Pts+=3; tabela[v].D++; }
-                else if(gv > gm){ tabela[v].V++; tabela[v].Pts+=3; tabela[m].D++; }
-                else { tabela[m].E++; tabela[v].E++; tabela[m].Pts++; tabela[v].Pts++; }
+
+    // CORREÇÃO MÁGICA: Lê os dois calendários ao mesmo tempo para não perder os pontos
+    // dos times que foram movidos de divisão com o campeonato rolando!
+    let calendarios = [calendarioGlobal.serieA, calendarioGlobal.serieB];
+
+    calendarios.forEach(jogosDivisao => {
+        if(jogosDivisao){
+            for(let rodada in jogosDivisao){
+                for(let idJogo in jogosDivisao[rodada]){
+                    let jogo = jogosDivisao[rodada][idJogo];
+                    if(!jogo.jogado &&!jogo.linhaDoTempo) continue;
+
+                    let m = jogo.mandante; let v = jogo.visitante;
+                    let gm = jogo.placarMandante?? jogo.golsM?? 0;
+                    let gv = jogo.placarVisitante?? jogo.golsV?? 0;
+                    if(m==="Fantasma" || v==="Fantasma") continue;
+
+                    // Só contabiliza se o time pertence à divisão que estamos visualizando na tela (20 times)
+                    if(tabela[m]){
+                        tabela[m].J++;
+                        tabela[m].GP += gm; tabela[m].GC += gv;
+                        if(gm > gv){ tabela[m].V++; tabela[m].Pts+=3; }
+                        else if(gv > gm){ tabela[m].D++; }
+                        else { tabela[m].E++; tabela[m].Pts++; }
+                    }
+                    if(tabela[v]){
+                        tabela[v].J++;
+                        tabela[v].GP += gv; tabela[v].GC += gm;
+                        if(gv > gm){ tabela[v].V++; tabela[v].Pts+=3; }
+                        else if(gm > gv){ tabela[v].D++; }
+                        else { tabela[v].E++; tabela[v].Pts++; }
+                    }
+                }
             }
         }
-    }
+    });
+
     for(let t in tabela) tabela[t].SG = tabela[t].GP - tabela[t].GC;
     let ordenados = Object.values(tabela).sort((a,b)=> b.Pts - a.Pts || b.V - a.V || b.SG - a.SG || b.GP - a.GP);
     let tbody = document.getElementById('corpo-tabela');
