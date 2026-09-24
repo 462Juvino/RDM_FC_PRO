@@ -1387,36 +1387,106 @@ async function carregarEstatisticasGerais(meuTimeId) {
             }
         }
 
-        // GOLS (Os verdadeiros Artilheiros)
-        let artilheiros = [...todosJogadores].filter(j => j.golsFiltro > 0).sort((a, b) => b.golsFiltro - a.golsFiltro).slice(0, 5);
-        let htmlGols = artilheiros.length === 0 ? '<li><span style="color:#666;">Sem gols...</span></li>' : '';
-        artilheiros.forEach(j => {
-            let nomeCurto = j.nome.split(" ")[0];
-            htmlGols += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#ff8c00; font-weight:bold;">${j.golsFiltro}</span></li>`;
-        });
-        document.getElementById('lista-top-gols').innerHTML = htmlGols;
+        // 💾 SALVAMENTO GLOBAL PARA OS MODAIS FULL
+        window.rankingDashDados = {
+            artilheiros: [...todosJogadores].filter(j => j.golsFiltro > 0).sort((a, b) => b.golsFiltro - a.golsFiltro),
+            assistentes: [...todosJogadores].filter(j => j.astsFiltro > 0).sort((a, b) => b.astsFiltro - a.astsFiltro),
+            goleiros: [...todosJogadores].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.jogosFiltro >= 1).sort((a, b) => a.gcFiltro - b.gcFiltro)
+        };
 
-        // ASSISTÊNCIAS (Os verdadeiros Garçons)
-        let assistentes = [...todosJogadores].filter(j => j.astsFiltro > 0).sort((a, b) => b.astsFiltro - a.astsFiltro).slice(0, 5);
-        let htmlAsts = assistentes.length === 0 ? '<li><span style="color:#666;">Sem assistências...</span></li>' : '';
-        assistentes.forEach(j => {
+        // GOLS (Mini Widget)
+        let htmlGols = window.rankingDashDados.artilheiros.length === 0 ? '<li><span style="color:#666;">Sem gols...</span></li>' : '';
+        window.rankingDashDados.artilheiros.slice(0, 5).forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            htmlAsts += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.astsFiltro}</span></li>`;
+            htmlGols += `<li style="padding: 4px 0; border-bottom: 1px dashed #333; cursor:pointer;" onclick="abrirRankingCompletoDash('gols')"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#ff8c00; font-weight:bold;">${j.golsFiltro}</span></li>`;
         });
-        document.getElementById('lista-top-asts').innerHTML = htmlAsts;
+        document.getElementById('lista-top-gols').innerHTML = htmlGols + `<div style="text-align:center; margin-top:8px;"><button onclick="abrirRankingCompletoDash('gols')" style="background:transparent; border:1px solid #ff8c00; color:#ff8c00; padding:2px 8px; border-radius:12px; font-size:10px; cursor:pointer;">Ver Tudo</button></div>`;
 
-        // GOLEIROS (As verdadeiras Muralhas - Menos Vazados)
-        let goleiros = [...todosJogadores].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.jogosFiltro >= 1).sort((a, b) => a.gcFiltro - b.gcFiltro).slice(0, 5);
-        let htmlGks = goleiros.length === 0 ? '<li><span style="color:#666;">Aguardando...</span></li>' : '';
-        goleiros.forEach(j => {
+        // ASSISTÊNCIAS (Mini Widget)
+        let htmlAsts = window.rankingDashDados.assistentes.length === 0 ? '<li><span style="color:#666;">Sem assistências...</span></li>' : '';
+        window.rankingDashDados.assistentes.slice(0, 5).forEach(j => {
+            let nomeCurto = j.nome.split(" ")[0];
+            htmlAsts += `<li style="padding: 4px 0; border-bottom: 1px dashed #333; cursor:pointer;" onclick="abrirRankingCompletoDash('asts')"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.astsFiltro}</span></li>`;
+        });
+        document.getElementById('lista-top-asts').innerHTML = htmlAsts + `<div style="text-align:center; margin-top:8px;"><button onclick="abrirRankingCompletoDash('asts')" style="background:transparent; border:1px solid var(--verde-campo); color:var(--verde-campo); padding:2px 8px; border-radius:12px; font-size:10px; cursor:pointer;">Ver Tudo</button></div>`;
+
+        // GOLEIROS (Mini Widget)
+        let htmlGks = window.rankingDashDados.goleiros.length === 0 ? '<li><span style="color:#666;">Aguardando...</span></li>' : '';
+        window.rankingDashDados.goleiros.slice(0, 5).forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
             let corGS = (j.gcFiltro === 0) ? "var(--verde-campo)" : "#007bff";
-            htmlGks += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:${corGS}; font-weight:bold;">${j.gcFiltro} GC</span></li>`;
+            htmlGks += `<li style="padding: 4px 0; border-bottom: 1px dashed #333; cursor:pointer;" onclick="abrirRankingCompletoDash('gks')"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:${corGS}; font-weight:bold;">${j.gcFiltro}</span></li>`;
         });
-        document.getElementById('lista-top-gks').innerHTML = htmlGks;
+        document.getElementById('lista-top-gks').innerHTML = htmlGks + `<div style="text-align:center; margin-top:8px;"><button onclick="abrirRankingCompletoDash('gks')" style="background:transparent; border:1px solid #007bff; color:#007bff; padding:2px 8px; border-radius:12px; font-size:10px; cursor:pointer;">Ver Tudo</button></div>`;
 
     } catch (e) { console.error(e); }
 }
+
+// 🏆 JANELA MODAL DO RANKING DE ESTATÍSTICAS
+window.abrirRankingCompletoDash = function(tipo) {
+    if(!window.rankingDashDados) return;
+
+    let dados = [];
+    let titulo = "";
+    let icone = "";
+    let cor = "";
+    let colValor = "";
+
+    if (tipo === 'gols') {
+        dados = window.rankingDashDados.artilheiros.slice(0, 20); // Top 20
+        titulo = "Artilharia da Liga"; icone = "⚽"; cor = "#ff8c00"; colValor = "Gols";
+    } else if (tipo === 'asts') {
+        dados = window.rankingDashDados.assistentes.slice(0, 20);
+        titulo = "Garçons da Liga"; icone = "👟"; cor = "var(--verde-campo)"; colValor = "Assists";
+    } else if (tipo === 'gks') {
+        dados = window.rankingDashDados.goleiros.slice(0, 20);
+        titulo = "Goleiros Menos Vazados"; icone = "🧤"; cor = "#007bff"; colValor = "GS / Jogos";
+    }
+
+    let cx = document.createElement('div');
+    cx.id = 'modal-ranking-estatisticas';
+    cx.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10006; display:flex; justify-content:center; align-items:center;";
+
+    let htmlLinhas = dados.map((j, i) => {
+        let val = "";
+        if (tipo === 'gols') val = j.golsFiltro;
+        else if (tipo === 'asts') val = j.astsFiltro;
+        else if (tipo === 'gks') val = `${j.gcFiltro} <span style="font-size:10px; color:#888;">(${j.jogosFiltro}J)</span>`;
+
+        let medalha = i === 0 ? "🥇" : (i === 1 ? "🥈" : (i === 2 ? "🥉" : `${i+1}º`));
+
+        return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #333; background:${i%2===0?'#111':'#1a1a1a'};">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="color:#aaa; font-weight:bold; width:25px; text-align:center;">${medalha}</span>
+                <div style="display:flex; flex-direction:column;">
+                    <strong style="color:#fff; font-size:15px;">${j.nome}</strong>
+                    <span style="color:#888; font-size:11px;">${j.timeOrigem.replace(/_/g, ' ')}</span>
+                </div>
+            </div>
+            <strong style="color:${cor}; font-size:18px;">${val}</strong>
+        </div>`;
+    }).join('');
+
+    if (dados.length === 0) htmlLinhas = `<div style="text-align:center; padding:30px; color:#666;">Sem estatísticas registradas ainda.</div>`;
+
+    cx.innerHTML = `
+        <div style="background:#1a1a1a; width:95%; max-width:450px; max-height:85vh; border-radius:12px; border:2px solid ${cor}; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+            <div style="padding:15px 20px; border-bottom:1px solid #333; background:#111; display:flex; justify-content:space-between; align-items:center; border-radius: 12px 12px 0 0;">
+                <h2 style="color:${cor}; margin:0; font-size:18px;">${icone} ${titulo}</h2>
+                <button onclick="document.getElementById('modal-ranking-estatisticas').remove()" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:10px 20px; display:flex; justify-content:space-between; border-bottom:1px dashed #444; color:#aaa; font-size:12px; font-weight:bold; background:#000;">
+                <span>JOGADOR</span>
+                <span>${colValor.toUpperCase()}</span>
+            </div>
+            <div style="overflow-y:auto; flex:1; padding-bottom:10px;">
+                ${htmlLinhas}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cx);
+};
 async function carregarMiniTabela(meuTimeId) {
     try {
         const snapTimes = await db.ref('banco_global_times').once('value');
