@@ -1277,13 +1277,22 @@ async function carregarEstatisticasGerais(meuTimeId) {
         if (times) {
             for (let t in times) {
                 if (times[t].jogadores && t!== "Fantasma" &&!t.startsWith("Agentes_Livres") &&!t.startsWith("Lendas_Futebol")) {
-                    // Se tiver divisão, filtra, se não tiver divisão, inclui mesmo assim (corrige bug)
                     if (minhaDivisao && times[t].divisao && times[t].divisao!== minhaDivisao) continue;
                     for (let j in times[t].jogadores) {
                         let jog = times[t].jogadores[j];
-                        // CORRIGIDO: inclui quem tem gols/assist/gols_sofridos mesmo sem jogos
-                        if (jog.estatisticas && (jog.estatisticas.jogos > 0 || jog.estatisticas.gols > 0 || jog.estatisticas.assistencias > 0 || jog.estatisticas.gols_sofridos >= 0)) {
+
+                        // 🟢 INJEÇÃO DA REGRA DE CAMPEONATO (Filtra gols e GC da Copa)
+                        let golsCamp = (jog.estatisticas?.gols || 0) - (jog.estatisticas?.gols_copa || 0);
+                        let astsCamp = (jog.estatisticas?.assistencias || 0) - (jog.estatisticas?.assistencias_copa || 0);
+                        let gcCamp = (jog.estatisticas?.gols_sofridos || 0) - (jog.estatisticas?.gols_sofridos_copa || 0);
+                        let jogosCamp = jog.estatisticas?.jogos || 0;
+
+                        if (golsCamp > 0 || astsCamp > 0 || (jog.posicoes && jog.posicoes.p === "Goleiro" && jogosCamp > 0)) {
                             jog.timeOrigem = t;
+                            jog.golsFiltro = Math.max(0, golsCamp);
+                            jog.astsFiltro = Math.max(0, astsCamp);
+                            jog.gcFiltro = Math.max(0, gcCamp);
+                            jog.jogosFiltro = jogosCamp;
                             todosJogadores.push(jog);
                         }
                     }
@@ -1292,43 +1301,30 @@ async function carregarEstatisticasGerais(meuTimeId) {
         }
 
         // GOLS (Os verdadeiros Artilheiros)
-        let artilheiros = [...todosJogadores]
-            .filter(j => j.estatisticas && j.estatisticas.gols > 0)
-            .sort((a, b) => b.estatisticas.gols - a.estatisticas.gols)
-            .slice(0, 5);
-
+        let artilheiros = [...todosJogadores].filter(j => j.golsFiltro > 0).sort((a, b) => b.golsFiltro - a.golsFiltro).slice(0, 5);
         let htmlGols = artilheiros.length === 0 ? '<li><span style="color:#666;">Sem gols...</span></li>' : '';
         artilheiros.forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            htmlGols += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#ff8c00; font-weight:bold;">${j.estatisticas.gols}</span></li>`;
+            htmlGols += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:#ff8c00; font-weight:bold;">${j.golsFiltro}</span></li>`;
         });
         document.getElementById('lista-top-gols').innerHTML = htmlGols;
 
         // ASSISTÊNCIAS (Os verdadeiros Garçons)
-        let assistentes = [...todosJogadores]
-            .filter(j => j.estatisticas && j.estatisticas.assistencias > 0)
-            .sort((a, b) => b.estatisticas.assistencias - a.estatisticas.assistencias)
-            .slice(0, 5);
-
+        let assistentes = [...todosJogadores].filter(j => j.astsFiltro > 0).sort((a, b) => b.astsFiltro - a.astsFiltro).slice(0, 5);
         let htmlAsts = assistentes.length === 0 ? '<li><span style="color:#666;">Sem assistências...</span></li>' : '';
         assistentes.forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            htmlAsts += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.estatisticas.assistencias}</span></li>`;
+            htmlAsts += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:var(--verde-campo); font-weight:bold;">${j.astsFiltro}</span></li>`;
         });
         document.getElementById('lista-top-asts').innerHTML = htmlAsts;
 
         // GOLEIROS (As verdadeiras Muralhas - Menos Vazados)
-        let goleiros = [...todosJogadores]
-            .filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.estatisticas && j.estatisticas.jogos > 0)
-            .sort((a, b) => (a.estatisticas.gols_sofridos || 0) - (b.estatisticas.gols_sofridos || 0)) // 🟢 MENOR sofredor de gols vem primeiro!
-            .slice(0, 5);
-
+        let goleiros = [...todosJogadores].filter(j => j.posicoes && j.posicoes.p === "Goleiro" && j.jogosFiltro >= 1).sort((a, b) => a.gcFiltro - b.gcFiltro).slice(0, 5);
         let htmlGks = goleiros.length === 0 ? '<li><span style="color:#666;">Aguardando...</span></li>' : '';
         goleiros.forEach(j => {
             let nomeCurto = j.nome.split(" ")[0];
-            // Destaca se o goleiro é uma parede absurda (0 gols sofridos)
-            let corGS = (j.estatisticas.gols_sofridos === 0) ? "var(--verde-campo)" : "#007bff";
-            htmlGks += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:${corGS}; font-weight:bold;">${j.estatisticas.gols_sofridos || 0} GS</span></li>`;
+            let corGS = (j.gcFiltro === 0) ? "var(--verde-campo)" : "#007bff";
+            htmlGks += `<li style="padding: 4px 0; border-bottom: 1px dashed #333;"><span style="color:#fff;">${nomeCurto} <span style="font-size:9px;color:#888;">(${j.timeOrigem.replace(/_/g,' ')})</span></span> <span style="color:${corGS}; font-weight:bold;">${j.gcFiltro} GC</span></li>`;
         });
         document.getElementById('lista-top-gks').innerHTML = htmlGks;
 

@@ -120,10 +120,13 @@ function renderArtilharia(div){
         for(let jId in jogadores){
             let j = jogadores[jId];
             if(j.estatisticas){
-                let golsCamp = j.estatisticas.gols_campeonato ?? j.estatisticas.gols ?? 0;
-                let astsCamp = j.estatisticas.assistencias_campeonato ?? j.estatisticas.assistencias ?? 0;
-                let gcCamp = j.estatisticas.gols_sofridos_campeonato ?? j.estatisticas.gols_sofridos ?? 0;
-                let jogosCamp = j.estatisticas.jogos_campeonato ?? j.estatisticas.jogos ?? 0;
+                // 🟢 CORREÇÃO: Pega o histórico COMPLETO do jogador e subtrai os gols exclusivos da Copa
+                let golsCamp = (j.estatisticas.gols || 0) - (j.estatisticas.gols_copa || 0);
+                let astsCamp = (j.estatisticas.assistencias || 0) - (j.estatisticas.assistencias_copa || 0);
+                let gcCamp = (j.estatisticas.gols_sofridos || 0) - (j.estatisticas.gols_sofridos_copa || 0);
+                let jogosCamp = j.estatisticas.jogos || 0;
+
+                // Qualquer goleiro que jogou 1 partida já entra!
                 if(golsCamp>0 || astsCamp>0 || (j.posicoes && j.posicoes.p==="Goleiro" && jogosCamp>0)){
                     todos.push({
                         id: jId,
@@ -131,9 +134,9 @@ function renderArtilharia(div){
                         nomeCompleto: j.nome,
                         time: t.replace(/_/g,' '),
                         timeId: t,
-                        gols: golsCamp,
-                        asts: astsCamp,
-                        gc: gcCamp,
+                        gols: Math.max(0, golsCamp),
+                        asts: Math.max(0, astsCamp),
+                        gc: Math.max(0, gcCamp),
                         jogos: jogosCamp,
                         bonus: j.bonus_ranking||0,
                         isGoleiro: j.posicoes && j.posicoes.p==="Goleiro"
@@ -143,7 +146,7 @@ function renderArtilharia(div){
         }
     }
     function bonusLabel(b){ return b>0? `<span style="background:gold; color:#000; font-size:10px; padding:2px 4px; border-radius:3px; margin-left:5px;">+${b} OVR</span>` : ""; }
-    function calcBonus(pos){ if(pos===0) return 5; if(pos===1) return 4; if(pos===2) return 3; if(pos===3) return 2; if(pos===4) return 1; if(pos<=9) return 1; return 0; }
+
     let art = [...todos].filter(j=>j.gols>0).sort((a,b)=>b.gols-a.gols).slice(0,10);
     let ulGols = document.getElementById('lista-artilheiros');
     if(ulGols){
@@ -159,7 +162,9 @@ function renderArtilharia(div){
             return `<li style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #333;"><span style="color:#fff;">${i+1}º ${j.nomeCompleto} ${j.bonus?bonusLabel(j.bonus):''} <small style="color:#888;">(${j.time})</small></span><strong style="color:#00b853;">${j.asts}</strong></li>`;
         }).join('') : '<li style="color:#666;">Sem assistências no campeonato...</li>';
     }
-    let gols = [...todos].filter(j=>j.isGoleiro && j.jogos>=3).sort((a,b)=>a.gc-b.gc).slice(0,10);
+
+    // 🟢 CORREÇÃO: Pega qualquer goleiro com 1+ jogos. Se o GC for 0, ele fica em 1º!
+    let gols = [...todos].filter(j=>j.isGoleiro && j.jogos>=1).sort((a,b)=>a.gc-b.gc).slice(0,10);
     let ulGolsSof = document.getElementById('lista-goleiros');
     if(ulGolsSof){
         ulGolsSof.innerHTML = gols.length? gols.map((j,i)=> {

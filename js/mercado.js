@@ -137,24 +137,22 @@ function carregarMundo() {
             }
         }
 
-        // FIX LENDAS DUPLICADAS: Mantém só 1 cópia, prioriza time que comprou
+        // 🟢 FIX SUPREMO DE DUPLICATAS: Usa o NOME do jogador como chave. Nunca existirão 2 iguais na tela!
         let mapaUnico = {};
         for (let j of todosJogadores) {
-            let chave = j.id_banco;
-            if (!mapaUnico[chave]) {
-                mapaUnico[chave] = j;
+            if (!j.nome) continue;
+            let chaveNome = j.nome.trim().toLowerCase();
+
+            if (!mapaUnico[chaveNome]) {
+                mapaUnico[chaveNome] = j;
             } else {
-                let atual = mapaUnico[chave];
+                let atual = mapaUnico[chaveNome];
+                let atualLivre = (atual.timeCru || "").startsWith('Agentes_Livres');
+                let novoLivre = (j.timeCru || "").startsWith('Agentes_Livres');
 
-                // 🟢 BLINDAGEM CONTRA UNDEFINED:
-                let atualTimeCru = atual.timeCru || "";
-                let novoTimeCru = j.timeCru || "";
-
-                let atualEhLenda = atualTimeCru === 'Lendas_Futebol' || atualTimeCru.startsWith('Agentes_Livres');
-                let novoEhLenda = novoTimeCru === 'Lendas_Futebol' || novoTimeCru.startsWith('Agentes_Livres');
-
-                if (atualEhLenda && !novoEhLenda) {
-                    mapaUnico[chave] = j;
+                // Se achou um clone, dá prioridade pro jogador que já está contratado num Clube Real
+                if (atualLivre && !novoLivre) {
+                    mapaUnico[chaveNome] = j;
                 }
             }
         }
@@ -480,6 +478,12 @@ function confirmarProposta() {
     let rodadas = tipo === 'emprestimo' ? parseInt(document.getElementById('select-rodadas-emp').value) : 0;
 
     if (isNaN(valorSugerido)) valorSugerido = 0;
+
+    // 🟢 IMPEDE USUÁRIOS SEM CLUBE DE ENVIAR PROPOSTAS
+    if (!dadosUsuario.timeAtual || dadosUsuario.timeAtual === "Sem Clube") {
+        alert("Acesso Negado: Apenas dirigentes de Clubes ativos ou a IA podem fazer propostas no mercado.");
+        return;
+    }
 
     document.getElementById('input-valor-proposta').style.borderColor = '#555';
     document.getElementById('prop-seu-caixa').style.color = 'var(--verde-campo)';
@@ -1504,32 +1508,33 @@ window.removerDeAgentesLivres = async function(idJogador){
 };
 
 
-// 2. AGENTES LIVRES COM BOTÃO REMOVER PARA SEUS JOGADORES
 window.filtrarAgentesLivresSubAba = function(){
     let div = document.getElementById('lista-agentes-livres');
     if(!div) return;
     let livres = todosJogadores.filter(j=> j.timeCru && j.timeCru.includes('Agentes_Livres'));
     if(livres.length===0){ div.innerHTML='<p style="color:#666; text-align:center; padding:20px;">Nenhum agente livre. Envie seu olheiro para buscar lendas ou libere jogadores no mercado!</p>'; return; }
+
+    // 🟢 Identifica se o usuário não tem time para travar os botões e impedir bizarrices
+    let isSemClube = (!dadosUsuario.timeAtual || dadosUsuario.timeAtual === "Sem Clube");
+
     div.innerHTML = livres.map(j=> {
-        let ehMeu = false;
-        // Checa se foi eu que coloquei (precisa buscar dados completos, mas pelo nome do time_origem)
-        // Vamos usar timeCru e dadosUsuario para inferir
-        // Na renderização completa vamos buscar no banco depois, aqui simplificamos
         let isLenda = j.nome.includes('Lenda')|| Object.keys(typeof BANCO_LENDAS!=='undefined'?BANCO_LENDAS:{}).some(k=> j.nome.includes(BANCO_LENDAS[k].nome));
         let corBorda = isLenda?'gold':'#333';
         let botaoAcao = '';
-        // Se for meu time de origem (vamos checar via todosJogadores que tem time_origem no objeto original)
-        // Para simplificar, se o jogador está nos livres e meu time já teve ele, mostra remover
-        // O backend vai validar de qualquer forma
-        // Vamos mostrar dois botões: Negociar (para todos) e se for meu, Remover
+
+        let btnNegociar = isSemClube
+            ? `<button onclick="alert('Requer Clube para negociar.')" style="flex:1; background:#555; color:#aaa; border:none; padding:6px; border-radius:4px; cursor:not-allowed;">Requer Clube</button>`
+            : `<button onclick="fazerProposta('${j.id_banco}')" style="flex:1; background:#ff8c00; color:#fff; border:none; padding:6px; border-radius:4px; cursor:pointer;">Negociar</button>`;
+
         if(j.clube==="Agentes Livres"){
             botaoAcao = `<div style="display:flex; gap:5px; margin-top:6px;">
-                <button onclick="fazerProposta('${j.id_banco}')" style="flex:1; background:#ff8c00; color:#fff; border:none; padding:6px; border-radius:4px; cursor:pointer;">Negociar</button>
-                <button onclick="abrirOpcoesMeuJogador('${j.id_banco}')" style="flex:1; background:#333; color:#aaa; border:1px solid #555; padding:6px; border-radius:4px; cursor:pointer;">Meu? Remover</button>
+                ${btnNegociar}
+                ${isSemClube ? '' : `<button onclick="abrirOpcoesMeuJogador('${j.id_banco}')" style="flex:1; background:#333; color:#aaa; border:1px solid #555; padding:6px; border-radius:4px; cursor:pointer;">Meu? Remover</button>`}
             </div>`;
         } else {
-            botaoAcao = `<button onclick="fazerProposta('${j.id_banco}')" style="width:100%; margin-top:6px; background:#ff8c00; color:#fff; border:none; padding:6px; border-radius:4px; cursor:pointer;">Negociar</button>`;
+            botaoAcao = btnNegociar.replace('flex:1', 'width:100%; margin-top:6px');
         }
+
         return `<div style="background:#1a1a1a; border:1px solid ${corBorda}; padding:10px; border-radius:6px;">
             <strong style="color:#fff;">${j.nome} ${isLenda?'⭐':''}</strong><br><small style="color:#aaa;">${j.posicao} | OVR ${j.forca} | ${j.clube}</small><br>
             <small style="color:#666;">Origem: ${(j.timeCru||'').replace(/_/g,' ')}</small><br>
@@ -1538,7 +1543,6 @@ window.filtrarAgentesLivresSubAba = function(){
         </div>`;
     }).join('');
 };
-
 // 3. CONTRA-PROPOSTA COM REGRA 50% / 80% E VISUAL CUSTOMIZADO
 window.abrirContraProposta = function(idAlvo, loginComprador){
     let prop = propostasRecebidasGlobais.find(p=>p.id_alvo===idAlvo && p.login_comprador===loginComprador);

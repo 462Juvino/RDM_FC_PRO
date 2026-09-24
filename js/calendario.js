@@ -183,8 +183,24 @@ function renderizarRodada() {
 
         let subTitulo = modoAtual === "camp" ? "Campeonato Nacional" : "Copa Nacional";
 
-        let donoM = window.treinadoresGlobais[jogo.mandante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.mandante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
-        let donoV = window.treinadoresGlobais[jogo.visitante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.visitante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+        // 🟢 PREVINE O ERRO DA IA E DO ESCUDO NO TEXTO "Vencedor"
+        let isMandanteDefinido = !jogo.mandante.includes("Vencedor");
+        let isVisitanteDefinido = !jogo.visitante.includes("Vencedor");
+
+        let donoM = "";
+        let donoV = "";
+
+        // Se ainda for um Vencedor genérico, não tenta carregar o escudo, exibe um escudo padrão
+        let escudoMandante = isMandanteDefinido ? getEscudo(jogo.mandante) : "esculdos/default.png";
+        let escudoVisitante = isVisitanteDefinido ? getEscudo(jogo.visitante) : "esculdos/default.png";
+
+        if (isMandanteDefinido) {
+            donoM = window.treinadoresGlobais[jogo.mandante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.mandante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+        }
+
+        if (isVisitanteDefinido) {
+            donoV = window.treinadoresGlobais[jogo.visitante] ? `<br><span style="font-size:10px; color:#ff8c00; font-weight:normal;">👤 ${window.treinadoresGlobais[jogo.visitante]}</span>` : `<br><span style="font-size:10px; color:#888; font-weight:normal;">🤖 IA</span>`;
+        }
 
         container.innerHTML += `
             <div style="${destaqueBackground} border: 1px solid ${corBorda}; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
@@ -196,18 +212,18 @@ function renderizarRodada() {
 
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
                     <div style="flex: 1; text-align: right; font-weight: bold; color: ${jogo.mandante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px; line-height:1.2;">
-                        ${timeMandante} ${donoM} <img src="${getEscudo(jogo.mandante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini" style="vertical-align:top;">
+                        ${timeMandante} ${donoM} <img src="${escudoMandante}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/1126/1126135.png';" class="escudo-mini" style="vertical-align:top;">
                     </div>
 
                     <div style="background: #111; padding: 5px 12px; border-radius: 6px; font-weight: bold; color: #555; border: 1px solid #333;">X</div>
 
                     <div style="flex: 1; text-align: left; font-weight: bold; color: ${jogo.visitante === dadosUsuario.timeAtual ? '#fff' : '#ccc'}; font-size: 15px; line-height:1.2;">
-                        <img src="${getEscudo(jogo.visitante)}" onerror="this.src='esculdos/default.png'" class="escudo-mini" style="vertical-align:top;"> ${timeVisitante} ${donoV}
+                        <img src="${escudoVisitante}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/1126/1126135.png';" class="escudo-mini" style="vertical-align:top;"> ${timeVisitante} ${donoV}
                     </div>
                 </div>
 
                 ${jogo.jogado || jogo.linhaDoTempo
-                    ? `<div style="margin-top: 10px; font-size: 12px; color: var(--verde-campo); background: rgba(0,184,83,0.1); padding: 3px 8px; border-radius: 4px;">Placar Oficial: ${jogo.placarMandante} x ${jogo.placarVisitante}</div>`
+                    ? `<div style="margin-top: 10px; font-size: 12px; color: var(--verde-campo); background: rgba(0,184,83,0.1); padding: 3px 8px; border-radius: 4px;">Placar Oficial: ${jogo.placarMandante} x${jogo.placarVisitante}</div>`
                     : `<div style="margin-top: 10px; font-size: 12px; color: #aaa;">Aguardando Simulação</div>`
                 }
             </div>

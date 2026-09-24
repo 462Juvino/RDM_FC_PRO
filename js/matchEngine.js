@@ -931,10 +931,70 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
             jogo.placarVisitante=res.golsV;
             jogo.jogado=true;
             updates[`ligas/${ligaLogada}/calendario/${caminhoDivisao}/${idJAtual}`]=jogo;
+
+            // 1. PROGRESSÃO DA COPA
+            if (isMataMata) {
+                let vencedor = res.golsM > res.golsV ? jogo.mandante : jogo.visitante;
+                let num = parseInt(idJAtual.split('_')[1]);
+                if (chave === "oitavas" && cal.copa.quartas) { let tgt = `jogo_${9 + Math.floor((num-1)/2)}`; num%2!==0 ? updates[`ligas/${ligaLogada}/calendario/copa/quartas/${tgt}/mandante`] = vencedor : updates[`ligas/${ligaLogada}/calendario/copa/quartas/${tgt}/visitante`] = vencedor; }
+                else if (chave === "quartas" && cal.copa.semis) { let tgt = `jogo_${13 + Math.floor((num-9)/2)}`; num%2!==0 ? updates[`ligas/${ligaLogada}/calendario/copa/semis/${tgt}/mandante`] = vencedor : updates[`ligas/${ligaLogada}/calendario/copa/semis/${tgt}/visitante`] = vencedor; }
+                else if (chave === "semis" && cal.copa.final) { let tgt = `jogo_15`; num===13 ? updates[`ligas/${ligaLogada}/calendario/copa/final/${tgt}/mandante`] = vencedor : updates[`ligas/${ligaLogada}/calendario/copa/final/${tgt}/visitante`] = vencedor; }
+                else if (chave === "final") { updates[`ligas/${ligaLogada}/calendario/sistema_campeao_copa`] = vencedor; }
+            }
+
+            // 2. PAGAMENTO DE RENDA E PREMIAÇÃO
+            if (donoMLogin && !donoMLogin.startsWith('IA_')) {
+                let caixaNovo = (donoM.caixaClube || 0) + 1500000; // Renda Base
+                if (res.golsM > res.golsV) caixaNovo += 3000000; // Vitória
+                else if (res.golsM === res.golsV) caixaNovo += 1000000; // Empate
+                updates[`ligas/${ligaLogada}/usuarios/${donoMLogin}/caixaClube`] = caixaNovo;
+            }
+            if (donoVLogin && !donoVLogin.startsWith('IA_')) {
+                let caixaNovo = (donoV.caixaClube || 0);
+                if (res.golsV > res.golsM) caixaNovo += 3000000; // Vitória
+                else if (res.golsV === res.golsM) caixaNovo += 1000000; // Empate
+                updates[`ligas/${ligaLogada}/usuarios/${donoVLogin}/caixaClube`] = caixaNovo;
+            }
+
+            // 3. ATUALIZAÇÃO RÁPIDA DE ESTATÍSTICAS (Gols e Goleiro)
+            let gkM = titularesM.find(j=>j.posicoes?.p==="Goleiro");
+            let gkV = titularesV.find(j=>j.posicoes?.p==="Goleiro");
+
+            if (gkM && times[jogo.mandante]?.jogadores?.[gkM.id]) {
+                let jg = times[jogo.mandante].jogadores[gkM.id];
+                jg.estatisticas = jg.estatisticas || {jogos:0, gols_sofridos:0};
+                jg.estatisticas.jogos += 1;
+                jg.estatisticas.gols_sofridos += res.golsV;
+                updates[`banco_global_times/${jogo.mandante}/jogadores/${gkM.id}`] = jg;
+            }
+            if (gkV && times[jogo.visitante]?.jogadores?.[gkV.id]) {
+                let jg = times[jogo.visitante].jogadores[gkV.id];
+                jg.estatisticas = jg.estatisticas || {jogos:0, gols_sofridos:0};
+                jg.estatisticas.jogos += 1;
+                jg.estatisticas.gols_sofridos += res.golsM;
+                updates[`banco_global_times/${jogo.visitante}/jogadores/${gkV.id}`] = jg;
+            }
+
+            res.linha.forEach(ev => {
+                if (ev.tipo.includes('gol_') && ev.jogador) {
+                    let isMandanteGol = ev.tipo.includes('mandante');
+                    let timeId = isMandanteGol ? jogo.mandante : jogo.visitante;
+                    let tits = isMandanteGol ? titularesM : titularesV;
+                    let jogAlvo = tits.find(j => j.nome === ev.jogador);
+
+                    if (jogAlvo && times[timeId]?.jogadores?.[jogAlvo.id]) {
+                        let jg = times[timeId].jogadores[jogAlvo.id];
+                        jg.estatisticas = jg.estatisticas || {gols:0, assistencias:0};
+                        jg.estatisticas.gols = (jg.estatisticas.gols || 0) + 1;
+                        jg.valor_mercado = (jg.valor_mercado || 1000000) + 250000;
+                        updates[`banco_global_times/${timeId}/jogadores/${jogAlvo.id}`] = jg;
+                    }
+                }
+            });
         }
         await db.ref().update(updates);
         window._travouSimulacao=false;
-        alert(`✅ ${jogosParaSimular.length} jogos simulados!`);
+        alert(`✅ Jogo Oficial Finalizado! Estatísticas, Caixa e Copa foram atualizados!`);
         location.reload();
     }catch(e){ window._travouSimulacao=false; console.error(e); alert("Erro: "+e.message); }
 };

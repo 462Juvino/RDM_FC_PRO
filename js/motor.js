@@ -413,8 +413,35 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         qtd++;
                     }
                 }
+                // 3 - 🟢 ELIMINADOR DE CLONES FÍSICOS DA NUVEM (Exterminador de Duplicatas)
+                let nomesVistos = {};
+                for(let t in times){
+                    if(t === 'Fantasma' || t === 'Lendas_Futebol') continue;
+                    let jogadoresT = times[t].jogadores || {};
+                    for(let idJog in jogadoresT){
+                        let nomeReal = jogadoresT[idJog].nome;
+                        if(nomeReal){
+                            let nomeKey = nomeReal.trim().toLowerCase();
+                            if(!nomesVistos[nomeKey]){
+                                nomesVistos[nomeKey] = { id: idJog, time: t };
+                            } else {
+                                // Clone detectado no Banco! Deleta um deles para proteger o ecossistema.
+                                if (t.startsWith('Agentes_Livres')) {
+                                    fix[`banco_global_times/${t}/jogadores/${idJog}`] = null;
+                                } else if (nomesVistos[nomeKey].time.startsWith('Agentes_Livres')) {
+                                    fix[`banco_global_times/${nomesVistos[nomeKey].time}/jogadores/${nomesVistos[nomeKey].id}`] = null;
+                                    nomesVistos[nomeKey] = { id: idJog, time: t };
+                                } else {
+                                    fix[`banco_global_times/${t}/jogadores/${idJog}`] = null;
+                                }
+                                qtd++;
+                            }
+                        }
+                    }
+                }
+
                 if(qtd>0){
-                    console.log(`♻️ AUDITOR: ${qtd} restaurados (sumidos + SEM)`);
+                    console.log(`♻️ AUDITOR: ${qtd} restaurados/clones deletados`);
                     await db.ref().update(fix);
                     for(let p in fix){
                         if(fix[p]===null) continue;
@@ -423,7 +450,7 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         if(!times[t].jogadores) times[t].jogadores={};
                         times[t].jogadores[id]=fix[p];
                     }
-                    // Limpa nulls dos livres
+                    // Limpa nulls da memória local
                     for(let p in fix){
                         if(fix[p]===null){
                             let t = p.split('/')[1]; let id = p.split('/')[3];
@@ -440,13 +467,10 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         const snapCal = await db.ref(`ligas/${liga}/calendario`).once('value');
         const cal = snapCal.val();
 
-        // 🟢 BUSCA AS PROPOSTAS NA NUVEM ANTES DE AVALIÁ-LAS! (Isso corrige o Crash)
         const snapPropostas = await db.ref(`ligas/${liga}/mercado_propostas`).once('value');
         let propostas = snapPropostas.val() || {};
 
         let updates = {};
-
-
 
         // ============================================
         // --- PASSO A.0: IA ATIVA NO MERCADO E FINANÇAS ---
@@ -457,22 +481,26 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         for (let t of timesIA) {
             let loginIA = `IA_${t}`;
 
-            // 🤖 Cria uma "Conta Bancária Virtual" para a Máquina operar no jogo
+            // 🤖 IA GANHA PERSONALIDADE (Ousada x Moderada)
             if (!usuarios[loginIA]) {
-                usuarios[loginIA] = { nome: `Diretoria ${t.replace(/_/g,' ')}`, timeAtual: t, caixaClube: 30000000 };
+                let perfilSorteado = Math.random() < 0.3 ? 'ousada' : 'moderada';
+                usuarios[loginIA] = { nome: `Diretoria ${t.replace(/_/g,' ')}`, timeAtual: t, caixaClube: 30000000, perfil_ia: perfilSorteado };
                 updates[`ligas/${liga}/usuarios/${loginIA}`] = usuarios[loginIA];
             }
 
             let caixaClubeIA = usuarios[loginIA].caixaClube || 0;
+            let perfilIA = usuarios[loginIA].perfil_ia || 'moderada';
 
-            // 🎲 25% de chance da Diretoria da IA agir nesta rodada
-            if (Math.random() < 0.25) {
+            // 🎲 Ousados agem muito mais (60%), Moderados seguram a grana (25%)
+            let chanceAgir = (perfilIA === 'ousada') ? 0.60 : 0.25;
+
+            if (Math.random() < chanceAgir) {
 
                 // AÇÃO 1: Pegar Empréstimo se estiver à beira da falência (Caixa < 5M)
                 if (caixaClubeIA < 5000000) {
                     let valorPedido = 15000000;
                     let rodadas = 10;
-                    let parcela = Math.round((valorPedido * 1.5) / rodadas); // O Banco cobra 50% de juros da IA
+                    let parcela = Math.round((valorPedido * 1.5) / rodadas);
 
                     caixaClubeIA += valorPedido;
                     usuarios[loginIA].caixaClube = caixaClubeIA;
@@ -482,12 +510,11 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                         devedor: t, credor: 'Banco Central da Liga', valor_total: valorPedido * 1.5, parcela_rodada: parcela, rodadas_restantes: rodadas
                     };
                 }
-
-                // AÇÃO 2: Comprar ou Alugar Jogadores (Se tiver grana razoável)
-                else if (caixaClubeIA >= 10000000 && caixaClubeIA <= 40000000) {
+                // AÇÃO 2: Comprar ou Alugar Jogadores
+                else if (caixaClubeIA >= 10000000 && caixaClubeIA <= (perfilIA === 'ousada' ? 80000000 : 40000000)) {
                     let todosAlvos = [];
                     for (let outroT in times) {
-                        // IA não tenta comprar do próprio time nem varre os Agentes Livres (ainda)
+                        // IA agora escaneia IAs E Players reais livremente!
                         if (outroT !== t && times[outroT].jogadores && !outroT.startsWith("Agentes_Livres")) {
                             for (let idJog in times[outroT].jogadores) {
                                 todosAlvos.push({ id: idJog, time: outroT, dados: times[outroT].jogadores[idJog] });
@@ -496,14 +523,14 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     }
 
                     if (todosAlvos.length > 0) {
-                        // A máquina procura jogadores que não quebrem o cofre (Custa no máximo 70% do que ela tem)
-                        let alvosBons = todosAlvos.filter(x => x.dados.valor_mercado > 1000000 && x.dados.valor_mercado <= (caixaClubeIA * 0.7));
+                        // IA Ousada gasta até 90% do caixa, a Moderada para em 60%
+                        let tetoGasto = perfilIA === 'ousada' ? 0.9 : 0.6;
+                        let alvosBons = todosAlvos.filter(x => x.dados.valor_mercado > 1000000 && x.dados.valor_mercado <= (caixaClubeIA * tetoGasto));
 
                         if (alvosBons.length > 0) {
                             let alvo = alvosBons[Math.floor(Math.random() * alvosBons.length)];
-                            let isCompra = Math.random() < 0.7; // 70% de chance de tentar Comprar Definitivo
+                            let isCompra = Math.random() < 0.7;
 
-                            // Oferece 5% a mais do passe na compra, ou paga as 10 rodadas justas no aluguel
                             let valorOferecido = isCompra ? Math.round(alvo.dados.valor_mercado * 1.05) : Math.round((alvo.dados.valor_mercado * 0.02) * 10);
                             let duracao = isCompra ? 0 : 10;
 
@@ -517,18 +544,16 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                                 duracao_rodadas: duracao
                             };
 
-                            // Registra a proposta na mesa do leilão!
                             updates[`ligas/${liga}/mercado_propostas/${alvo.id}/${loginIA}`] = propostas[alvo.id][loginIA];
                         }
                     }
                 }
-
-                // AÇÃO 3: Virar Investidor Agiota (Se estiver super rica > 40M)
+                // AÇÃO 3: Virar Investidor Agiota
                 else if (caixaClubeIA > 40000000 && Math.random() < 0.2) {
                     const snapBanc = await db.ref(`ligas/${liga}/banco_investidores/${t}`).once('value');
                     let invAtual = snapBanc.val() ? snapBanc.val().saldo : 0;
 
-                    let valorInvestido = 10000000; // Guarda 10 Milhões no banco para players pegarem!
+                    let valorInvestido = 10000000;
                     caixaClubeIA -= valorInvestido;
                     usuarios[loginIA].caixaClube = caixaClubeIA;
                     updates[`ligas/${liga}/usuarios/${loginIA}/caixaClube`] = caixaClubeIA;
@@ -541,14 +566,12 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
         }
 
         // ============================================
-        // --- PASSO A.1: IA GERENCIA AGENTES LIVRES (NOVO) ---
+        // --- PASSO A.1: IA GERENCIA AGENTES LIVRES E COMPRA LENDAS ---
         // ============================================
-        // IA coloca jogadores excedentes nos Agentes Livres com 20% desconto
         for(let t of timesIA){
             let elenco = times[t]?.jogadores||{};
             let qtd = Object.keys(elenco).length;
             if(qtd > 25){
-                // Pega os 3 piores com fadiga alta ou OVR baixo
                 let piores = Object.keys(elenco).map(id=> ({id,...elenco[id]}))
                   .filter(j=> j && j.atributos)
                   .sort((a,b)=>{
@@ -573,46 +596,31 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
             }
         }
 
-        // 🔍 AUDITOR ADM - Restaura jogadores sumidos
-        try{
-          if(window.BANCO_ADM){
-            let jogadoresNoBanco = {};
-            for(let t in times){
-              if(t==='Fantasma') continue;
-              for(let id in (times[t].jogadores||{})) jogadoresNoBanco[id]=t;
-            }
-            for(let timeOrig in window.BANCO_ADM){
-              if(timeOrig.startsWith('Agentes_Livres')||timeOrig==='Fantasma') continue;
-              let elencoADM = window.BANCO_ADM[timeOrig].jogadores || window.BANCO_ADM[timeOrig];
-              for(let idJog in elencoADM){
-                let dados = elencoADM[idJog];
-                if(!dados?.nome) continue;
-                if(!jogadoresNoBanco[idJog]){
-                  console.log(`♻️ Auditor: ${dados.nome} sumiu, voltando pra ${timeOrig}`);
-                  updates[`banco_global_times/${timeOrig}/jogadores/${idJog}`] = dados;
-                }
-              }
-            }
-          }
-        }catch(e){ console.warn('Auditor falhou', e); }
-
-        // IA tenta comprar dos Agentes Livres com 50% do valor
+        // IA tenta comprar dos Agentes Livres (PAGANDO VALOR CHEIO EM LENDAS)
         let snapLivres = await db.ref(`banco_global_times/Agentes_Livres_${liga}/jogadores`).once('value');
         let livres = snapLivres.val()||{};
         for(let idLivre in livres){
             let jLivre = livres[idLivre];
             if(jLivre.origem_livre && jLivre.origem_livre.startsWith("IA_")) continue; // IA não compra dela mesma
-            if(Math.random()<0.15){ // 15% chance de IA tentar comprar cada livre por rodada
+
+            // A IA tem um apetite gigante por lendas
+            let ehLenda = jLivre.nome && jLivre.nome.includes("(Lenda)");
+            let chanceDeComprar = ehLenda ? 0.40 : 0.15;
+
+            if(Math.random() < chanceDeComprar){
                 let timeIALogin = `IA_${timesIA[Math.floor(Math.random()*timesIA.length)]}`;
                 let timeIA = usuarios[timeIALogin]?.timeAtual;
                 if(!timeIA) continue;
-                let oferta50 = Math.round((jLivre.valor_mercado||0)*0.5);
+
+                // 🟢 VALOR JUSTO SE FOR LENDA, 50% se for BAGRE
+                let ofertaMercado = ehLenda ? (jLivre.valor_mercado || 0) : Math.round((jLivre.valor_mercado||0)*0.5);
+
                 let jaTemProposta = propostas[idLivre] && propostas[idLivre][timeIALogin];
                 if(!jaTemProposta){
                     if(!propostas[idLivre]) propostas[idLivre] = {};
                     propostas[idLivre][timeIALogin] = {
                         time_comprador: timeIA,
-                        valor_oferecido: oferta50,
+                        valor_oferecido: ofertaMercado,
                         data_proposta: new Date().toISOString(),
                         tipo_negocio: 'compra',
                         is_agentes_livres: true,
@@ -1258,6 +1266,17 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     if (cal.copa[f]) {
                         for (let idJ in cal.copa[f]) {
                             let jogo = cal.copa[f][idJ];
+
+                            // 🟢 AUTO-REPAIR DA COPA: Jogos já finalizados empurram os vencedores se a próxima fase estiver bugada/vazia ("Vencedor")
+                            if (jogo.jogado && !jogo.mandante.includes("Vencedor") && !jogo.visitante.includes("Vencedor")) {
+                                let vencedor = jogo.placarMandante > jogo.placarVisitante ? jogo.mandante : jogo.visitante;
+                                let num = parseInt(idJ.split('_')[1]);
+
+                                if (f === "oitavas" && cal.copa.quartas) { let tgt = `jogo_${9 + Math.floor((num-1)/2)}`; if(cal.copa.quartas[tgt]) { if(num%2!==0 && cal.copa.quartas[tgt].mandante.includes("Vencedor")) cal.copa.quartas[tgt].mandante = vencedor; else if(num%2===0 && cal.copa.quartas[tgt].visitante.includes("Vencedor")) cal.copa.quartas[tgt].visitante = vencedor; } }
+                                else if (f === "quartas" && cal.copa.semis) { let tgt = `jogo_${13 + Math.floor((num-9)/2)}`; if(cal.copa.semis[tgt]) { if(num%2!==0 && cal.copa.semis[tgt].mandante.includes("Vencedor")) cal.copa.semis[tgt].mandante = vencedor; else if(num%2===0 && cal.copa.semis[tgt].visitante.includes("Vencedor")) cal.copa.semis[tgt].visitante = vencedor; } }
+                                else if (f === "semis" && cal.copa.final) { let tgt = `jogo_15`; if(cal.copa.final[tgt]) { if(num===13 && cal.copa.final[tgt].mandante.includes("Vencedor")) cal.copa.final[tgt].mandante = vencedor; else if(num===14 && cal.copa.final[tgt].visitante.includes("Vencedor")) cal.copa.final[tgt].visitante = vencedor; } }
+                                else if (f === "final" && !cal.sistema_campeao_copa) { cal.sistema_campeao_copa = vencedor; }
+                            }
 
                             if (!jogo.jogado && !jogo.linhaDoTempo && jogo.data_jogo && !jogo.mandante.includes("Vencedor") && !jogo.visitante.includes("Vencedor")) {
                                 let dataJogoStr = jogo.data_jogo.split(' ')[0];
