@@ -859,19 +859,26 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     if (!loginVencedor.startsWith('IA_')) {
                         updates[`ligas/${liga}/caixa_mensagens/${loginVencedor}/msg_compra_${Date.now()}`] = {
                             tipo: 'sucesso',
-                            texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} ACEITOU sua oferta. ${dadosDoAlvo.nome} se juntou ao elenco!`,
+                            texto: `A diretoria do ${timeDoAlvo.replace(/_/g,' ')} ACEITOU sua oferta. ${dadosDoAlvo.nome || 'o atleta'} se juntou ao elenco!`,
                             data: new Date().toISOString()
                         };
                     }
 
-                    // 📜 HISTÓRICO - REGISTRA TRANSFERÊNCIA
+                    // 📜 HISTÓRICO - REGISTRA TRANSFERÊNCIA (Blindado e Seguro)
+                    let nomeSeguro = dadosDoAlvo.nome || "Jogador Desconhecido";
+                    let idSeguro = idAlvo || "ID_000";
+                    let origemSegura = timeDoAlvo || "Agentes Livres";
+                    let destinoSeguro = timeQueComprou || "Desconhecido";
+                    let valorSeguro = lanceVencedor.valor_oferecido || 0;
+                    let tipoSeguro = lanceVencedor.tipo_negocio || 'compra';
+
                     updates[`ligas/${liga}/historico_transferencias/${Date.now()}_${Math.floor(Math.random()*1000)}`] = {
-                        jogador_nome: dadosDoAlvo.nome,
-                        jogador_id: idAlvo,
-                        time_origem: timeDoAlvo,
-                        time_destino: timeQueComprou,
-                        valor: lanceVencedor.valor_oferecido,
-                        tipo: lanceVencedor.tipo_negocio || 'compra',
+                        jogador_nome: nomeSeguro,
+                        jogador_id: idSeguro,
+                        time_origem: origemSegura,
+                        time_destino: destinoSeguro,
+                        valor: valorSeguro,
+                        tipo: tipoSeguro,
                         data: new Date().toISOString()
                     };
 
@@ -1162,14 +1169,44 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
 
                 linhaTempo.sort((a,b) => a.minuto - b.minuto);
 
-                if (donoM) {
-                    let pub = 15000 + ((usuarios[donoM].moral||50) * 400); let ren = pub * 60;
-                    usuarios[donoM].caixaClube += ren; updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
+                if (donoM && !donoM.startsWith("IA_")) {
+                    let pub = 15000 + ((usuarios[donoM].moral||50) * 400);
+                    let ren = pub * 60;
+                    usuarios[donoM].caixaClube = (usuarios[donoM].caixaClube || 0) + ren;
+                    updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
                     linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes)` });
                 }
 
-                if (golsM > golsV) { if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.min(100, (usuarios[donoM].moral||50)+10); if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.max(0, (usuarios[donoV].moral||50)-10); }
-                else if (golsV > golsM) { if(donoV) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10); if(donoM) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10); }
+                if (golsM > golsV) {
+                    if(donoM && !donoM.startsWith("IA_")) {
+                        usuarios[donoM].caixaClube = (usuarios[donoM].caixaClube || 0) + 3000000;
+                        updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
+                        updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.min(100, (usuarios[donoM].moral||50)+10);
+                        linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: `💰 Prêmio de Vitória: R$ 3.000.000 (Mandante)` });
+                    }
+                    if(donoV && !donoV.startsWith("IA_")) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.max(0, (usuarios[donoV].moral||50)-10);
+                }
+                else if (golsV > golsM) {
+                    if(donoV && !donoV.startsWith("IA_")) {
+                        usuarios[donoV].caixaClube = (usuarios[donoV].caixaClube || 0) + 3000000;
+                        updates[`ligas/${liga}/usuarios/${donoV}/caixaClube`] = usuarios[donoV].caixaClube;
+                        updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10);
+                        linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: `💰 Prêmio de Vitória: R$ 3.000.000 (Visitante)` });
+                    }
+                    if(donoM && !donoM.startsWith("IA_")) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10);
+                }
+                else {
+                    // Empate dá 1 milhão para os dois!
+                    if(donoM && !donoM.startsWith("IA_")) {
+                        usuarios[donoM].caixaClube = (usuarios[donoM].caixaClube || 0) + 1000000;
+                        updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
+                    }
+                    if(donoV && !donoV.startsWith("IA_")) {
+                        usuarios[donoV].caixaClube = (usuarios[donoV].caixaClube || 0) + 1000000;
+                        updates[`ligas/${liga}/usuarios/${donoV}/caixaClube`] = usuarios[donoV].caixaClube;
+                    }
+                    linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: `💰 Prêmio de Empate: R$ 1.000.000 para ambos` });
+                }
 
                 let dataInicio = new Date(); dataInicio.setHours(isMataMata ? HORA_COPA : HORA_CAMP, 0, 0, 0);
                 jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime();

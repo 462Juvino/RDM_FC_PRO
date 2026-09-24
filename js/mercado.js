@@ -139,15 +139,21 @@ function carregarMundo() {
 
         // FIX LENDAS DUPLICADAS: Mantém só 1 cópia, prioriza time que comprou
         let mapaUnico = {};
-        for(let j of todosJogadores){
+        for (let j of todosJogadores) {
             let chave = j.id_banco;
-            if(!mapaUnico[chave]){
+            if (!mapaUnico[chave]) {
                 mapaUnico[chave] = j;
             } else {
                 let atual = mapaUnico[chave];
-                let atualEhLenda = atual.timeCru === 'Lendas_Futebol' || atual.timeCru.startsWith('Agentes_Livres');
-                let novoEhLenda = j.timeCru === 'Lendas_Futebol' || j.timeCru.startsWith('Agentes_Livres');
-                if(atualEhLenda &&!novoEhLenda){
+
+                // 🟢 BLINDAGEM CONTRA UNDEFINED:
+                let atualTimeCru = atual.timeCru || "";
+                let novoTimeCru = j.timeCru || "";
+
+                let atualEhLenda = atualTimeCru === 'Lendas_Futebol' || atualTimeCru.startsWith('Agentes_Livres');
+                let novoEhLenda = novoTimeCru === 'Lendas_Futebol' || novoTimeCru.startsWith('Agentes_Livres');
+
+                if (atualEhLenda && !novoEhLenda) {
                     mapaUnico[chave] = j;
                 }
             }
@@ -710,10 +716,6 @@ window.renderListaTransacoes = function(aba) {
                 <div id="lista-dividas-ativas">Carregando...</div>
             </div>
 
-            <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
-                <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
-                <div id="lista-dividas-ativas">Carregando...</div>
-            </div>
 
             <div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px;">
                 <h3 style="color:#00b853; margin-top:0; font-size:16px;">💰 Meu Cofre (Fundo do Clube)</h3>
@@ -1358,18 +1360,28 @@ window.trocarSubAbaMercado = function(aba){
 };
 
 
-// FIX 1: mercado.js - Correção do clique no meu jogador
-// Substitua toda a função abrirOpcoesMeuJogador e as 2 abaixo por estas:
-
 window.abrirOpcoesMeuJogador = function(idJogador) {
     let j = todosJogadores.find(x => x.id_banco === idJogador);
-    if(!j) return alert("Jogador não encontrado!");
+    if(!j) return;
 
     // Se já está nos Agentes Livres
     if(j.timeCru && j.timeCru.includes('Agentes_Livres')){
-        if(confirm(`🔙 ${j.nome} está nos Agentes Livres.\n\nDeseja REMOVER e trazer de volta para o seu elenco (${dadosUsuario.timeAtual.replace(/_/g,' ')})?`)){
-            window.removerDeAgentesLivres(idJogador);
-        }
+        let cxConf = document.createElement('div');
+        cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+        cxConf.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #00b853; padding:20px; text-align:center;">
+                <div style="font-size:40px; margin-bottom:10px;">🔙</div>
+                <h3 style="color:#00b853; margin-top:0;">Resgatar Jogador</h3>
+                <p style="color:#ccc; font-size:14px; margin-bottom:20px;">O jogador <strong>${j.nome}</strong> está nos Agentes Livres.<br><br>Deseja remover ele de lá e trazer de volta para o seu elenco (${dadosUsuario.timeAtual.replace(/_/g,' ')})?</p>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-conf-resgate" style="flex:1; padding:10px; background:#00b853; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Resgatar</button>
+                    <button id="btn-canc-resgate" style="flex:1; padding:10px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(cxConf);
+        document.getElementById('btn-canc-resgate').onclick = () => cxConf.remove();
+        document.getElementById('btn-conf-resgate').onclick = () => { cxConf.remove(); window.removerDeAgentesLivres(idJogador); };
         return;
     }
 
@@ -1379,9 +1391,28 @@ window.abrirOpcoesMeuJogador = function(idJogador) {
         return window.fazerProposta(idJogador);
     }
 
-    if(confirm(`📤 Colocar ${j.nome} (OVR ${j.forca}) nos Agentes Livres?\n\nEle sairá do seu time e aparecerá para TODOS na aba Agentes Livres para negociação.\n• Lendas e jogadores que você não quer mais ficam aqui\n• IA pode comprar com 50% do valor\n• Você pode fazer contra-proposta até 80%\n\nConfirmar?`)){
-        window.colocarEmAgentesLivres(idJogador);
-    }
+    // O Jogador está no elenco e vamos mandar pros Agentes Livres
+    let cxConf = document.createElement('div');
+    cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cxConf.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #ff8c00; padding:20px; text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">📤</div>
+            <h3 style="color:#ff8c00; margin-top:0;">Liberar Jogador</h3>
+            <p style="color:#ccc; font-size:14px; margin-bottom:20px;">Deseja colocar <strong>${j.nome}</strong> (OVR ${j.forca}) nos Agentes Livres?</p>
+            <div style="text-align:left; background:#111; padding:10px; border-radius:6px; font-size:12px; color:#aaa; margin-bottom:20px;">
+                • Ele sairá do seu time imediatamente.<br>
+                • A Inteligência Artificial pode comprar ele pagando 50% do valor.<br>
+                • Você poderá fazer contra-propostas e negociar (até 80%).
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-conf-liberar" style="flex:1; padding:10px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Liberar</button>
+                <button id="btn-canc-liberar" style="flex:1; padding:10px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cxConf);
+    document.getElementById('btn-canc-liberar').onclick = () => cxConf.remove();
+    document.getElementById('btn-conf-liberar').onclick = () => { cxConf.remove(); window.colocarEmAgentesLivres(idJogador); };
 };
 
 window.colocarEmAgentesLivres = async function(idJogador){
@@ -1508,52 +1539,106 @@ window.filtrarAgentesLivresSubAba = function(){
     }).join('');
 };
 
-// 3. CONTRA-PROPOSTA COM REGRA 50% / 80%
+// 3. CONTRA-PROPOSTA COM REGRA 50% / 80% E VISUAL CUSTOMIZADO
 window.abrirContraProposta = function(idAlvo, loginComprador){
     let prop = propostasRecebidasGlobais.find(p=>p.id_alvo===idAlvo && p.login_comprador===loginComprador);
     if(!prop) return alert("Proposta não encontrada!");
     let valorOriginal = prop.valor;
     let jogador = todosJogadores.find(j=> j.id_banco===idAlvo);
-    let valorMercado = jogador? jogador.valor : valorOriginal*2; // se for de livres, valorMercado é o dobro do oferecido (50%)
+    let valorMercado = jogador? jogador.valor : valorOriginal*2;
 
     let ehAgentesLivres = prop.timeCru && prop.timeCru.includes("Agentes_Livres");
+
     let textoExplica = ehAgentesLivres ?
-        `Proposta da IA nos Agentes Livres: ${formatarDinheiro(valorOriginal)} (50% do valor)\nValor de mercado: ${formatarDinheiro(valorMercado)}\n\nVocê pode fazer contra-proposta até 80% do valor (${formatarDinheiro(valorMercado*0.8)}). Se pedir mais que isso, a IA recusa e finaliza.` :
-        `Valor original: ${formatarDinheiro(valorOriginal)}\nDigite sua contra-proposta:`;
+        `A Máquina ofereceu 50% do valor. Faça uma contraproposta de no máximo 80% (${formatarDinheiro(valorMercado*0.8)}). Se pedir mais, ela desiste do negócio.` :
+        `Digite o valor da sua contraproposta. Ela deve ser maior que a oferta original.`;
 
-    let novoValorStr = prompt(textoExplica, Math.round(valorMercado*0.7));
-    if(!novoValorStr) return;
-    let novoValor = parseInt(novoValorStr);
-    if(isNaN(novoValor) || novoValor <= valorOriginal) return alert("Contra-proposta tem que ser MAIOR que a original!");
+    let cxPrompt = document.createElement('div');
+    cxPrompt.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+    cxPrompt.innerHTML = `
+        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #ff8c00; padding:20px; box-shadow:0 10px 40px rgba(255,140,0,0.3); text-align:center;">
+            <h3 style="color:#ff8c00; margin-top:0;">↩️ Fazer Contraproposta</h3>
+            <div style="background:#111; padding:10px; border-radius:6px; font-size:13px; color:#aaa; margin-bottom:15px; text-align:left;">
+                <strong style="color:#fff;">Oponente ofereceu:</strong> <span style="color:var(--verde-campo);">${formatarDinheiro(valorOriginal)}</span><br>
+                <strong style="color:#fff;">Valor de Mercado:</strong> ${formatarDinheiro(valorMercado)}<br><br>
+                ${textoExplica}
+            </div>
+            <input type="number" id="input-contra-prop" value="${Math.round(valorMercado*0.7)}" style="width:100%; padding:10px; margin-bottom:20px; background:#000; border:1px solid #444; color:#fff; border-radius:4px; font-size:16px;">
+            <div style="display:flex; gap:10px;">
+                <button id="btn-conf-contra" style="flex:1; padding:10px; background:#ff8c00; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Enviar Oferta</button>
+                <button id="btn-canc-contra" style="flex:1; padding:10px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cxPrompt);
 
-    if(ehAgentesLivres){
-        if(novoValor > valorMercado*0.8){
-            if(confirm(`❌ IA RECUSOU!\nVocê pediu ${formatarDinheiro(novoValor)} que é mais que 80% do valor (${formatarDinheiro(valorMercado*0.8)}).\nA negociação será finalizada. Deseja finalizar?`)){
-                // Finaliza - remove proposta
-                db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).remove();
-                alert("Negociação finalizada. Proposta removida.");
-                carregarMundo();
-            }
+    document.getElementById('btn-canc-contra').onclick = () => cxPrompt.remove();
+    document.getElementById('btn-conf-contra').onclick = () => {
+        let novoValorStr = document.getElementById('input-contra-prop').value;
+        if(!novoValorStr) return;
+        let novoValor = parseInt(novoValorStr);
+        if(isNaN(novoValor) || novoValor <= valorOriginal) {
+            alert("A contra-proposta tem que ser MAIOR que a oferta original!");
             return;
-        } else {
-            // IA aceita até 80%
-            if(confirm(`✅ IA ACEITOU sua contra-proposta de ${formatarDinheiro(novoValor)} (até 80% do valor)!\nDeseja vender?`)){
-                // Aceita venda
-                aceitarProposta(idAlvo, loginComprador, novoValor);
+        }
+
+        cxPrompt.remove();
+
+        if(ehAgentesLivres){
+            if(novoValor > valorMercado*0.8){
+                // IA Recusou
+                let cxRecusa = document.createElement('div');
+                cxRecusa.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+                cxRecusa.innerHTML = `
+                    <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #dc3545; padding:20px; text-align:center;">
+                        <h3 style="color:#dc3545; margin-top:0;">❌ A Máquina Recusou!</h3>
+                        <p style="color:#ccc; font-size:14px; margin-bottom:20px;">Você pediu ${formatarDinheiro(novoValor)}, que ultrapassa o teto de 80% do valor do jogador. A diretoria da IA encerrou as negociações.</p>
+                        <button id="btn-fim-negocio" style="width:100%; padding:10px; background:#dc3545; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Finalizar</button>
+                    </div>
+                `;
+                document.body.appendChild(cxRecusa);
+                document.getElementById('btn-fim-negocio').onclick = () => {
+                    cxRecusa.remove();
+                    db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${loginComprador}`).remove();
+                    carregarMundo();
+                };
+                return;
+            } else {
+                // IA Aceitou
+                let cxAceite = document.createElement('div');
+                cxAceite.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+                cxAceite.innerHTML = `
+                    <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #00b853; padding:20px; text-align:center;">
+                        <h3 style="color:#00b853; margin-top:0;">✅ A Máquina Aceitou!</h3>
+                        <p style="color:#ccc; font-size:14px; margin-bottom:20px;">A diretoria topou pagar os ${formatarDinheiro(novoValor)} que você pediu.</p>
+                        <button id="btn-fechar-venda" style="width:100%; padding:10px; background:#00b853; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Fechar Venda</button>
+                    </div>
+                `;
+                document.body.appendChild(cxAceite);
+                document.getElementById('btn-fechar-venda').onclick = () => {
+                    cxAceite.remove();
+                    aceitarProposta(idAlvo, loginComprador, novoValor);
+                };
                 return;
             }
         }
-    }
 
-    // Para proposta normal (não livres), envia contra-proposta
-    db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${userLogado}_contra_${Date.now()}`).set({
-        time_comprador: dadosUsuario.timeAtual,
-        valor_oferecido: novoValor,
-        tipo_negocio: 'contraproposta',
-        data_proposta: new Date().toISOString(),
-        proposta_original_de: loginComprador,
-        is_contra: true
-    }).then(()=> alert("Contra-proposta enviada! Aguarde resposta."));
+        // Para proposta normal (não livres), envia contra-proposta
+        db.ref(`ligas/${ligaLogada}/mercado_propostas/${idAlvo}/${userLogado}_contra_${Date.now()}`).set({
+            time_comprador: dadosUsuario.timeAtual,
+            valor_oferecido: novoValor,
+            tipo_negocio: 'contraproposta',
+            data_proposta: new Date().toISOString(),
+            proposta_original_de: loginComprador,
+            is_contra: true
+        }).then(()=> {
+            let cxFim = document.createElement('div');
+            cxFim.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
+            cxFim.innerHTML = `<div style="background:#1a1a1a; padding:20px; border-radius:8px; border:1px solid #ff8c00; text-align:center; color:#fff;">Contraproposta enviada ao clube interessado! Aguarde a resposta.</div>`;
+            document.body.appendChild(cxFim);
+            setTimeout(()=> { cxFim.remove(); carregarMundo(); }, 2500);
+        });
+    };
 };
 
 // Função aceitar com valor custom (para contra-proposta aceita)
