@@ -93,158 +93,256 @@ button:hover {
     overflow: hidden;
 }
 
-/* Menu Lateral */
+/* ======================================================== */
+/* 🖥️ MENU LATERAL (SIDEBAR) ELEGANTE E MODERNA */
+/* ======================================================== */
 .sidebar {
-    width: 250px;
-    min-width: 250px;
-    background-color: rgba(30, 30, 30, 0.9);
-    border-right: 1px solid #333;
+    width: 260px;
+    min-width: 260px;
+    background: linear-gradient(180deg, #161616 0%, #111111 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
-    padding: 20px 0;
+    padding: 25px 10px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    backdrop-filter: blur(10px);
     z-index: 10002;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.4);
+    box-sizing: border-box;
 }
 
-/* Conteúdo principal ocupa resto */
-.main-content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    background-color: transparent;
-}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
 
-/* MOBILE VERTICAL - até 768px */
-@media (max-width: 768px) {
-    .dashboard-layout { flex-direction: column; }
-    .sidebar {
-        position: fixed;
-        top: 0; left: 0; bottom: 0;
-        width: 85vw;
-        max-width: 300px;
-        min-width: unset;
-        transform: translateX(-100%);
-        transition: transform 0.28s ease;
-        padding-top: max(20px, env(safe-area-inset-top));
-        padding-bottom: max(20px, env(safe-area-inset-bottom));
-    }
-    .sidebar.aberta { transform: translateX(0); }
-    body.menu-aberto { overflow: hidden; }
-    body.menu-aberto::after {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.6);
-        z-index: 10001;
-        /* blur removido aqui porque tava borrando a própria sidebar */
-    }
-    /* Sidebar SEM blur no mobile e clicável */
-    .sidebar {
-        background-color: #1e1e1e !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        pointer-events: auto !important;
-        z-index: 10002 !important;
-    }
-    .sidebar *, .sidebar button {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
-    .topbar {
-        padding: 10px 15px;
-        padding-top: max(10px, env(safe-area-inset-top));
-        position: sticky;
-        top: 0;
-        z-index: 10000;
-    }
-    .area-trabalho { padding: 15px; padding-bottom: max(30px, env(safe-area-inset-bottom)); }
-    .dashboard-widgets { grid-template-columns: 1fr; gap: 12px; }
-    .btn-menu { display: block !important; }
-}
-
-/* Deixa a barra de rolagem do menu lateral fina e elegante */
-.sidebar::-webkit-scrollbar {
-    width: 4px;
-}
-.sidebar::-webkit-scrollbar-thumb {
-    background: #444;
-    border-radius: 4px;
-}
-
+/* Título do Menu (Fut Amigos) */
 .sidebar h2 {
     color: var(--verde-campo);
     text-align: center;
-    margin-bottom: 30px;
-    font-size: 22px;
-    text-shadow: 1px 1px 3px #000;
+    margin: 0 0 30px 0;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
+/* Botões do Menu Lateral */
 .sidebar button {
     background: transparent;
-    color: #aaa;
+    color: #9aa0a6;
     border: none;
-    padding: 15px 20px;
+    padding: 12px 15px;
+    margin-bottom: 5px;
     text-align: left;
-    font-size: 16px;
-    margin-top: 0;
-    border-radius: 0;
+    font-size: 14.5px;
+    font-weight: 500;
+    border-radius: 8px;
     cursor: pointer;
-    border-left: 4px solid transparent;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.sidebar button:hover, .sidebar button.ativo {
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
+.sidebar button:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    transform: translateX(3px);
+}
+
+.sidebar button.ativo {
+    background-color: rgba(0, 184, 83, 0.15);
+    color: var(--verde-campo);
+    font-weight: bold;
     border-left: 4px solid var(--verde-campo);
+    border-radius: 0 8px 8px 0;
 }
 
+/* Botão de Sair no Rodapé */
 .sidebar .btn-sair {
     margin-top: auto;
+    background: rgba(220, 53, 69, 0.1);
     color: #dc3545;
+    font-weight: bold;
+    justify-content: center;
+    padding: 12px;
 }
 
 .sidebar .btn-sair:hover {
-    border-left: 4px solid #dc3545;
+    background: #dc3545;
+    color: #fff;
+    transform: none;
 }
 
-/* Área Principal */
+/* Botão Especial (Ir para o jogo / X1) */
+.sidebar #btn-manual-tecnico {
+    background: rgba(0, 123, 255, 0.1);
+    color: #007bff !important;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    justify-content: center;
+}
+.sidebar #btn-manual-tecnico:hover {
+    background: #007bff;
+    color: #fff !important;
+}
+
+/* ======================================================== */
+/* 🔝 BARRA SUPERIOR (TOPBAR) COMPACTA E MODERNA */
+/* ======================================================== */
+.topbar {
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 10001;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+/* Grupo da Esquerda: Botão Menu + Info do Treinador */
+.topbar-esquerda {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.btn-menu {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 26px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    display: none; /* Só aparece no mobile */
+    transition: 0.2s;
+}
+
+.btn-menu:hover { color: var(--verde-campo); }
+
+.info-treinador-topbar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+#nome-treinador {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
+    line-height: 1.2;
+}
+
+#nome-time {
+    color: var(--verde-campo);
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0;
+}
+
+/* Grupo da Direita: Saldo e Tickets (Design Pílula) */
+.info-caixa {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#saldo-treinador {
+    color: var(--verde-campo);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+#qtd-tickets-topbar {
+    background: rgba(255, 140, 0, 0.15) !important;
+    border: 1px solid rgba(255, 140, 0, 0.5) !important;
+    color: #ff8c00 !important;
+    padding: 4px 10px !important;
+    border-radius: 20px !important; /* Pílula perfeita */
+    font-size: 12px !important;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ======================================================== */
+/* 📱 RESPONSIVIDADE DO LAYOUT BASE (MOBILE) */
+/* ======================================================== */
 .main-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    background-color: transparent; /* 🟢 Garante que a área principal não bloqueia a visão */
+    background-color: transparent;
 }
 
-/* Barra Superior */
-.topbar {
-    background-color: var(--card-bg);
-    padding: 15px 30px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #333;
-    position: relative; /* ADICIONADO */
-    z-index: 10001; /* ADICIONADO: Fica por cima do menu lateral mobile */
+@media (max-width: 768px) {
+    .dashboard-layout { flex-direction: column; }
+
+    .sidebar {
+        position: fixed;
+        top: 0; left: -320px; bottom: 0; /* Escondida por padrão */
+        width: 280px;
+        max-width: 85vw;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        padding-top: max(25px, env(safe-area-inset-top));
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+        z-index: 10003 !important; /* Acima da Topbar */
+        box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+    }
+
+    .sidebar.aberta { left: 0; }
+
+    .topbar {
+        padding: 10px 15px;
+        padding-top: max(10px, env(safe-area-inset-top));
+    }
+
+    .btn-menu { display: block; }
+
+    /* Overlay escuro de fundo quando o menu abre */
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        z-index: 10002;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+
+    body.menu-aberto { overflow: hidden; }
+    body.menu-aberto::after {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .area-trabalho { padding: 15px; padding-bottom: max(30px, env(safe-area-inset-bottom)); }
+    .dashboard-widgets { grid-template-columns: 1fr; gap: 15px; }
 }
 
-.topbar .info-caixa {
-    color: var(--verde-campo);
-    font-size: 18px;
-    font-weight: bold;
+@media (max-width: 480px) {
+    /* No telemóvel pequeno, esconde o nome do treinador e mostra só o time pra poupar espaço */
+    #nome-treinador { display: none; }
+    #nome-time { font-size: 14px; }
+    #saldo-treinador { font-size: 14px; }
+    .info-caixa { gap: 6px; }
 }
-
-/* Conteúdo Dinâmico */
-.area-trabalho {
-    padding: 30px;
-}
-
 /* Grid de Clubes (Para quando estiver desempregado) */
 .grid-clubes {
     display: grid;
