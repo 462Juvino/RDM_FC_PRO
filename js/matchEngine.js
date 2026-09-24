@@ -925,6 +925,16 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
             let forcaV=calcularForcaTime(titularesV, donoV?.mentalidade||"Equilibrado", donoV?.estilo||"Equilibrado", donoV?.moral||50, false, donoV?.ct_ativo, donoV?.escudo_rodada);
             let res=gerarLinhaDoTempoComplexa(jogo, times, usuarios, titularesM, titularesV, forcaM, forcaV);
 
+            // 📢 INJEÇÃO DO OFERECIMENTO DOS PATROCINADORES (TV AO VIVO)
+            let patM = (donoM && donoM.patrocinio_ativo) ? donoM.patrocinio_ativo.empresa : null;
+            let patV = (donoV && donoV.patrocinio_ativo) ? donoV.patrocinio_ativo.empresa : null;
+            let txtPatrocinio = patM && patV ? `${patM} e ${patV}` : (patM || patV);
+
+            if (txtPatrocinio) {
+                res.linha.push({ minuto: 2, tipo: 'patrocinio', texto: `📺 Oferecimento: ${txtPatrocinio}. As melhores marcas apoiam o futebol nacional!` });
+                res.linha.sort((a,b) => a.minuto - b.minuto);
+            }
+
             jogo.linhaDoTempo=res.linha;
             jogo.horaInicio=tsAgora;
             jogo.placarMandante=res.golsM;
@@ -942,19 +952,47 @@ window.gerarPartida = async function(idJ, chave, isMataMata){
                 else if (chave === "final") { updates[`ligas/${ligaLogada}/calendario/sistema_campeao_copa`] = vencedor; }
             }
 
-            // 2. PAGAMENTO DE RENDA E PREMIAÇÃO
-            if (donoMLogin && !donoMLogin.startsWith('IA_')) {
-                let caixaNovo = (donoM.caixaClube || 0) + 1500000; // Renda Base
-                if (res.golsM > res.golsV) caixaNovo += 3000000; // Vitória
-                else if (res.golsM === res.golsV) caixaNovo += 1000000; // Empate
-                updates[`ligas/${ligaLogada}/usuarios/${donoMLogin}/caixaClube`] = caixaNovo;
-            }
-            if (donoVLogin && !donoVLogin.startsWith('IA_')) {
-                let caixaNovo = (donoV.caixaClube || 0);
-                if (res.golsV > res.golsM) caixaNovo += 3000000; // Vitória
-                else if (res.golsV === res.golsM) caixaNovo += 1000000; // Empate
-                updates[`ligas/${ligaLogada}/usuarios/${donoVLogin}/caixaClube`] = caixaNovo;
-            }
+            // 2. PAGAMENTO DE RENDA E PREMIAÇÃO + PATROCINADORES AO VIVO
+            const processarPagamentosAoVivo = (loginDono, uObj, isMandante, golsFeitos, golsTomados) => {
+                if (!loginDono || loginDono.startsWith('IA_') || !uObj) return;
+
+                let caixaNovo = uObj.caixaClube || 0;
+
+                // Bilheteria
+                if (isMandante) {
+                    let pub = 15000 + ((uObj.moral || 50) * 400);
+                    caixaNovo += (pub * 60);
+                }
+
+                // Prêmio Base
+                if (golsFeitos > golsTomados) caixaNovo += 3000000;
+                else if (golsFeitos === golsTomados) caixaNovo += 1000000;
+
+                // Patrocínio Master
+                if (uObj.patrocinio_ativo && uObj.patrocinio_ativo.rodadas_restantes > 0) {
+                    let pat = uObj.patrocinio_ativo;
+                    let valorPago = (golsFeitos > golsTomados) ? pat.valVitoria : (golsFeitos === golsTomados ? pat.valEmpate : pat.valDerrota);
+
+                    caixaNovo += valorPago;
+                    pat.rodadas_restantes -= 1;
+
+                    if (pat.rodadas_restantes <= 0) {
+                        updates[`ligas/${ligaLogada}/usuarios/${loginDono}/patrocinio_ativo`] = null;
+                        updates[`ligas/${ligaLogada}/caixa_mensagens/${loginDono}/msg_pat_${Date.now()}`] = {
+                            tipo: 'recusa',
+                            texto: `O seu contrato com a ${pat.empresa} encerrou. As finanças precisam de um novo Master, negocie já!`,
+                            data: new Date().toISOString()
+                        };
+                    } else {
+                        updates[`ligas/${ligaLogada}/usuarios/${loginDono}/patrocinio_ativo`] = pat;
+                    }
+                }
+
+                updates[`ligas/${ligaLogada}/usuarios/${loginDono}/caixaClube`] = caixaNovo;
+            };
+
+            processarPagamentosAoVivo(donoMLogin, donoM, true, res.golsM, res.golsV);
+            processarPagamentosAoVivo(donoVLogin, donoV, false, res.golsV, res.golsM);
 
             // 3. ATUALIZAÇÃO RÁPIDA DE ESTATÍSTICAS (Gols e Goleiro)
             let gkM = titularesM.find(j=>j.posicoes?.p==="Goleiro");

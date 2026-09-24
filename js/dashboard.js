@@ -214,7 +214,7 @@ function carregarVisaoGeralClube() {
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
                     <button onclick="darColetivaImprensa()" style="flex: 1; background: #333; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🎤 Coletiva</button>
                     <button onclick="pagarBichoExtra()" style="flex: 1; background: #ff8c00; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💰 Bicho Extra</button>
-                    <button onclick="recolherPatrocinio()" style="flex: 1; background: #007bff; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">📺 Cota de TV</button>
+                    <button onclick="recolherPatrocinio()" style="flex: 1; background: #007bff; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">📺 Patrocínio</button>
                     <button onclick="ativarTreinoSigiloso()" style="flex: 1; background: #800080; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; box-shadow: 0 0 10px rgba(128,0,128,0.5);">🛡️ Treino Secreto</button>
                 </div>
             </div>
@@ -607,46 +607,120 @@ window.pagarBichoExtra = async function() {
     };
 };
 
-// 📺 SISTEMA DE RETENÇÃO 2 (COTA DE TV / DAILY LOGIN)
+// 🤝 SISTEMA DE PATROCINADORES MASTER (RISCO E PERFORMANCE)
 window.recolherPatrocinio = async function() {
-    let hoje = new Date().toLocaleDateString('pt-BR');
-    if (dadosUsuario.ultimo_patrocinio === hoje) return mostrarAvisoEleganteDash("Você já resgatou sua Cota de TV diária! Volte amanhã.", "#ff8c00", "📺");
+    let cxConf = document.getElementById('modal-patrocinio');
+    if(cxConf) cxConf.remove();
 
-    let cxConf = document.createElement('div');
+    let snapUser = await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).once('value');
+    let u = snapUser.val() || {};
+    let pat = u.patrocinio_ativo;
+
+    cxConf = document.createElement('div');
+    cxConf.id = 'modal-patrocinio';
     cxConf.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; display:flex; justify-content:center; align-items:center;";
-    cxConf.innerHTML = `
-        <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3); text-align:center;">
-            <div style="font-size:40px; margin-bottom:10px;">📺</div>
-            <h3 style="color:#007bff; margin-top:0;">Recolher Cota de TV</h3>
-            <p style="color:#ccc; font-size:14px; margin-bottom:20px;">O Patrocinador Master liberou o depósito da rodada. Deseja resgatar <strong>R$ 2.000.000,00</strong> para os cofres do clube?</p>
-            <div style="display:flex; gap:10px;">
-                <button id="btn-conf-tv" style="flex:1; padding:12px; background:#007bff; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Sim, Resgatar</button>
-                <button id="btn-canc-tv" style="flex:1; padding:12px; background:#333; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Não, Cancelar</button>
+
+    if (pat && pat.rodadas_restantes > 0) {
+        cxConf.innerHTML = `
+            <div style="background:#1a1a1a; width:90%; max-width:400px; border-radius:12px; border:2px solid #007bff; padding:20px; box-shadow:0 10px 40px rgba(0,123,255,0.3); text-align:center;">
+                <div style="font-size:40px; margin-bottom:10px;">🤝</div>
+                <h3 style="color:#007bff; margin-top:0;">Patrocinador Atual</h3>
+                <div style="background:#111; padding:15px; border-radius:8px; border:1px solid #333; margin-bottom:20px; text-align:left;">
+                    <strong style="color:#fff; font-size:16px;">${pat.empresa}</strong> <span style="color:#aaa; font-size:12px;">(${pat.desc})</span><br><br>
+
+                    <span style="color:#888; font-size:12px;">Modelo de Contrato:</span><br>
+                    <strong style="color:${pat.tipo==='Fixo Seguro'?'var(--verde-campo)':(pat.tipo==='Alta Performance'?'#dc3545':'#ff8c00')};">${pat.tipo}</strong><br><br>
+
+                    <span style="color:#888; font-size:12px;">Previsão de Ganhos (Por Jogo):</span><br>
+                    <div style="background:#000; padding:10px; border-radius:6px; margin-top:5px; font-size:13px;">
+                        <span style="color:var(--verde-campo);">Vitória: <strong>${formatarDinheiro(pat.valVitoria)}</strong></span><br>
+                        <span style="color:#ffc107;">Empate: <strong>${formatarDinheiro(pat.valEmpate)}</strong></span><br>
+                        <span style="color:#dc3545;">Derrota: <strong>${formatarDinheiro(pat.valDerrota)}</strong></span>
+                    </div>
+                    <br>
+                    <span style="color:#888; font-size:12px;">Vigência do Contrato:</span><br>
+                    <strong style="color:#fff;">Restam ${pat.rodadas_restantes} Jogo(s)</strong>
+                </div>
+                <button onclick="document.getElementById('modal-patrocinio').remove()" style="width:100%; padding:12px; background:#333; color:#fff; border:1px solid #555; border-radius:4px; font-weight:bold; cursor:pointer;">Fechar Painel</button>
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        const empresasDB = [
+            { nome: "Elicars", desc: "Oficina Mecânica" },
+            { nome: "RDM Studios", desc: "Estúdio de Games" },
+            { nome: "Etilim Modas", desc: "Loja de Roupas" },
+            { nome: "Fleury Games", desc: "Streamer" },
+            { nome: "Mileniso", desc: "Marcenaria" },
+            { nome: "Zi_bar", desc: "Tabacaria" }
+        ];
+
+        // Sorteia 4 empresas da lista para oferecerem propostas
+        const empresas = empresasDB.sort(() => Math.random() - 0.5).slice(0, 4);
+
+        let htmlPropostas = empresas.map((emp, i) => {
+            let rng = Math.random();
+            let tipo, rodadas, valorBase;
+            let corTipo = "";
+
+            if (rng < 0.33) {
+                tipo = 'Fixo Seguro'; corTipo = 'var(--verde-campo)';
+                rodadas = Math.floor(Math.random() * 4) + 4; // 4 a 7 rodadas
+                valorBase = Math.floor(Math.random() * 800000) + 800000; // 800k a 1.6M
+            } else if (rng < 0.66) {
+                tipo = 'Risco Moderado'; corTipo = '#ff8c00';
+                rodadas = Math.floor(Math.random() * 3) + 2; // 2 a 4 rodadas
+                valorBase = Math.floor(Math.random() * 1000000) + 1500000; // 1.5M a 2.5M
+            } else {
+                tipo = 'Alta Performance'; corTipo = '#dc3545';
+                rodadas = Math.floor(Math.random() * 2) + 1; // 1 a 2 rodadas
+                valorBase = Math.floor(Math.random() * 2000000) + 3000000; // 3M a 5M
+            }
+
+            let valVitoria = valorBase;
+            let valEmpate = tipo === 'Fixo Seguro' ? valorBase : (tipo === 'Risco Moderado' ? valorBase * 0.5 : valorBase * 0.1);
+            let valDerrota = tipo === 'Fixo Seguro' ? valorBase : (tipo === 'Risco Moderado' ? valorBase * 0.2 : 0);
+
+            window[`assinarPatrocinio_${i}`] = async function() {
+                cxConf.remove();
+                await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}/patrocinio_ativo`).set({
+                    empresa: emp.nome, desc: emp.desc, tipo: tipo,
+                    valVitoria: valVitoria, valEmpate: valEmpate, valDerrota: valDerrota,
+                    rodadas_restantes: rodadas, rodadas_total: rodadas
+                });
+                mostrarAvisoEleganteDash(`Contrato assinado com a ${emp.nome} por ${rodadas} jogo(s)!<br><br>As transferências serão automáticas ao fim de cada partida. Dê o seu melhor em campo!`, "var(--verde-campo)", "✍️");
+            };
+
+            return `
+            <div style="background:#111; border:1px solid ${corTipo}; padding:15px; border-radius:8px; margin-bottom:12px; text-align:left; position:relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+                <strong style="color:#fff; font-size:15px;">${emp.nome}</strong> <span style="color:#aaa; font-size:11px;">(${emp.desc})</span><br>
+                <div style="font-size:12px; color:#aaa; margin:8px 0; display:flex; justify-content:space-between;">
+                    <span>Tipo: <strong style="color:${corTipo};">${tipo}</strong></span>
+                    <span>Duração: <strong style="color:#fff;">${rodadas} Jogos</strong></span>
+                </div>
+                <div style="background:#000; padding:8px; border-radius:6px; font-size:11px; margin-bottom:10px; line-height:1.4;">
+                    <span style="color:var(--verde-campo);">Vitória: <strong>${formatarDinheiro(valVitoria)}</strong></span><br>
+                    <span style="color:#ffc107;">Empate: <strong>${formatarDinheiro(valEmpate)}</strong></span><br>
+                    <span style="color:#dc3545;">Derrota: <strong>${formatarDinheiro(valDerrota)}</strong></span>
+                </div>
+                <button onclick="assinarPatrocinio_${i}()" style="width:100%; padding:10px; background:${corTipo}; color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:13px; text-shadow:1px 1px 2px rgba(0,0,0,0.5);">Assinar Contrato</button>
+            </div>
+            `;
+        }).join('');
+
+        cxConf.innerHTML = `
+            <div style="background:#1a1a1a; width:95%; max-width:500px; border-radius:12px; border:2px solid #007bff; display:flex; flex-direction:column; max-height:85vh; box-shadow:0 10px 40px rgba(0,123,255,0.3);">
+                <div style="padding:15px 20px; border-bottom:1px solid #333; background:#111; border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="color:#007bff; margin:0; font-size:18px;">🤝 Propostas de Patrocínio</h3>
+                    <button onclick="document.getElementById('modal-patrocinio').remove()" style="background:transparent; border:none; color:#aaa; font-size:26px; cursor:pointer;">&times;</button>
+                </div>
+                <div style="padding:20px; overflow-y:auto; flex:1;">
+                    <p style="color:#ccc; font-size:13px; margin-top:0;">O seu departamento de marketing recebeu propostas das empresas abaixo. Escolha bem o nível de risco que a sua equipa consegue suportar!</p>
+                    ${htmlPropostas}
+                </div>
+            </div>
+        `;
+    }
     document.body.appendChild(cxConf);
-
-    document.getElementById('btn-canc-tv').onclick = () => cxConf.remove();
-    document.getElementById('btn-conf-tv').onclick = async () => {
-        cxConf.remove();
-
-        let novoCaixa = (dadosUsuario.caixaClube || 0) + 2000000;
-
-        await db.ref(`ligas/${ligaLogada}/usuarios/${userLogado}`).update({
-            caixaClube: novoCaixa,
-            ultimo_patrocinio: hoje
-        });
-
-        // Atualiza a interface gráfica do saldo na hora!
-        dadosUsuario.caixaClube = novoCaixa;
-        let saldoElem = document.getElementById('saldo-treinador');
-        if (saldoElem) {
-            saldoElem.innerText = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(novoCaixa);
-        }
-
-        mostrarAvisoEleganteDash("A transferência caiu na conta! Patrocinador depositou R$ 2.000.000.<br><br>Volte todos os dias para não perder a cota.", "var(--verde-campo)", "💰");
-    };
 };
 
 // 💬 SISTEMA DE CHAT GLOBAL (OTIMIZADO PARA MOBILE)
@@ -899,8 +973,10 @@ async function carregarCentralDeAvisos(meuTimeId) {
             `);
         }
 
-        // 5. ESCALAÇÃO 18:59 - se não confirmou hoje
+        // 5. ESCALAÇÃO E PATROCÍNIO MASTER
         const meuUser = snapMeuUser.val()||{};
+
+        // Checa Escalação
         let ultima = meuUser.ultima_escalacao_confirmada? new Date(meuUser.ultima_escalacao_confirmada) : null;
         let hoje = new Date();
         let pendenteEscalacao =!ultima || ultima.toDateString()!==hoje.toDateString() || (ultima.getHours()+ultima.getMinutes()/60)>=18.983;
@@ -909,6 +985,17 @@ async function carregarCentralDeAvisos(meuTimeId) {
                 <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
                     <div><strong style="color:#dc3545;">⚠️ Escalação Pendente:</strong> <span style="color:#ccc;">Confirme até 18:59 ou -15% no jogo.</span></div>
                     <button onclick="window.location.href='escalacao.html'" style="${btnStyle} background:#dc3545; color:#fff;">Escalar</button>
+                </li>
+            `);
+        }
+
+        // Checa Patrocínio Master
+        let patMaster = meuUser.patrocinio_ativo;
+        if (!patMaster || patMaster.rodadas_restantes <= 0) {
+            avisos.push(`
+                <li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #444; display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong style="color:#ff8c00;">🤝 Camisa Limpa:</strong> <span style="color:#ccc;">O seu clube está sem Patrocinador Master. Você está deixando dinheiro na mesa!</span></div>
+                    <button onclick="recolherPatrocinio()" style="${btnStyle} background:#ff8c00; color:#fff;">Negociar</button>
                 </li>
             `);
         }
@@ -1087,7 +1174,7 @@ async function gerarNoticia(meuTime) {
 
     // 🚨 1. PENDÊNCIAS DO SEU CLUBE (Alertas de Ação)
     if (dadosUsuario.ultimo_patrocinio !== hoje) {
-        noticias.push(`"💰 ALERTA FINANCEIRO: A Cota de TV está disponível na mesa do presidente! Não se esqueça de recolher o patrocínio de hoje."`);
+        noticias.push(`"💰 ALERTA FINANCEIRO: A Patrocínio está disponível na mesa do presidente! Não se esqueça de recolher o patrocínio de hoje."`);
     }
     if (dadosUsuario.ultima_coletiva !== hoje) {
         noticias.push(`"🎤 IMPRENSA NO AGUARDO: Os jornalistas estão na sala de imprensa cobrando a sua Coletiva Diária. Corra para melhorar a moral da torcida!"`);
@@ -1646,35 +1733,28 @@ function criarBotaoSom() {
     btn.innerHTML = '🔊';
     btn.title = "Ligar/Desligar Som";
 
-    // Trava a largura e altura exata do botão para que o clique não "vaze" pelos lados ou para cima
-    btn.style.cssText = "background: transparent; color: var(--verde-campo); border: none; padding: 0; margin: 0 5px 0 0; font-size: 14px; cursor: pointer; transition: 0.2s; opacity: 0.8; display: inline-flex; justify-content: center; align-items: center; width: 20px; height: 20px; flex-shrink: 0;";
+    btn.style.cssText = "background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; width: 32px; height: 32px; font-size: 14px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; flex-shrink: 0;";
 
     btn.onclick = (e) => {
         e.stopPropagation();
         if (hinoAmbiente.paused) {
             hinoAmbiente.play(); torcidaAmbiente.play();
             btn.innerHTML = '🔊';
-            btn.style.color = 'var(--verde-campo)';
-            btn.style.opacity = '0.8';
+            btn.style.background = 'rgba(0,184,83,0.2)';
+            btn.style.borderColor = 'var(--verde-campo)';
         } else {
             hinoAmbiente.pause(); torcidaAmbiente.pause();
             btn.innerHTML = '🔇';
-            btn.style.color = '#888';
-            btn.style.opacity = '0.5';
+            btn.style.background = 'rgba(255,255,255,0.1)';
+            btn.style.borderColor = 'rgba(255,255,255,0.2)';
         }
     };
 
-    // Procura o elemento do saldo para grudar o botão à ESQUERDA dele!
-    let saldoElement = document.getElementById('saldo-treinador');
-    if (saldoElement) {
-        // Usa beforebegin para colocar antes do saldo, sem mudar o CSS do pai e evitar empurrar a tela!
-        saldoElement.insertAdjacentElement('beforebegin', btn);
-        saldoElement.style.verticalAlign = "middle";
+    // 🟢 Novo Ponto de Injeção: O botão de Som vai ficar entre a Info do Treinador e o Saldo, perfeitamente alinhado na Topbar!
+    let infoCaixaDiv = document.querySelector('.info-caixa');
+    if (infoCaixaDiv) {
+        infoCaixaDiv.insertBefore(btn, infoCaixaDiv.firstChild);
     } else {
-        // Fallback
-        btn.style.position = "absolute";
-        btn.style.top = "15px";
-        btn.style.right = "15px";
         document.body.appendChild(btn);
     }
 }

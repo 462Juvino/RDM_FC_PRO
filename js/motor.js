@@ -1175,46 +1175,86 @@ async function processarTudo(liga, dataAtualStr, ontemStr, lockRef, rodarCampHoj
                     else { golsV++; linhaTempo.push({ minuto: 99, tipo: "gol_visitante", texto: `🏆 O ${jogo.visitante.replace(/_/g,' ')} VENCEU A DISPUTA DE PÊNALTIS!` }); }
                 }
 
+                // 📢 INJEÇÃO DO OFERECIMENTO DOS PATROCINADORES
+                let patM = (donoM && usuarios[donoM] && usuarios[donoM].patrocinio_ativo) ? usuarios[donoM].patrocinio_ativo.empresa : null;
+                let patV = (donoV && usuarios[donoV] && usuarios[donoV].patrocinio_ativo) ? usuarios[donoV].patrocinio_ativo.empresa : null;
+                let txtPatrocinio = patM && patV ? `${patM} e ${patV}` : (patM || patV);
+
+                if (txtPatrocinio) {
+                    linhaTempo.push({ minuto: 2, tipo: 'patrocinio', texto: `📺 Oferecimento: ${txtPatrocinio}. As melhores marcas apoiam o futebol nacional!` });
+                }
+
+
                 linhaTempo.sort((a,b) => a.minuto - b.minuto);
 
-                if (donoM && !donoM.startsWith("IA_")) {
-                    let pub = 15000 + ((usuarios[donoM].moral||50) * 400);
-                    let ren = pub * 60;
-                    usuarios[donoM].caixaClube = (usuarios[donoM].caixaClube || 0) + ren;
-                    updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
-                    linhaTempo.unshift({ minuto: 0, tipo: "renda", texto: `🎟️ Renda: R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} pagantes)` });
-                }
+                // ==========================================
+                // 💰 2. PAGAMENTO DE RENDA, PRÉMIOS E PATROCÍNIO (MOTOR)
+                // ==========================================
+                const processarFinanceiroClube = (loginDono, isMandante, golsFeitos, golsTomados) => {
+                    if (!loginDono || loginDono.startsWith("IA_") || !usuarios[loginDono]) return;
 
-                if (golsM > golsV) {
-                    if(donoM && !donoM.startsWith("IA_")) {
-                        usuarios[donoM].caixaClube = (usuarios[donoM].caixaClube || 0) + 3000000;
-                        updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
-                        updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.min(100, (usuarios[donoM].moral||50)+10);
-                        linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: `💰 Prêmio de Vitória: R$ 3.000.000 (Mandante)` });
+                    let uObj = usuarios[loginDono];
+                    let caixaNovo = uObj.caixaClube || 0;
+                    let txtGanhos = [];
+
+                    // Renda de Bilheteira (Só Mandante)
+                    if (isMandante) {
+                        let pub = 15000 + ((uObj.moral || 50) * 400);
+                        let ren = pub * 60;
+                        caixaNovo += ren;
+                        txtGanhos.push(`🎟️ Bilheteria: + R$ ${ren.toLocaleString('pt-BR')} (${pub.toLocaleString('pt-BR')} fãs)`);
                     }
-                    if(donoV && !donoV.startsWith("IA_")) updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.max(0, (usuarios[donoV].moral||50)-10);
-                }
-                else if (golsV > golsM) {
-                    if(donoV && !donoV.startsWith("IA_")) {
-                        usuarios[donoV].caixaClube = (usuarios[donoV].caixaClube || 0) + 3000000;
-                        updates[`ligas/${liga}/usuarios/${donoV}/caixaClube`] = usuarios[donoV].caixaClube;
-                        updates[`ligas/${liga}/usuarios/${donoV}/moral`] = Math.min(100, (usuarios[donoV].moral||50)+10);
-                        linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: `💰 Prêmio de Vitória: R$ 3.000.000 (Visitante)` });
+
+                    // Prêmio da Federação (Copa/Liga) + Mudança de Moral
+                    if (golsFeitos > golsTomados) {
+                        caixaNovo += 3000000;
+                        updates[`ligas/${liga}/usuarios/${loginDono}/moral`] = Math.min(100, (uObj.moral||50)+10);
+                        txtGanhos.push(`🏆 Bônus de Vitória: + R$ 3.000.000`);
+                    } else if (golsFeitos === golsTomados) {
+                        caixaNovo += 1000000;
+                        txtGanhos.push(`⚖️ Bônus de Empate: + R$ 1.000.000`);
+                    } else {
+                        updates[`ligas/${liga}/usuarios/${loginDono}/moral`] = Math.max(0, (uObj.moral||50)-10);
                     }
-                    if(donoM && !donoM.startsWith("IA_")) updates[`ligas/${liga}/usuarios/${donoM}/moral`] = Math.max(0, (usuarios[donoM].moral||50)-10);
-                }
-                else {
-                    // Empate dá 1 milhão para os dois!
-                    if(donoM && !donoM.startsWith("IA_")) {
-                        usuarios[donoM].caixaClube = (usuarios[donoM].caixaClube || 0) + 1000000;
-                        updates[`ligas/${liga}/usuarios/${donoM}/caixaClube`] = usuarios[donoM].caixaClube;
+
+                    // Pagamento do Patrocinador Master
+                    if (uObj.patrocinio_ativo && uObj.patrocinio_ativo.rodadas_restantes > 0) {
+                        let pat = uObj.patrocinio_ativo;
+                        let valorPago = (golsFeitos > golsTomados) ? pat.valVitoria : (golsFeitos === golsTomados ? pat.valEmpate : pat.valDerrota);
+
+                        if (valorPago > 0) {
+                            caixaNovo += valorPago;
+                            txtGanhos.push(`🤝 Patrocínio (${pat.empresa}): + R$ ${valorPago.toLocaleString('pt-BR')}`);
+                        } else {
+                            txtGanhos.push(`🚫 Patrocínio (${pat.empresa}): Contrato de risco! R$ 0,00 por derrota.`);
+                        }
+
+                        // Desconta 1 rodada do contrato
+                        pat.rodadas_restantes -= 1;
+
+                        if (pat.rodadas_restantes <= 0) {
+                            updates[`ligas/${liga}/usuarios/${loginDono}/patrocinio_ativo`] = null;
+                            updates[`ligas/${liga}/caixa_mensagens/${loginDono}/msg_pat_${Date.now()}`] = {
+                                tipo: 'recusa',
+                                texto: `O seu contrato com a ${pat.empresa} chegou ao fim. Vá à sua mesa na tela principal para analisar novas propostas de patrocínio!`,
+                                data: new Date().toISOString()
+                            };
+                        } else {
+                            updates[`ligas/${liga}/usuarios/${loginDono}/patrocinio_ativo`] = pat;
+                        }
                     }
-                    if(donoV && !donoV.startsWith("IA_")) {
-                        usuarios[donoV].caixaClube = (usuarios[donoV].caixaClube || 0) + 1000000;
-                        updates[`ligas/${liga}/usuarios/${donoV}/caixaClube`] = usuarios[donoV].caixaClube;
+
+                    // Efetiva a transação no banco
+                    uObj.caixaClube = caixaNovo;
+                    updates[`ligas/${liga}/usuarios/${loginDono}/caixaClube`] = caixaNovo;
+
+                    if(txtGanhos.length > 0) {
+                        linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: txtGanhos.join(' | ') });
                     }
-                    linhaTempo.unshift({ minuto: 95, tipo: "renda", texto: `💰 Prêmio de Empate: R$ 1.000.000 para ambos` });
-                }
+                };
+
+                processarFinanceiroClube(donoM, true, golsM, golsV);
+                processarFinanceiroClube(donoV, false, golsV, golsM);
 
                 let dataInicio = new Date(); dataInicio.setHours(isMataMata ? HORA_COPA : HORA_CAMP, 0, 0, 0);
                 jogo.linhaDoTempo = linhaTempo; jogo.horaInicio = dataInicio.getTime();
